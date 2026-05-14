@@ -24,18 +24,23 @@ describe("groupPhraseCaptionSegmentsIntoLines", () => {
 		expect(lines[0]!.endSec).toBeLessThanOrEqual(0.62);
 	});
 
-	it("wraps a single phrase into multiple visual lines without inventing extra timing regions", () => {
+	it("slices a single merged phrase into timed caption lines by word bounds", () => {
 		const lines = groupPhraseCaptionSegmentsIntoLines(
 			[{ startSec: 0, endSec: 1, text: "alpha beta gamma delta" }],
 			2,
 			2,
 		);
 
-		expect(lines).toHaveLength(1);
+		expect(lines).toHaveLength(2);
 		expect(lines[0]).toMatchObject({
 			startSec: 0,
+			endSec: 0.5,
+			text: "alpha beta",
+		});
+		expect(lines[1]).toMatchObject({
+			startSec: 0.5,
 			endSec: 1,
-			text: "alpha beta\ngamma delta",
+			text: "gamma delta",
 		});
 	});
 });

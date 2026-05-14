@@ -459,11 +459,42 @@ export function groupPhraseCaptionSegmentsIntoLines(
 	for (const group of groups) {
 		if (group.length === 1) {
 			const only = group[0]!;
-			out.push({
-				startSec: only.startSec,
-				endSec: only.endSec,
-				text: wrapCaptionTextByWordBounds(only.text, minWords, maxWords),
-			});
+			const wrapped = wrapCaptionTextByWordBounds(only.text, minWords, maxWords).trim();
+			if (!wrapped) continue;
+			const lineTexts = wrapped
+				.split("\n")
+				.map((t) => t.trim())
+				.filter(Boolean);
+			const n = lineTexts.length;
+			const rawDur = only.endSec - only.startSec;
+			if (n > 1 && rawDur < n * WORD_SPLIT_MIN_SPAN_SEC) {
+				out.push({
+					startSec: only.startSec,
+					endSec: only.endSec,
+					text: lineTexts.join(" "),
+				});
+				continue;
+			}
+			const dur = Math.max(rawDur, WORD_SPLIT_MIN_SPAN_SEC * n);
+			if (n <= 1) {
+				out.push({
+					startSec: only.startSec,
+					endSec: only.endSec,
+					text: lineTexts[0] ?? wrapped,
+				});
+				continue;
+			}
+			for (let i = 0; i < n; i++) {
+				const startSec = only.startSec + (dur * i) / n;
+				const boundary = only.startSec + (dur * (i + 1)) / n;
+				const endSec =
+					i === n - 1 ? only.endSec : Math.max(startSec + WORD_SPLIT_MIN_SPAN_SEC, boundary);
+				out.push({
+					startSec,
+					endSec,
+					text: lineTexts[i]!,
+				});
+			}
 			continue;
 		}
 
