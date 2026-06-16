@@ -28,6 +28,7 @@ describe("projectPersistence media compatibility", () => {
 			{
 				screenVideoPath: "/tmp/screen.webm",
 				webcamVideoPath: "/tmp/webcam.webm",
+				webcamStartOffsetMs: 275,
 			},
 			{
 				wallpaper: "/wallpapers/wallpaper1.jpg",
@@ -59,8 +60,40 @@ describe("projectPersistence media compatibility", () => {
 		expect(project.media).toEqual({
 			screenVideoPath: "/tmp/screen.webm",
 			webcamVideoPath: "/tmp/webcam.webm",
+			webcamStartOffsetMs: 275,
 		});
 		expect(validateProjectData(project)).toBe(true);
+	});
+
+	it("normalizes webcam start offsets only when webcam media exists", () => {
+		expect(
+			resolveProjectMedia({
+				version: 2,
+				media: {
+					screenVideoPath: "/tmp/screen.webm",
+					webcamVideoPath: "/tmp/webcam.webm",
+					webcamStartOffsetMs: 123.5,
+				},
+				editor: {},
+			}),
+		).toEqual({
+			screenVideoPath: "/tmp/screen.webm",
+			webcamVideoPath: "/tmp/webcam.webm",
+			webcamStartOffsetMs: 123.5,
+		});
+
+		expect(
+			resolveProjectMedia({
+				version: 2,
+				media: {
+					screenVideoPath: "/tmp/screen.webm",
+					webcamStartOffsetMs: 123.5,
+				},
+				editor: {},
+			}),
+		).toEqual({
+			screenVideoPath: "/tmp/screen.webm",
+		});
 	});
 
 	it("normalizes webcam mask shape values safely", () => {

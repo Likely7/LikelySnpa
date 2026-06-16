@@ -1,6 +1,7 @@
 export interface ProjectMedia {
 	screenVideoPath: string;
 	webcamVideoPath?: string;
+	webcamStartOffsetMs?: number;
 	cursorCaptureMode?: CursorCaptureMode;
 }
 
@@ -42,6 +43,14 @@ function normalizePath(value: unknown): string | undefined {
 	return trimmed ? trimmed : undefined;
 }
 
+function normalizeNonNegativeNumber(value: unknown): number | undefined {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return undefined;
+	}
+
+	return Math.max(0, value);
+}
+
 export function normalizeProjectMedia(candidate: unknown): ProjectMedia | null {
 	if (!candidate || typeof candidate !== "object") {
 		return null;
@@ -55,11 +64,13 @@ export function normalizeProjectMedia(candidate: unknown): ProjectMedia | null {
 	}
 
 	const webcamVideoPath = normalizePath(raw.webcamVideoPath);
+	const webcamStartOffsetMs = normalizeNonNegativeNumber(raw.webcamStartOffsetMs);
 	const cursorCaptureMode = normalizeCursorCaptureMode(raw.cursorCaptureMode);
 
 	return {
 		screenVideoPath,
 		...(webcamVideoPath ? { webcamVideoPath } : {}),
+		...(webcamVideoPath && webcamStartOffsetMs !== undefined ? { webcamStartOffsetMs } : {}),
 		...(cursorCaptureMode ? { cursorCaptureMode } : {}),
 	};
 }

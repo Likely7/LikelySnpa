@@ -14,10 +14,10 @@ Build a durable macOS-first OpenScreen fork that can record long videos safely, 
 
 ## Current Priority
 
-Continue with macOS validation:
+Continue with macOS validation after the webcam offset fix:
 
-- Build the ScreenCaptureKit helper using full Xcode.
-- Record real source files into the selected directory.
-- Use the new manifest diagnostics to decide whether raw MP4 sync is correct or needs timestamp repair.
+- Record real source files into the selected directory with webcam and microphone enabled.
+- Use the session manifest to inspect raw MP4 diagnostics plus `webcamStartOffsetMs`.
+- Confirm editor preview and exported MP4 keep webcam video aligned with mic audio.
 - Replace the remaining macOS webcam sidecar memory blob with a disk stream.
 - Add export-side audio/video sync validation after raw source sync is proven.

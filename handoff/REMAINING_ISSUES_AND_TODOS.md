@@ -2,12 +2,13 @@
 
 ## P0
 
-1. Build the macOS native helper with full Xcode and run real recording tests.
+1. Run real macOS recording tests with webcam and microphone enabled.
 2. Validate raw macOS MP4 sync with the new `.session.json` diagnostics.
-3. If diagnostics show constant offset or drift, fix ScreenCaptureKit/AVAssetWriter timestamp handling against measured data.
-4. Introduce a main-process recording session manifest written before capture starts.
-5. Preserve files as recoverable when stop/finalize fails.
-6. Stream macOS native webcam sidecar to the selected directory instead of using a renderer in-memory sidecar blob.
+3. Validate the persisted `webcamStartOffsetMs` in editor preview and exported MP4.
+4. If diagnostics show constant offset or drift, fix ScreenCaptureKit/AVAssetWriter timestamp handling against measured data.
+5. Introduce a main-process recording session manifest written before capture starts.
+6. Preserve files as recoverable when stop/finalize fails.
+7. Stream macOS native webcam sidecar to the selected directory instead of using a renderer in-memory sidecar blob.
 
 ## P1
 

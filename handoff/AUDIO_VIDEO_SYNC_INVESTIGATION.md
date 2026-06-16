@@ -30,10 +30,26 @@ Initial assessment:
 Relevant renderer code:
 
 - `src/hooks/useScreenRecorder.ts`
+- `src/lib/recordingSession.ts`
+- `src/components/video-editor/VideoPlayback.tsx`
+- `src/lib/exporter/videoExporter.ts`
+- `src/lib/exporter/gifExporter.ts`
 
-For native macOS screen recording, webcam sidecar recording is still started through renderer `MediaRecorder` before or around native helper startup. This can desync webcam video from the native screen recording if the sidecar starts earlier than the screen timeline.
+The likely user-visible issue is webcam video leading microphone audio when the user records with webcam enabled. The native macOS screen/audio MP4 diagnostics collected from local recordings showed audio tracks starting around 133-150 ms before the first video sample, not a clear "video ahead of audio" defect in the raw MP4. The higher-risk path was the renderer webcam sidecar starting before the native ScreenCaptureKit helper had confirmed its screen/audio timeline.
 
-This is not the same as audio/video sync, but it is a timeline sync risk and must be preserved when changing disk writing.
+Implemented fix:
+
+- The renderer now waits for the native macOS helper's `recording-started` event before starting the webcam `MediaRecorder`.
+- The main process returns `captureStartedAtMs` from the helper's start event.
+- The renderer stores `webcamStartOffsetMs = webcamStartedAtMs - captureStartedAtMs` in the recording session.
+- Project/session normalization preserves `webcamStartOffsetMs` only when a webcam sidecar exists.
+- Editor preview seeks webcam media at `currentTime - webcamStartOffsetMs` and hides it before its real start point.
+- MP4 and GIF exports use the same offset when requesting webcam frames.
+
+Still required:
+
+- Re-record on macOS with webcam and microphone enabled and inspect the resulting `.session.json`.
+- If the webcam still appears ahead/behind after this fix, compare mouth movement against mic audio in the editor and exported MP4, then add measured per-device calibration only if there is a repeatable residual device latency.
 
 ## Browser Fallback Risk
 
@@ -99,7 +115,7 @@ Still required for export:
 
 1. If desync exists in the raw macOS recording, the bug is in ScreenCaptureKit/AVAssetWriter timing or post-recording interpretation.
 2. If raw recording is in sync but exported MP4 is out of sync, the bug is in `AudioProcessor` or `VideoMuxer`.
-3. If only webcam is out of sync, the bug is likely native screen recording plus renderer webcam sidecar start-time mismatch.
+3. If only webcam is out of sync, first inspect `webcamStartOffsetMs` in the session manifest; the native screen/audio plus renderer webcam sidecar start-time mismatch is now explicitly modeled.
 4. If desync grows over time, suspect independent clocks or sample-rate drift.
 5. If desync is constant, suspect start-time offset or pre-roll handling.
 

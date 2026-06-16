@@ -440,6 +440,7 @@ type AttachNativeMacWebcamRecordingInput = {
 	screenVideoPath?: string;
 	recordingId?: number;
 	webcam?: RecordedVideoAssetInput;
+	webcamStartOffsetMs?: number;
 	cursorCaptureMode?: CursorCaptureMode;
 };
 
@@ -1182,7 +1183,7 @@ function attachNativeMacCaptureOutputDrain(proc: ChildProcessWithoutNullStreams)
 }
 
 function waitForNativeMacCaptureStart(proc: ChildProcessWithoutNullStreams) {
-	return new Promise<void>((resolve, reject) => {
+	return new Promise<number>((resolve, reject) => {
 		const timer = setTimeout(() => {
 			cleanup();
 			reject(new Error("Timed out waiting for native macOS capture to start"));
@@ -1191,7 +1192,11 @@ function waitForNativeMacCaptureStart(proc: ChildProcessWithoutNullStreams) {
 		const inspect = (event: Record<string, unknown>) => {
 			if (event.event === "recording-started") {
 				cleanup();
-				resolve();
+				resolve(
+					typeof event.timestampMs === "number" && Number.isFinite(event.timestampMs)
+						? event.timestampMs
+						: Date.now(),
+				);
 				return;
 			}
 			if (event.event === "error") {
@@ -1946,8 +1951,7 @@ export function registerIpcHandlers(
 			nativeMacCaptureProcess = proc;
 			attachNativeMacCaptureOutputDrain(proc);
 
-			await waitForNativeMacCaptureStart(proc);
-			const captureStartedAtMs = Date.now();
+			const captureStartedAtMs = await waitForNativeMacCaptureStart(proc);
 			nativeMacCursorOffsetMs =
 				cursorCaptureMode === "editable-overlay"
 					? Math.max(0, captureStartedAtMs - cursorStartTimeMs)
@@ -1963,6 +1967,7 @@ export function registerIpcHandlers(
 				recordingId,
 				path: outputPath,
 				helperPath,
+				captureStartedAtMs,
 			};
 		} catch (error) {
 			console.error("Failed to start native macOS recording:", error);
@@ -2286,10 +2291,16 @@ export function registerIpcHandlers(
 						? payload.recordingId
 						: Date.now();
 				const cursorCaptureMode = normalizeCursorCaptureMode(payload.cursorCaptureMode);
+				const webcamStartOffsetMs =
+					typeof payload.webcamStartOffsetMs === "number" &&
+					Number.isFinite(payload.webcamStartOffsetMs)
+						? Math.max(0, payload.webcamStartOffsetMs)
+						: undefined;
 				const session: RecordingSession = {
 					screenVideoPath,
 					webcamVideoPath,
 					createdAt,
+					...(webcamStartOffsetMs !== undefined ? { webcamStartOffsetMs } : {}),
 					...(cursorCaptureMode ? { cursorCaptureMode } : {}),
 				};
 				const diagnostics = getNativeMacDiagnosticsForPath(screenVideoPath);

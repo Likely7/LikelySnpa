@@ -216,6 +216,7 @@ export default function VideoEditor() {
 	const [videoSourcePath, setVideoSourcePath] = useState<string | null>(null);
 	const [webcamVideoPath, setWebcamVideoPath] = useState<string | null>(null);
 	const [webcamVideoSourcePath, setWebcamVideoSourcePath] = useState<string | null>(null);
+	const [webcamStartOffsetMs, setWebcamStartOffsetMs] = useState(0);
 	const [currentProjectPath, setCurrentProjectPath] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
@@ -344,6 +345,7 @@ export default function VideoEditor() {
 		return {
 			screenVideoPath,
 			...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath } : {}),
+			...(webcamSourcePath && webcamStartOffsetMs > 0 ? { webcamStartOffsetMs } : {}),
 			...(recordingCursorCaptureMode ? { cursorCaptureMode: recordingCursorCaptureMode } : {}),
 		};
 	}, [
@@ -351,6 +353,7 @@ export default function VideoEditor() {
 		videoSourcePath,
 		webcamVideoPath,
 		webcamVideoSourcePath,
+		webcamStartOffsetMs,
 		recordingCursorCaptureMode,
 	]);
 
@@ -367,6 +370,7 @@ export default function VideoEditor() {
 			}
 			const sourcePath = projectMedia.screenVideoPath;
 			const webcamSourcePath = projectMedia.webcamVideoPath ?? null;
+			const projectWebcamStartOffsetMs = projectMedia.webcamStartOffsetMs ?? 0;
 			const projectCursorCaptureMode = projectMedia.cursorCaptureMode ?? null;
 			const normalizedEditor = normalizeProjectEditor(project.editor);
 			const inferredDurationMs = Math.max(
@@ -391,6 +395,7 @@ export default function VideoEditor() {
 			setVideoPath(toFileUrl(sourcePath));
 			setWebcamVideoSourcePath(webcamSourcePath);
 			setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
+			setWebcamStartOffsetMs(projectWebcamStartOffsetMs);
 			setRecordingCursorCaptureMode(projectCursorCaptureMode);
 			setCurrentProjectPath(path ?? null);
 
@@ -461,6 +466,9 @@ export default function VideoEditor() {
 					{
 						screenVideoPath: sourcePath,
 						...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath } : {}),
+						...(webcamSourcePath && projectWebcamStartOffsetMs > 0
+							? { webcamStartOffsetMs: projectWebcamStartOffsetMs }
+							: {}),
 						...(projectCursorCaptureMode ? { cursorCaptureMode: projectCursorCaptureMode } : {}),
 					},
 					normalizedEditor,
@@ -562,6 +570,7 @@ export default function VideoEditor() {
 					setVideoPath(toFileUrl(sourcePath));
 					setWebcamVideoSourcePath(webcamSourcePath);
 					setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
+					setWebcamStartOffsetMs(session.webcamStartOffsetMs ?? 0);
 					setRecordingCursorCaptureMode(session.cursorCaptureMode ?? null);
 					setCurrentProjectPath(null);
 					setLastSavedSnapshot(
@@ -569,6 +578,9 @@ export default function VideoEditor() {
 							{
 								screenVideoPath: sourcePath,
 								...(webcamSourcePath ? { webcamVideoPath: webcamSourcePath } : {}),
+								...(webcamSourcePath && (session.webcamStartOffsetMs ?? 0) > 0
+									? { webcamStartOffsetMs: session.webcamStartOffsetMs }
+									: {}),
 								...(session.cursorCaptureMode
 									? { cursorCaptureMode: session.cursorCaptureMode }
 									: {}),
@@ -583,6 +595,9 @@ export default function VideoEditor() {
 				if (result.success && result.path) {
 					setVideoSourcePath(result.path);
 					setVideoPath(toFileUrl(result.path));
+					setWebcamVideoSourcePath(null);
+					setWebcamVideoPath(null);
+					setWebcamStartOffsetMs(0);
 					setRecordingCursorCaptureMode(null);
 					setCurrentProjectPath(null);
 					setLastSavedSnapshot(
@@ -1884,6 +1899,7 @@ export default function VideoEditor() {
 					const gifExporter = new GifExporter({
 						videoUrl: videoPath,
 						webcamVideoUrl: webcamVideoPath || undefined,
+						webcamStartOffsetMs,
 						width: settings.gifConfig.width,
 						height: settings.gifConfig.height,
 						frameRate: settings.gifConfig.frameRate,
@@ -1979,6 +1995,7 @@ export default function VideoEditor() {
 					const exporter = new VideoExporter({
 						videoUrl: videoPath,
 						webcamVideoUrl: webcamVideoPath || undefined,
+						webcamStartOffsetMs,
 						width: exportWidth,
 						height: exportHeight,
 						frameRate: 60,
@@ -2124,6 +2141,7 @@ export default function VideoEditor() {
 			cursorClipToBounds,
 			cursorTheme,
 			t,
+			webcamStartOffsetMs,
 		],
 	);
 
@@ -2592,6 +2610,7 @@ export default function VideoEditor() {
 													ref={videoPlaybackRef}
 													videoPath={videoPath || ""}
 													webcamVideoPath={webcamVideoPath || undefined}
+													webcamStartOffsetMs={webcamStartOffsetMs}
 													webcamLayoutPreset={webcamLayoutPreset}
 													webcamMaskShape={webcamMaskShape}
 													webcamMirrored={webcamMirrored}

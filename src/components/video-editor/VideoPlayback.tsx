@@ -93,6 +93,7 @@ import {
 interface VideoPlaybackProps {
 	videoPath: string;
 	webcamVideoPath?: string;
+	webcamStartOffsetMs?: number;
 	webcamLayoutPreset: WebcamLayoutPreset;
 	webcamMaskShape?: import("./types").WebcamMaskShape;
 	webcamMirrored?: boolean;
@@ -220,6 +221,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		{
 			videoPath,
 			webcamVideoPath,
+			webcamStartOffsetMs = 0,
 			webcamLayoutPreset,
 			webcamMaskShape,
 			webcamMirrored = false,
@@ -283,6 +285,14 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const webcamReactiveZoomRef = useRef(webcamReactiveZoom);
 		const webcamLayoutPresetRef = useRef(webcamLayoutPreset);
 		const webcamPositionRef = useRef(webcamPosition);
+		const webcamOffsetSeconds = Math.max(0, webcamStartOffsetMs) / 1000;
+		const webcamPlaybackTime = Math.max(0, currentTime - webcamOffsetSeconds);
+		const webcamVisibleAtCurrentTime =
+			currentTime >= webcamOffsetSeconds - 0.05 &&
+			(() => {
+				const duration = webcamVideoRef.current?.duration;
+				return !duration || !Number.isFinite(duration) || webcamPlaybackTime <= duration + 0.1;
+			})();
 		const containerRef = useRef<HTMLDivElement | null>(null);
 		const appRef = useRef<Application | null>(null);
 		const videoSpriteRef = useRef<Sprite | null>(null);
@@ -1828,22 +1838,37 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				) ?? null;
 			webcamVideo.playbackRate = activeSpeedRegion ? activeSpeedRegion.speed : 1;
 
-			if (!isPlaying) {
+			if (currentTime < webcamOffsetSeconds) {
 				webcamVideo.pause();
-				if (Math.abs(webcamVideo.currentTime - currentTime) > 0.05) {
-					webcamVideo.currentTime = currentTime;
+				if (webcamVideo.currentTime !== 0) {
+					webcamVideo.currentTime = 0;
 				}
 				return;
 			}
 
-			if (Math.abs(webcamVideo.currentTime - currentTime) > 0.15) {
-				webcamVideo.currentTime = currentTime;
+			if (!isPlaying) {
+				webcamVideo.pause();
+				if (Math.abs(webcamVideo.currentTime - webcamPlaybackTime) > 0.05) {
+					webcamVideo.currentTime = webcamPlaybackTime;
+				}
+				return;
+			}
+
+			if (Math.abs(webcamVideo.currentTime - webcamPlaybackTime) > 0.15) {
+				webcamVideo.currentTime = webcamPlaybackTime;
 			}
 
 			webcamVideo.play().catch(() => {
 				// Ignore webcam autoplay restoration failures.
 			});
-		}, [currentTime, isPlaying, speedRegions, webcamVideoPath]);
+		}, [
+			currentTime,
+			isPlaying,
+			speedRegions,
+			webcamOffsetSeconds,
+			webcamPlaybackTime,
+			webcamVideoPath,
+		]);
 
 		useEffect(() => {
 			const webcamVideo = webcamVideoRef.current;
@@ -1941,7 +1966,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 										width: webcamLayout?.width ?? 0,
 										height: webcamLayout?.height ?? 0,
 										zIndex: 20,
-										opacity: webcamLayout ? 1 : 0,
+										opacity: webcamLayout && webcamVisibleAtCurrentTime ? 1 : 0,
 										filter:
 											useClipPath && webcamCssBoxShadow !== "none"
 												? `drop-shadow(${webcamCssBoxShadow})`

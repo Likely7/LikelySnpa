@@ -23,6 +23,7 @@ const ENCODER_FLUSH_TIMEOUT_MS = 20_000;
 export interface VideoExporterConfig extends ExportConfig {
 	videoUrl: string;
 	webcamVideoUrl?: string;
+	webcamStartOffsetMs?: number;
 	wallpaper: string;
 	zoomRegions: ZoomRegion[];
 	trimRegions?: TrimRegion[];
@@ -297,6 +298,7 @@ export class VideoExporter {
 					: this.MAX_ENCODE_QUEUE;
 
 			webcamFrameQueue = this.config.webcamVideoUrl ? new TimestampedVideoFrameQueue() : null;
+			const webcamStartOffsetMs = Math.max(0, this.config.webcamStartOffsetMs ?? 0);
 			webcamDecodePromise =
 				webcamDecoder && webcamFrameQueue
 					? (() => {
@@ -349,7 +351,7 @@ export class VideoExporter {
 
 						const timestamp = frameIndex * frameDuration;
 						webcamFrame = webcamFrameQueue
-							? await webcamFrameQueue.frameAt(sourceTimestampMs)
+							? await webcamFrameQueue.frameAt(sourceTimestampMs - webcamStartOffsetMs)
 							: null;
 						if (this.cancelled) {
 							return;

@@ -15,6 +15,9 @@
 11. Stored the main-process stream's actual file path and used it when finalizing sessions, so changing the configured folder after recording starts cannot make stop/finalize look in the wrong directory.
 12. Added macOS ScreenCaptureKit helper diagnostics for AVAssetWriter append/drop counts and final MP4 audio/video track timing.
 13. Persisted macOS recording diagnostics into the `.session.json` manifest and returned them from stop/attach IPC results.
+14. Confirmed local macOS diagnostic manifests did not show raw MP4 video leading audio; the remaining user-visible desync is most likely webcam sidecar video leading native mic audio.
+15. Added a durable webcam timeline offset model for macOS native recordings: helper capture start time is returned to the renderer, the webcam recorder starts only after native capture starts, and `webcamStartOffsetMs` is persisted.
+16. Applied `webcamStartOffsetMs` consistently in project/session persistence, editor webcam preview, MP4 export, and GIF export.
 
 ## Implemented This Pass
 
@@ -27,22 +30,31 @@
 - `src/hooks/recorderHandle.test.ts`
 - `src/components/launch/LaunchWindow.tsx`
 - `src/lib/nativeMacRecording.ts`
+- `src/lib/recordingSession.ts`
+- `src/components/video-editor/VideoEditor.tsx`
+- `src/components/video-editor/VideoPlayback.tsx`
+- `src/components/video-editor/projectPersistence.test.ts`
+- `src/lib/exporter/videoExporter.ts`
+- `src/lib/exporter/gifExporter.ts`
 - `src/i18n/locales/*/launch.json`
 
 ## Verification
 
 - `npm test -- src/hooks/recorderHandle.test.ts` passes.
+- `npm test -- src/components/video-editor/projectPersistence.test.ts src/hooks/recorderHandle.test.ts` passes.
 - `./node_modules/.bin/tsc --noEmit` passes.
+- `npm run build-vite` passes.
 - `swiftc -parse-as-library -typecheck ... main.swift` passes with deprecation warnings only.
 - `npm run build:native:mac` is blocked by the local machine using Command Line Tools instead of full Xcode.
 - `npm run i18n:check` still fails on pre-existing translation drift; the new `tooltips.chooseRecordingDirectory` key is no longer listed as missing.
 
 ## Next Engineering Step
 
-Run macOS truth tests with full Xcode active and real recordings:
+Run macOS truth tests with the current app build and real recordings:
 
-1. Build native helpers with full Xcode.
-2. Record short and long macOS captures with system audio and/or microphone.
-3. Inspect `.session.json` diagnostics for audio/video start offsets and dropped samples.
+1. Record short and long macOS captures with webcam and microphone enabled.
+2. Inspect `.session.json` diagnostics for raw MP4 audio/video start offsets and `webcamStartOffsetMs`.
+3. Compare editor preview and exported MP4 against the same recording.
 4. If raw MP4 diagnostics show offset/drift, fix helper timestamp handling using the measured values.
-5. Then move to export-side MP4 sync validation.
+5. If only webcam remains offset after `webcamStartOffsetMs`, add measured device-latency calibration.
+6. Then move to export-side MP4 sync validation.

@@ -170,6 +170,7 @@ interface Window {
 			screenVideoPath: string;
 			recordingId: number;
 			webcam: import("../src/lib/recordingSession").RecordedVideoAssetInput;
+			webcamStartOffsetMs?: number;
 			cursorCaptureMode?: import("../src/lib/recordingSession").CursorCaptureMode;
 		}) => Promise<{
 			success: boolean;

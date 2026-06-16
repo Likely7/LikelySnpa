@@ -27,6 +27,7 @@ const GIF_WORKER_URL = new URL("gif.js/dist/gif.worker.js", import.meta.url).toS
 interface GifExporterConfig {
 	videoUrl: string;
 	webcamVideoUrl?: string;
+	webcamStartOffsetMs?: number;
 	width: number;
 	height: number;
 	frameRate: GifFrameRate;
@@ -220,6 +221,7 @@ export class GifExporter {
 
 			let frameIndex = 0;
 			webcamFrameQueue = this.config.webcamVideoUrl ? new TimestampedVideoFrameQueue() : null;
+			const webcamStartOffsetMs = Math.max(0, this.config.webcamStartOffsetMs ?? 0);
 			let stopWebcamDecode = false;
 			let webcamDecodeError: Error | null = null;
 			const webcamDecodePromise =
@@ -270,7 +272,7 @@ export class GifExporter {
 						}
 
 						webcamFrame = webcamFrameQueue
-							? await webcamFrameQueue.frameAt(sourceTimestampMs)
+							? await webcamFrameQueue.frameAt(sourceTimestampMs - webcamStartOffsetMs)
 							: null;
 						const renderer = this.renderer;
 						if (this.cancelled || !renderer) {
