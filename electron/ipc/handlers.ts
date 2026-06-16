@@ -36,7 +36,7 @@ import type {
 	ProjectPathResult,
 } from "../../src/native/contracts";
 import { mainT } from "../i18n";
-import { RECORDINGS_DIR } from "../main";
+import { RECORDINGS_DIR as LEGACY_RECORDINGS_DIR } from "../main";
 import { createCursorRecordingSession } from "../native-bridge/cursor/recording/factory";
 import { requestMacCursorAccessibilityAccess } from "../native-bridge/cursor/recording/macNativeCursorRecordingSession";
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
@@ -60,7 +60,10 @@ const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
 	".ts",
 ]);
 const PREVIEW_AUDIO_DIR = path.join(app.getPath("userData"), "preview-audio");
+const RECORDING_SETTINGS_FILE = path.join(app.getPath("userData"), "recording-settings.json");
+const RECORDING_DIRECTORY_WRITE_TEST_FILE = ".openscreen-write-test";
 const nativeMacCaptureEvents = new EventEmitter();
+let activeRecordingsDir = getDefaultRecordingsDir();
 
 // Paths the user approved via file picker or project load (i.e. outside the default dirs).
 const approvedPaths = new Set<string>();
@@ -70,7 +73,93 @@ function approveFilePath(filePath: string): void {
 }
 
 function getAllowedReadDirs(): string[] {
-	return [RECORDINGS_DIR];
+	return Array.from(new Set([LEGACY_RECORDINGS_DIR, activeRecordingsDir]));
+}
+
+function getDefaultRecordingsDir() {
+	const baseDir = process.platform === "darwin" ? "Movies" : "Videos";
+	return path.join(os.homedir(), baseDir, "OpenScreen");
+}
+
+function normalizeRecordingDirectoryPath(value: unknown): string | null {
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	const trimmed = value.trim();
+	return trimmed ? path.resolve(trimmed) : null;
+}
+
+async function loadRecordingDirectorySetting(): Promise<string | null> {
+	try {
+		const content = await fs.readFile(RECORDING_SETTINGS_FILE, "utf-8");
+		const parsed = JSON.parse(content) as { recordingDirectory?: unknown };
+		return normalizeRecordingDirectoryPath(parsed.recordingDirectory);
+	} catch (error) {
+		const nodeError = error as NodeJS.ErrnoException;
+		if (nodeError.code !== "ENOENT") {
+			console.warn("Failed to load recording directory settings:", error);
+		}
+		return null;
+	}
+}
+
+async function saveRecordingDirectorySetting(recordingDirectory: string): Promise<void> {
+	await fs.mkdir(path.dirname(RECORDING_SETTINGS_FILE), { recursive: true });
+	await fs.writeFile(
+		RECORDING_SETTINGS_FILE,
+		JSON.stringify({ recordingDirectory: path.resolve(recordingDirectory) }, null, 2),
+		"utf-8",
+	);
+}
+
+async function ensureWritableDirectory(dirPath: string): Promise<void> {
+	await fs.mkdir(dirPath, { recursive: true });
+	const stats = await fs.stat(dirPath);
+	if (!stats.isDirectory()) {
+		throw new Error(`${dirPath} is not a directory`);
+	}
+
+	const testPath = path.join(dirPath, RECORDING_DIRECTORY_WRITE_TEST_FILE);
+	await fs.writeFile(testPath, String(Date.now()), "utf-8");
+	await fs.rm(testPath, { force: true });
+}
+
+async function refreshActiveRecordingsDir(): Promise<string> {
+	const configuredDir = await loadRecordingDirectorySetting();
+	activeRecordingsDir = configuredDir ?? getDefaultRecordingsDir();
+	approveFilePath(activeRecordingsDir);
+	return activeRecordingsDir;
+}
+
+async function getWritableRecordingsDir(): Promise<string> {
+	const dirPath = await refreshActiveRecordingsDir();
+	await ensureWritableDirectory(dirPath);
+	approveFilePath(dirPath);
+	return dirPath;
+}
+
+async function getRecordingDirectoryInfo() {
+	const configuredDir = await loadRecordingDirectorySetting();
+	const dirPath = configuredDir ?? getDefaultRecordingsDir();
+	let writable = true;
+	let error: string | undefined;
+	try {
+		await ensureWritableDirectory(dirPath);
+		activeRecordingsDir = dirPath;
+		approveFilePath(dirPath);
+	} catch (nextError) {
+		writable = false;
+		error = nextError instanceof Error ? nextError.message : String(nextError);
+	}
+
+	return {
+		success: true,
+		path: dirPath,
+		isDefault: !configuredDir,
+		writable,
+		...(error ? { error } : {}),
+	};
 }
 
 function isPathWithinDir(filePath: string, dirPath: string): boolean {
@@ -250,7 +339,7 @@ async function approveReadableVideoPath(
 	return normalizedPath;
 }
 
-function resolveRecordingOutputPath(fileName: string): string {
+function resolveRecordingOutputPath(fileName: string, recordingDir = activeRecordingsDir): string {
 	const trimmed = fileName.trim();
 	if (!trimmed) {
 		throw new Error("Invalid recording file name");
@@ -267,7 +356,7 @@ function resolveRecordingOutputPath(fileName: string): string {
 		throw new Error("Recording file name must not contain path segments");
 	}
 
-	return path.join(RECORDINGS_DIR, parsedPath.base);
+	return path.join(recordingDir, parsedPath.base);
 }
 
 function isValidDurationMs(value: number | undefined): value is number {
@@ -313,9 +402,9 @@ async function getApprovedProjectSession(
 		return null;
 	}
 
-	// Only auto-approve media within the project's dir or RECORDINGS_DIR, so a crafted
+	// Only auto-approve media within the project's dir or known recording dirs, so a crafted
 	// project file can't approve reads to arbitrary locations.
-	const trustedDirs = [RECORDINGS_DIR];
+	const trustedDirs = getAllowedReadDirs();
 	if (projectFilePath) {
 		trustedDirs.push(path.dirname(path.resolve(projectFilePath)));
 	}
@@ -416,6 +505,7 @@ const NATIVE_WINDOWS_CAPTURE_STOP_TIMEOUT_MS = 15_000;
 let nativeMacCaptureProcess: ChildProcessWithoutNullStreams | null = null;
 let nativeMacCaptureOutput = "";
 let nativeMacCaptureTargetPath: string | null = null;
+let nativeMacCaptureDiagnostics: Record<string, unknown> | null = null;
 let nativeMacCaptureRecordingId: number | null = null;
 let nativeMacCursorOffsetMs = 0;
 let nativeMacCursorCaptureMode: CursorCaptureMode = "editable-overlay";
@@ -1042,9 +1132,19 @@ function inspectNativeMacCaptureOutput() {
 	for (const line of nativeMacCaptureOutput.split(/\r?\n/)) {
 		const event = tryParseNativeHelperEvent(line.trim());
 		if (event) {
+			if (event.event === "recording-diagnostics") {
+				nativeMacCaptureDiagnostics = event;
+			}
 			nativeMacCaptureEvents.emit("helper-event", event);
 		}
 	}
+}
+
+function getNativeMacDiagnosticsForPath(screenVideoPath: string) {
+	if (nativeMacCaptureDiagnostics?.screenPath === screenVideoPath) {
+		return nativeMacCaptureDiagnostics;
+	}
+	return null;
 }
 
 function attachNativeMacCaptureOutputDrain(proc: ChildProcessWithoutNullStreams) {
@@ -1058,6 +1158,9 @@ function attachNativeMacCaptureOutputDrain(proc: ChildProcessWithoutNullStreams)
 		for (const line of lines) {
 			const event = tryParseNativeHelperEvent(line.trim());
 			if (event) {
+				if (event.event === "recording-diagnostics") {
+					nativeMacCaptureDiagnostics = event;
+				}
 				nativeMacCaptureEvents.emit("helper-event", event);
 			}
 		}
@@ -1223,7 +1326,7 @@ async function loadRecordedSessionForVideoPath(
 		if (!isPathAllowed(session.screenVideoPath)) {
 			const approvedScreen = await approveReadableVideoPath(session.screenVideoPath, [
 				path.dirname(manifestPath),
-				RECORDINGS_DIR,
+				...getAllowedReadDirs(),
 			]);
 			if (!approvedScreen) {
 				return null;
@@ -1234,7 +1337,7 @@ async function loadRecordedSessionForVideoPath(
 		if (session.webcamVideoPath && !isPathAllowed(session.webcamVideoPath)) {
 			const approvedWebcam = await approveReadableVideoPath(session.webcamVideoPath, [
 				path.dirname(manifestPath),
-				RECORDINGS_DIR,
+				...getAllowedReadDirs(),
 			]);
 			if (!approvedWebcam) {
 				session.webcamVideoPath = undefined;
@@ -1267,6 +1370,10 @@ export function registerIpcHandlers(
 	onRecordingStateChange?: (recording: boolean, sourceName: string) => void,
 	_switchToHud?: () => void,
 ) {
+	void refreshActiveRecordingsDir().catch((error) => {
+		console.warn("Failed to preload recording directory setting:", error);
+	});
+
 	async function requestScreenAccess() {
 		if (process.platform !== "darwin") {
 			return { success: true, granted: true, status: "granted" };
@@ -1565,9 +1672,10 @@ export function registerIpcHandlers(
 					typeof request.recordingId === "number" && Number.isFinite(request.recordingId)
 						? request.recordingId
 						: Date.now();
-				const outputPath = path.join(RECORDINGS_DIR, `${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
+				const recordingDir = await getWritableRecordingsDir();
+				const outputPath = path.join(recordingDir, `${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
 				const webcamOutputPath = path.join(
-					RECORDINGS_DIR,
+					recordingDir,
 					`${RECORDING_FILE_PREFIX}${recordingId}-webcam.mp4`,
 				);
 				const sourceDisplay =
@@ -1646,7 +1754,7 @@ export function registerIpcHandlers(
 					outputPath,
 				});
 
-				await fs.mkdir(RECORDINGS_DIR, { recursive: true });
+				await fs.mkdir(recordingDir, { recursive: true });
 				nativeWindowsCaptureOutput = "";
 				nativeWindowsCaptureTargetPath = outputPath;
 				nativeWindowsCaptureWebcamTargetPath = request.webcam.enabled ? webcamOutputPath : null;
@@ -1671,7 +1779,7 @@ export function registerIpcHandlers(
 				}
 
 				const proc = spawn(helperPath, [JSON.stringify(config)], {
-					cwd: RECORDINGS_DIR,
+					cwd: recordingDir,
 					stdio: ["pipe", "pipe", "pipe"],
 					windowsHide: true,
 				});
@@ -1742,7 +1850,8 @@ export function registerIpcHandlers(
 				typeof request.recordingId === "number" && Number.isFinite(request.recordingId)
 					? request.recordingId
 					: Date.now();
-			const outputPath = path.join(RECORDINGS_DIR, `${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
+			const recordingDir = await getWritableRecordingsDir();
+			const outputPath = path.join(recordingDir, `${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
 			const cursorCaptureMode =
 				normalizeCursorCaptureMode(request.cursor?.mode) ?? "editable-overlay";
 			try {
@@ -1787,7 +1896,7 @@ export function registerIpcHandlers(
 				outputs: {
 					screenPath: outputPath,
 					manifestPath: path.join(
-						RECORDINGS_DIR,
+						recordingDir,
 						`${RECORDING_FILE_PREFIX}${recordingId}${RECORDING_SESSION_SUFFIX}`,
 					),
 				},
@@ -1802,9 +1911,10 @@ export function registerIpcHandlers(
 				outputPath,
 			});
 
-			await fs.mkdir(RECORDINGS_DIR, { recursive: true });
+			await fs.mkdir(recordingDir, { recursive: true });
 			nativeMacCaptureOutput = "";
 			nativeMacCaptureTargetPath = outputPath;
+			nativeMacCaptureDiagnostics = null;
 			nativeMacCaptureRecordingId = recordingId;
 			nativeMacCursorOffsetMs = 0;
 			nativeMacCursorCaptureMode = cursorCaptureMode;
@@ -1822,7 +1932,7 @@ export function registerIpcHandlers(
 			}
 
 			const proc = spawn(helperPath, [JSON.stringify(config)], {
-				cwd: RECORDINGS_DIR,
+				cwd: recordingDir,
 				stdio: ["pipe", "pipe", "pipe"],
 			});
 			nativeMacCaptureProcess = proc;
@@ -1851,6 +1961,7 @@ export function registerIpcHandlers(
 			nativeMacCaptureProcess?.kill();
 			nativeMacCaptureProcess = null;
 			nativeMacCaptureTargetPath = null;
+			nativeMacCaptureDiagnostics = null;
 			nativeMacCaptureRecordingId = null;
 			nativeMacCursorOffsetMs = 0;
 			nativeMacCursorCaptureMode = "editable-overlay";
@@ -2015,10 +2126,7 @@ export function registerIpcHandlers(
 			setCurrentRecordingSessionState(session);
 			currentProjectPath = null;
 
-			const sessionManifestPath = path.join(
-				RECORDINGS_DIR,
-				`${path.parse(screenVideoPath).name}${RECORDING_SESSION_SUFFIX}`,
-			);
+			const sessionManifestPath = getSessionManifestPathForVideo(screenVideoPath);
 			await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
 
 			return {
@@ -2098,19 +2206,22 @@ export function registerIpcHandlers(
 				createdAt: recordingId,
 				cursorCaptureMode,
 			};
+			const diagnostics = getNativeMacDiagnosticsForPath(screenVideoPath);
 			setCurrentRecordingSessionState(session);
 			currentProjectPath = null;
 
-			const sessionManifestPath = path.join(
-				RECORDINGS_DIR,
-				`${path.parse(screenVideoPath).name}${RECORDING_SESSION_SUFFIX}`,
+			const sessionManifestPath = getSessionManifestPathForVideo(screenVideoPath);
+			await fs.writeFile(
+				sessionManifestPath,
+				JSON.stringify(diagnostics ? { ...session, diagnostics } : session, null, 2),
+				"utf-8",
 			);
-			await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
 
 			return {
 				success: true,
 				path: screenVideoPath,
 				session,
+				...(diagnostics ? { diagnostics } : {}),
 				message: "Native macOS recording session stored successfully",
 			};
 		} catch (error) {
@@ -2143,7 +2254,7 @@ export function registerIpcHandlers(
 				}
 
 				const screenVideoPath = normalizeVideoSourcePath(payload.screenVideoPath);
-				if (!screenVideoPath || !isPathWithinDir(screenVideoPath, RECORDINGS_DIR)) {
+				if (!screenVideoPath || !isPathAllowed(screenVideoPath)) {
 					return {
 						success: false,
 						error: "Native macOS webcam attachment requires a recording output path.",
@@ -2156,7 +2267,10 @@ export function registerIpcHandlers(
 					return { success: false, error: "Native macOS webcam attachment is missing video data." };
 				}
 
-				const webcamVideoPath = resolveRecordingOutputPath(payload.webcam.fileName);
+				const webcamVideoPath = resolveRecordingOutputPath(
+					payload.webcam.fileName,
+					path.dirname(screenVideoPath),
+				);
 				await fs.writeFile(webcamVideoPath, Buffer.from(payload.webcam.videoData));
 
 				const createdAt =
@@ -2170,19 +2284,22 @@ export function registerIpcHandlers(
 					createdAt,
 					...(cursorCaptureMode ? { cursorCaptureMode } : {}),
 				};
+				const diagnostics = getNativeMacDiagnosticsForPath(screenVideoPath);
 				setCurrentRecordingSessionState(session);
 				currentProjectPath = null;
 
-				const sessionManifestPath = path.join(
-					RECORDINGS_DIR,
-					`${path.parse(screenVideoPath).name}${RECORDING_SESSION_SUFFIX}`,
+				const sessionManifestPath = getSessionManifestPathForVideo(screenVideoPath);
+				await fs.writeFile(
+					sessionManifestPath,
+					JSON.stringify(diagnostics ? { ...session, diagnostics } : session, null, 2),
+					"utf-8",
 				);
-				await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
 
 				return {
 					success: true,
 					path: screenVideoPath,
 					session,
+					...(diagnostics ? { diagnostics } : {}),
 					message: "Native macOS webcam recording attached successfully",
 				};
 			} catch (error) {
@@ -2198,7 +2315,9 @@ export function registerIpcHandlers(
 	// On-disk write streams for in-progress recordings, keyed by output file name.
 	// Chunks append as they arrive so the renderer never buffers the full video (#616).
 	const recordingStreams = new RecordingStreamRegistry();
-	registerRecordingStreamHandlers(ipcMain, recordingStreams, resolveRecordingOutputPath);
+	registerRecordingStreamHandlers(ipcMain, recordingStreams, async (fileName) =>
+		resolveRecordingOutputPath(fileName, await getWritableRecordingsDir()),
+	);
 
 	ipcMain.handle("store-recorded-session", async (_, payload: StoreRecordedSessionInput) => {
 		try {
@@ -2219,7 +2338,10 @@ export function registerIpcHandlers(
 				? payload.createdAt
 				: Date.now();
 		const cursorCaptureMode = normalizeCursorCaptureMode(payload.cursorCaptureMode);
-		const screenVideoPath = resolveRecordingOutputPath(payload.screen.fileName);
+		const recordingDir = await getWritableRecordingsDir();
+		const screenVideoPath =
+			recordingStreams.getPath(payload.screen.fileName) ??
+			resolveRecordingOutputPath(payload.screen.fileName, recordingDir);
 		const screenStreamed = await finalizeRecordingFile(
 			recordingStreams,
 			payload.screen.fileName,
@@ -2230,7 +2352,9 @@ export function registerIpcHandlers(
 		let webcamVideoPath: string | undefined;
 		let webcamStreamed = false;
 		if (payload.webcam) {
-			webcamVideoPath = resolveRecordingOutputPath(payload.webcam.fileName);
+			webcamVideoPath =
+				recordingStreams.getPath(payload.webcam.fileName) ??
+				resolveRecordingOutputPath(payload.webcam.fileName, recordingDir);
 			webcamStreamed = await finalizeRecordingFile(
 				recordingStreams,
 				payload.webcam.fileName,
@@ -2266,10 +2390,7 @@ export function registerIpcHandlers(
 
 		await writePendingCursorTelemetry(screenVideoPath);
 
-		const sessionManifestPath = path.join(
-			RECORDINGS_DIR,
-			`${path.parse(payload.screen.fileName).name}${RECORDING_SESSION_SUFFIX}`,
-		);
+		const sessionManifestPath = getSessionManifestPathForVideo(screenVideoPath);
 		await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
 
 		return {
@@ -2302,22 +2423,65 @@ export function registerIpcHandlers(
 				return { success: true, path: currentRecordingSession.screenVideoPath };
 			}
 
-			const files = await fs.readdir(RECORDINGS_DIR);
-			const videoFiles = files.filter(
-				(file) => file.endsWith(".webm") && !file.endsWith("-webcam.webm"),
-			);
+			const recordingDir = await refreshActiveRecordingsDir();
+			const files = await fs.readdir(recordingDir);
+			const videoFiles = files.filter((file) => {
+				const lower = file.toLowerCase();
+				return (
+					(lower.endsWith(".webm") || lower.endsWith(".mp4")) &&
+					!lower.endsWith("-webcam.webm") &&
+					!lower.endsWith("-webcam.mp4")
+				);
+			});
 
 			if (videoFiles.length === 0) {
 				return { success: false, message: "No recorded video found" };
 			}
 
 			const latestVideo = videoFiles.sort().reverse()[0];
-			const videoPath = path.join(RECORDINGS_DIR, latestVideo);
+			const videoPath = path.join(recordingDir, latestVideo);
 
 			return { success: true, path: videoPath };
 		} catch (error) {
 			console.error("Failed to get video path:", error);
 			return { success: false, message: "Failed to get video path", error: String(error) };
+		}
+	});
+
+	ipcMain.handle("get-recording-directory", async () => {
+		return getRecordingDirectoryInfo();
+	});
+
+	ipcMain.handle("pick-recording-directory", async () => {
+		try {
+			const current = await getRecordingDirectoryInfo();
+			const result = await dialog.showOpenDialog(
+				buildDialogOptions(
+					{
+						title: mainT("dialogs", "fileDialogs.selectFolder") || "Choose Recording Folder",
+						defaultPath: current.path,
+						properties: ["openDirectory", "createDirectory"],
+					},
+					getMainWindow(),
+				),
+			);
+
+			if (result.canceled || result.filePaths.length === 0) {
+				return { success: false, canceled: true, path: current.path };
+			}
+
+			const selectedPath = path.resolve(result.filePaths[0]);
+			await ensureWritableDirectory(selectedPath);
+			await saveRecordingDirectorySetting(selectedPath);
+			activeRecordingsDir = selectedPath;
+			approveFilePath(selectedPath);
+			return { success: true, path: selectedPath, isDefault: false, writable: true };
+		} catch (error) {
+			return {
+				success: false,
+				writable: false,
+				error: error instanceof Error ? error.message : String(error),
+			};
 		}
 	});
 
@@ -2449,10 +2613,11 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("open-video-file-picker", async () => {
 		try {
+			const recordingDir = await refreshActiveRecordingsDir();
 			const dialogOptions = buildDialogOptions(
 				{
 					title: mainT("dialogs", "fileDialogs.selectVideo"),
-					defaultPath: RECORDINGS_DIR,
+					defaultPath: recordingDir,
 					filters: [
 						{
 							name: mainT("dialogs", "fileDialogs.videoFiles"),
@@ -2590,11 +2755,12 @@ export function registerIpcHandlers(
 			const defaultName = safeName.endsWith(`.${PROJECT_FILE_EXTENSION}`)
 				? safeName
 				: `${safeName}.${PROJECT_FILE_EXTENSION}`;
+			const recordingDir = await refreshActiveRecordingsDir();
 
 			const dialogOptions = buildDialogOptions(
 				{
 					title: mainT("dialogs", "fileDialogs.saveProject"),
-					defaultPath: path.join(RECORDINGS_DIR, defaultName),
+					defaultPath: path.join(recordingDir, defaultName),
 					filters: [
 						{
 							name: mainT("dialogs", "fileDialogs.openscreenProject"),
@@ -2641,8 +2807,8 @@ export function registerIpcHandlers(
 	async function loadProjectFile(projectFolder?: string): Promise<ProjectFileResult> {
 		try {
 			// Prefer the user's last opened-project folder if it still exists, else
-			// RECORDINGS_DIR. Validate here because the renderer can't stat the filesystem.
-			let defaultDir = RECORDINGS_DIR;
+			// the active recording directory. Validate here because the renderer can't stat the filesystem.
+			let defaultDir = await refreshActiveRecordingsDir();
 			if (projectFolder) {
 				try {
 					const stats = await fs.stat(projectFolder);
@@ -2653,7 +2819,7 @@ export function registerIpcHandlers(
 					// Stat can fail if the folder was moved/deleted (expected) or on a
 					// permission error (worth surfacing). We fall back either way, but log it.
 					console.warn(
-						`Could not access remembered project folder "${projectFolder}", falling back to RECORDINGS_DIR:`,
+						`Could not access remembered project folder "${projectFolder}", falling back to recording directory:`,
 						err,
 					);
 				}

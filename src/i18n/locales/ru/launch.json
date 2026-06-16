@@ -9,7 +9,8 @@
 		"openVideoFile": "Открыть видеофайл",
 		"openProject": "Открыть проект",
 		"useVerticalTray": "Использовать вертикальную панель",
-		"useHorizontalTray": "Использовать горизонтальную панель"
+		"useHorizontalTray": "Использовать горизонтальную панель",
+		"chooseRecordingDirectory": "Choose recording folder"
 	},
 	"audio": {
 		"enableSystemAudio": "Включить системное аудио",

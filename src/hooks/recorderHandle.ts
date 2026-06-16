@@ -10,7 +10,7 @@ export type RecorderHandle = {
 	recordedBlobPromise: Promise<Blob>;
 	/**
 	 * Whether bytes went to disk via streaming. Computed at finalize, not construction,
-	 * so a stream that fails to open reports as not-streamed and uses its memory fallback.
+	 * so a stream that fails reports as not-streamed while the promise rejects.
 	 */
 	isStreaming: () => boolean;
 	/**
@@ -24,9 +24,9 @@ export type RecorderHandle = {
  * Wrap a MediaRecorder, optionally streaming its chunks to disk.
  *
  * With `fileName`, chunks stream to disk through the main process so a long recording
- * never buffers the whole video in the renderer (#616). Chunks held in memory until the
- * stream confirms open; if the open fails, that buffer is the complete fallback. Webcam
- * sidecars omit `fileName` and buffer in memory, since finalize reads the blob directly.
+ * never buffers the whole video in the renderer (#616). Small startup chunks are held only
+ * until the stream confirms open, then flushed to disk. If the stream cannot open or write,
+ * the recording stops and rejects instead of falling back to memory.
  */
 export function createRecorderHandle(
 	stream: MediaStream,
@@ -37,12 +37,21 @@ export function createRecorderHandle(
 	const mimeType = options.mimeType || "video/webm";
 	const api = window.electronAPI;
 
-	// Chunks held in memory before the stream opens, or for the whole recording when not
-	// streaming. On open they flush to disk and drop; on open failure they're the fallback.
+	// Chunks held in memory before the stream opens, or for the whole recording when no
+	// output file is supplied. On stream open they flush to disk and are dropped.
 	const memoryChunks: Blob[] = [];
-	let mode: "pending" | "streaming" | "buffering" = fileName ? "pending" : "buffering";
+	let mode: "pending" | "streaming" | "buffering" | "failed" = fileName ? "pending" : "buffering";
 	let streamOpened = false;
 	let appendError: Error | null = null;
+
+	const failRecording = (error: Error) => {
+		appendError = error;
+		mode = "failed";
+		memoryChunks.length = 0;
+		if (recorder.state !== "inactive") {
+			recorder.stop();
+		}
+	};
 
 	// Serialize writes so chunks land in arrival order and stop can await every in-flight
 	// write before the stream closes (a late chunk after close truncates the recording).
@@ -78,6 +87,9 @@ export function createRecorderHandle(
 
 	void openPromise.then(
 		(result) => {
+			if (!fileName) {
+				return;
+			}
 			if (result.success) {
 				streamOpened = true;
 				mode = "streaming";
@@ -86,12 +98,11 @@ export function createRecorderHandle(
 				}
 				memoryChunks.length = 0;
 			} else {
-				mode = "buffering";
+				failRecording(new Error(result.error ?? "Failed to open recording stream"));
 			}
 		},
-		() => {
-			// IPC call rejected. Treat like a failed open: keep buffering in memory.
-			mode = "buffering";
+		(error) => {
+			failRecording(error instanceof Error ? error : new Error(String(error)));
 		},
 	);
 
@@ -102,7 +113,7 @@ export function createRecorderHandle(
 			}
 			if (mode === "streaming") {
 				enqueueWrite(event.data);
-			} else {
+			} else if (mode !== "failed") {
 				// pending (stream not open yet) or buffering (not streaming).
 				memoryChunks.push(event.data);
 			}

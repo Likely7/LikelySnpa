@@ -15,11 +15,14 @@ Current behavior:
 - `writer.startSession(atSourceTime: presentationTime)` uses the first video sample time as the session start.
 - Audio samples before `didStartWriting` are dropped by `appendAudioSampleBuffer`.
 - During pause, both video/audio samples are retimed by subtracting `totalPausedDuration`.
+- The helper now counts video append success/failure, audio append success/failure, audio drops before writer start, and audio drops when the writer input is not ready.
+- After `AVAssetWriter.finishWriting`, the helper scans the written MP4 with `AVAssetReader` and emits `recording-diagnostics` before `recording-stopped`.
+- The main process stores this diagnostics payload in the recording `.session.json` manifest.
 
 Initial assessment:
 
 - The macOS helper is structurally capable of sync because ScreenCaptureKit sample timestamps should share a coherent time base.
-- The code does not currently prove sync after recording. There is no post-recording track timestamp validation.
+- The code now reports post-recording track timestamp ranges, but the data still needs to be collected from real macOS recordings.
 - If the user's desync appears in the raw recording before export, inspect actual packet/sample timestamp ranges first.
 
 ## macOS Webcam Sidecar Risk
@@ -77,16 +80,20 @@ Risks:
 
 ## Required Diagnostics
 
-Before large behavior changes, add diagnostics that can report:
+Implemented for macOS source recordings:
 
 - source file video track start/end/duration;
 - source file audio track start/end/duration;
 - detected audio/video offset;
 - whether mic/system audio was requested;
 - whether audio samples were actually written;
-- export file video/audio track start/end/duration.
+- AVAssetWriter append/drop/failure counts.
 
-For macOS source files, prefer lightweight native or main-process validation after `AVAssetWriter.finishWriting`.
+Still required for export:
+
+- export file video/audio track start/end/duration.
+- source-to-export audio timeline offset.
+- loud failure when requested audio cannot be preserved.
 
 ## Working Hypotheses
 
@@ -95,3 +102,12 @@ For macOS source files, prefer lightweight native or main-process validation aft
 3. If only webcam is out of sync, the bug is likely native screen recording plus renderer webcam sidecar start-time mismatch.
 4. If desync grows over time, suspect independent clocks or sample-rate drift.
 5. If desync is constant, suspect start-time offset or pre-roll handling.
+
+## How To Read The New Manifest Diagnostics
+
+Open the `.session.json` next to the recorded MP4 and inspect:
+
+- `diagnostics.audioStartOffsetsMs`: audio track start relative to the first video sample.
+- `diagnostics.writerSamples.systemAudio.droppedBeforeWriterStart`: audio pre-roll dropped before first video frame.
+- `diagnostics.writerSamples.*.appendFailures`: failed appends that must be treated as a source recording defect.
+- `diagnostics.tracks.video[0].firstSampleMs` and `diagnostics.tracks.audio[*].firstSampleMs`: raw media timeline boundaries.

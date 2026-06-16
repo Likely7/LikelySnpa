@@ -9,7 +9,8 @@
 		"openVideoFile": "Mở tệp video",
 		"openProject": "Mở dự án",
 		"useVerticalTray": "Dùng khay dọc",
-		"useHorizontalTray": "Dùng khay ngang"
+		"useHorizontalTray": "Dùng khay ngang",
+		"chooseRecordingDirectory": "Choose recording folder"
 	},
 	"audio": {
 		"enableSystemAudio": "Bật âm thanh hệ thống",

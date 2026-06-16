@@ -9,7 +9,8 @@
 		"openVideoFile": "فتح ملف فيديو",
 		"openProject": "فتح مشروع",
 		"useVerticalTray": "استخدام الشريط العمودي",
-		"useHorizontalTray": "استخدام الشريط الأفقي"
+		"useHorizontalTray": "استخدام الشريط الأفقي",
+		"chooseRecordingDirectory": "Choose recording folder"
 	},
 	"audio": {
 		"enableSystemAudio": "تفعيل صوت النظام",

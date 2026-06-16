@@ -10,11 +10,12 @@ import type { IpcMain } from "electron";
  */
 export class RecordingStreamRegistry {
 	private readonly streams = new Map<string, WriteStream>();
+	private readonly filePaths = new Map<string, string>();
 
 	/**
 	 * Open a write stream, resolving only on the `open` event so a bad path or
 	 * permission error rejects here instead of becoming a silent chunk drop later,
-	 * letting the renderer's fallback take over.
+	 * letting the renderer stop quickly with an actionable error.
 	 */
 	async open(fileName: string, filePath: string): Promise<void> {
 		await this.endStream(fileName);
@@ -35,10 +36,15 @@ export class RecordingStreamRegistry {
 		});
 
 		this.streams.set(fileName, ws);
+		this.filePaths.set(fileName, filePath);
 	}
 
 	has(fileName: string): boolean {
 		return this.streams.has(fileName);
+	}
+
+	getPath(fileName: string): string | undefined {
+		return this.filePaths.get(fileName);
 	}
 
 	/** Append a chunk; rejects if no stream is open or the write fails. */
@@ -62,6 +68,7 @@ export class RecordingStreamRegistry {
 			return false;
 		}
 		this.streams.delete(fileName);
+		this.filePaths.delete(fileName);
 		await new Promise<void>((resolve, reject) => {
 			ws.end((error?: Error | null) => (error ? reject(error) : resolve()));
 		});
@@ -73,8 +80,10 @@ export class RecordingStreamRegistry {
 	 * failed recording doesn't leak descriptors or orphan partial files on disk.
 	 */
 	async discard(fileName: string, filePath: string): Promise<void> {
+		const resolvedPath = this.filePaths.get(fileName) ?? filePath;
 		await this.endStream(fileName);
-		await unlink(filePath).catch(() => undefined);
+		this.filePaths.delete(fileName);
+		await unlink(resolvedPath).catch(() => undefined);
 	}
 
 	private async endStream(fileName: string): Promise<void> {
@@ -83,6 +92,7 @@ export class RecordingStreamRegistry {
 			return;
 		}
 		this.streams.delete(fileName);
+		this.filePaths.delete(fileName);
 		await new Promise<void>((resolve) => ws.end(() => resolve()));
 	}
 }
@@ -95,13 +105,13 @@ export class RecordingStreamRegistry {
 export function registerRecordingStreamHandlers(
 	ipcMain: IpcMain,
 	registry: RecordingStreamRegistry,
-	resolveRecordingOutputPath: (fileName: string) => string,
+	resolveRecordingOutputPath: (fileName: string) => string | Promise<string>,
 ): void {
 	ipcMain.handle(
 		"open-recording-stream",
 		async (_, fileName: string): Promise<{ success: boolean; error?: string }> => {
 			try {
-				await registry.open(fileName, resolveRecordingOutputPath(fileName));
+				await registry.open(fileName, await resolveRecordingOutputPath(fileName));
 				return { success: true };
 			} catch (error) {
 				return { success: false, error: String(error) };
@@ -129,7 +139,7 @@ export function registerRecordingStreamHandlers(
 		"close-recording-stream",
 		async (_, fileName: string): Promise<{ success: boolean; error?: string }> => {
 			try {
-				await registry.discard(fileName, resolveRecordingOutputPath(fileName));
+				await registry.discard(fileName, await resolveRecordingOutputPath(fileName));
 				return { success: true };
 			} catch (error) {
 				return { success: false, error: String(error) };

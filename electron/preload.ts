@@ -77,6 +77,12 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	closeRecordingStream: (fileName: string) => {
 		return ipcRenderer.invoke("close-recording-stream", fileName);
 	},
+	getRecordingDirectory: () => {
+		return ipcRenderer.invoke("get-recording-directory");
+	},
+	pickRecordingDirectory: () => {
+		return ipcRenderer.invoke("pick-recording-directory");
+	},
 
 	getRecordedVideoPath: () => {
 		return ipcRenderer.invoke("get-recorded-video-path");

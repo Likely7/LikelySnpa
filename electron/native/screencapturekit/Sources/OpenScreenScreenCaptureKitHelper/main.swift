@@ -145,6 +145,17 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 	private var outputHeight = 1080
 	private let microphoneOutputTypeRawValue = 2
 	private let hostClock = CMClockGetHostTimeClock()
+	private var videoSamplesAppended = 0
+	private var videoSamplesDroppedInputNotReady = 0
+	private var videoAppendFailures = 0
+	private var systemAudioSamplesAppended = 0
+	private var systemAudioSamplesDroppedBeforeWriterStart = 0
+	private var systemAudioSamplesDroppedInputNotReady = 0
+	private var systemAudioAppendFailures = 0
+	private var microphoneAudioSamplesAppended = 0
+	private var microphoneAudioSamplesDroppedBeforeWriterStart = 0
+	private var microphoneAudioSamplesDroppedInputNotReady = 0
+	private var microphoneAudioAppendFailures = 0
 
 	init(request: RecordingRequest) {
 		self.request = request
@@ -272,12 +283,12 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		}
 
 		if type == .audio {
-			appendAudioSampleBuffer(sampleBuffer, to: systemAudioInput)
+			appendAudioSampleBuffer(sampleBuffer, to: systemAudioInput, label: "system")
 			return
 		}
 
 		if type.rawValue == microphoneOutputTypeRawValue {
-			appendAudioSampleBuffer(sampleBuffer, to: microphoneAudioInput)
+			appendAudioSampleBuffer(sampleBuffer, to: microphoneAudioInput, label: "microphone")
 			return
 		}
 
@@ -298,15 +309,22 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		}
 
 		if videoInput.isReadyForMoreMediaData {
-			if videoInput.append(sampleBuffer), !didEmitRecordingStarted {
-				didEmitRecordingStarted = true
-				emit([
-					"event": "recording-started",
-					"timestampMs": Int(Date().timeIntervalSince1970 * 1000),
-					"width": outputWidth,
-					"height": outputHeight,
-				])
+			if videoInput.append(sampleBuffer) {
+				videoSamplesAppended += 1
+				if !didEmitRecordingStarted {
+					didEmitRecordingStarted = true
+					emit([
+						"event": "recording-started",
+						"timestampMs": Int(Date().timeIntervalSince1970 * 1000),
+						"width": outputWidth,
+						"height": outputHeight,
+					])
+				}
+			} else {
+				videoAppendFailures += 1
 			}
+		} else {
+			videoSamplesDroppedInputNotReady += 1
 		}
 	}
 
@@ -465,6 +483,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		}
 
 		if writer.status == .completed {
+			emitRecordingDiagnostics(for: request.outputs.screenPath)
 			emit([
 				"event": "recording-stopped",
 				"screenPath": request.outputs.screenPath,
@@ -495,15 +514,180 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		return input
 	}
 
-	private func appendAudioSampleBuffer(_ sampleBuffer: CMSampleBuffer, to input: AVAssetWriterInput?) {
+	private func appendAudioSampleBuffer(
+		_ sampleBuffer: CMSampleBuffer,
+		to input: AVAssetWriterInput?,
+		label: String
+	) {
+		let sampleCount = max(1, CMSampleBufferGetNumSamples(sampleBuffer))
 		guard didStartWriting else {
+			recordAudioSamples(label: label, droppedBeforeWriterStart: sampleCount)
 			return
 		}
 		guard let input, input.isReadyForMoreMediaData else {
+			recordAudioSamples(label: label, droppedInputNotReady: sampleCount)
 			return
 		}
 
-		input.append(sampleBuffer)
+		if input.append(sampleBuffer) {
+			recordAudioSamples(label: label, appended: sampleCount)
+		} else {
+			recordAudioSamples(label: label, appendFailures: sampleCount)
+		}
+	}
+
+	private func recordAudioSamples(
+		label: String,
+		appended: Int = 0,
+		droppedBeforeWriterStart: Int = 0,
+		droppedInputNotReady: Int = 0,
+		appendFailures: Int = 0
+	) {
+		if label == "microphone" {
+			microphoneAudioSamplesAppended += appended
+			microphoneAudioSamplesDroppedBeforeWriterStart += droppedBeforeWriterStart
+			microphoneAudioSamplesDroppedInputNotReady += droppedInputNotReady
+			microphoneAudioAppendFailures += appendFailures
+			return
+		}
+
+		systemAudioSamplesAppended += appended
+		systemAudioSamplesDroppedBeforeWriterStart += droppedBeforeWriterStart
+		systemAudioSamplesDroppedInputNotReady += droppedInputNotReady
+		systemAudioAppendFailures += appendFailures
+	}
+
+	private func emitRecordingDiagnostics(for path: String) {
+		var diagnostics = collectRecordingDiagnostics(for: path)
+		diagnostics["event"] = "recording-diagnostics"
+		diagnostics["screenPath"] = path
+		diagnostics["requestedAudio"] = [
+			"system": request.audio.system.enabled,
+			"microphone": request.audio.microphone.enabled,
+		]
+		diagnostics["nativeMicrophoneEnabled"] = nativeMicrophoneEnabled
+		diagnostics["writerSamples"] = [
+			"video": [
+				"appended": videoSamplesAppended,
+				"droppedInputNotReady": videoSamplesDroppedInputNotReady,
+				"appendFailures": videoAppendFailures,
+			],
+			"systemAudio": [
+				"appended": systemAudioSamplesAppended,
+				"droppedBeforeWriterStart": systemAudioSamplesDroppedBeforeWriterStart,
+				"droppedInputNotReady": systemAudioSamplesDroppedInputNotReady,
+				"appendFailures": systemAudioAppendFailures,
+			],
+			"microphoneAudio": [
+				"appended": microphoneAudioSamplesAppended,
+				"droppedBeforeWriterStart": microphoneAudioSamplesDroppedBeforeWriterStart,
+				"droppedInputNotReady": microphoneAudioSamplesDroppedInputNotReady,
+				"appendFailures": microphoneAudioAppendFailures,
+			],
+		]
+		emit(diagnostics)
+	}
+
+	private func collectRecordingDiagnostics(for path: String) -> [String: Any] {
+		let asset = AVURLAsset(url: URL(fileURLWithPath: path))
+		let videoTracks = asset.tracks(withMediaType: .video)
+		let audioTracks = asset.tracks(withMediaType: .audio)
+		let videoDiagnostics = videoTracks.enumerated().map { index, track in
+			scanTrack(track, index: index, mediaType: "video", asset: asset)
+		}
+		let audioDiagnostics = audioTracks.enumerated().map { index, track in
+			scanTrack(track, index: index, mediaType: "audio", asset: asset)
+		}
+		let firstVideoStartMs = videoDiagnostics.compactMap { $0["firstSampleMs"] as? Double }.first
+		let audioOffsets = audioDiagnostics.compactMap { diagnostic -> [String: Any]? in
+			guard let firstVideoStartMs,
+				let firstAudioStartMs = diagnostic["firstSampleMs"] as? Double,
+				let trackIndex = diagnostic["index"] as? Int
+			else {
+				return nil
+			}
+			return [
+				"trackIndex": trackIndex,
+				"startOffsetMs": firstAudioStartMs - firstVideoStartMs,
+			]
+		}
+
+		return [
+			"tracks": [
+				"video": videoDiagnostics,
+				"audio": audioDiagnostics,
+			],
+			"audioStartOffsetsMs": audioOffsets,
+		]
+	}
+
+	private func scanTrack(
+		_ track: AVAssetTrack,
+		index: Int,
+		mediaType: String,
+		asset: AVAsset
+	) -> [String: Any] {
+		var diagnostic: [String: Any] = [
+			"index": index,
+			"mediaType": mediaType,
+		]
+		if let durationMs = milliseconds(track.timeRange.duration) {
+			diagnostic["durationMs"] = durationMs
+		}
+
+		do {
+			let reader = try AVAssetReader(asset: asset)
+			let output = AVAssetReaderTrackOutput(track: track, outputSettings: nil)
+			output.alwaysCopiesSampleData = false
+			guard reader.canAdd(output) else {
+				diagnostic["scanError"] = "Unable to add reader output"
+				return diagnostic
+			}
+			reader.add(output)
+			guard reader.startReading() else {
+				diagnostic["scanError"] = reader.error.map { "\($0)" } ?? "Reader failed to start"
+				return diagnostic
+			}
+
+			var firstSample: CMTime?
+			var lastSampleEnd: CMTime?
+			var sampleBuffers = 0
+			while let sampleBuffer = output.copyNextSampleBuffer() {
+				sampleBuffers += 1
+				let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+				let duration = CMSampleBufferGetDuration(sampleBuffer)
+				if firstSample == nil, pts.isValid {
+					firstSample = pts
+				}
+				if pts.isValid {
+					lastSampleEnd = duration.isValid ? CMTimeAdd(pts, duration) : pts
+				}
+			}
+			reader.cancelReading()
+
+			diagnostic["sampleBuffers"] = sampleBuffers
+			if let firstSampleMs = milliseconds(firstSample) {
+				diagnostic["firstSampleMs"] = firstSampleMs
+			}
+			if let lastSampleEndMs = milliseconds(lastSampleEnd) {
+				diagnostic["lastSampleEndMs"] = lastSampleEndMs
+			}
+		} catch {
+			diagnostic["scanError"] = "\(error)"
+		}
+
+		return diagnostic
+	}
+
+	private func milliseconds(_ time: CMTime?) -> Double? {
+		guard let time, time.isValid, !time.isIndefinite else {
+			return nil
+		}
+		let seconds = CMTimeGetSeconds(time)
+		guard seconds.isFinite else {
+			return nil
+		}
+		return seconds * 1000
 	}
 
 	private func currentPauseState() -> (paused: Bool, offset: CMTime) {

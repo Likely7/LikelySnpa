@@ -63,6 +63,16 @@ export type NativeMacHelperRecordingStoppedEvent = {
 	screenPath: string;
 };
 
+export type NativeMacHelperRecordingDiagnosticsEvent = {
+	event: "recording-diagnostics";
+	screenPath: string;
+	requestedAudio?: Record<string, unknown>;
+	nativeMicrophoneEnabled?: boolean;
+	writerSamples?: Record<string, unknown>;
+	tracks?: Record<string, unknown>;
+	audioStartOffsetsMs?: Array<Record<string, unknown>>;
+};
+
 export type NativeMacHelperWarningEvent = {
 	event: "warning";
 	code: string;
@@ -78,6 +88,7 @@ export type NativeMacHelperErrorEvent = {
 export type NativeMacHelperEvent =
 	| NativeMacHelperReadyEvent
 	| NativeMacHelperRecordingStartedEvent
+	| NativeMacHelperRecordingDiagnosticsEvent
 	| NativeMacHelperRecordingStoppedEvent
 	| NativeMacHelperWarningEvent
 	| NativeMacHelperErrorEvent;

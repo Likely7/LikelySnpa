@@ -2,12 +2,12 @@
 
 ## P0
 
-1. Add user-selectable recording directory.
-2. Replace hard-coded `RECORDINGS_DIR` call sites with a validated session directory.
-3. Introduce a main-process recording session manifest written before capture starts.
-4. Make browser `MediaRecorder` screen and webcam paths disk-required, not memory fallback.
-5. Add macOS audio/video sync diagnostics for raw recordings.
-6. Preserve files as recoverable when stop/finalize fails.
+1. Build the macOS native helper with full Xcode and run real recording tests.
+2. Validate raw macOS MP4 sync with the new `.session.json` diagnostics.
+3. If diagnostics show constant offset or drift, fix ScreenCaptureKit/AVAssetWriter timestamp handling against measured data.
+4. Introduce a main-process recording session manifest written before capture starts.
+5. Preserve files as recoverable when stop/finalize fails.
+6. Stream macOS native webcam sidecar to the selected directory instead of using a renderer in-memory sidecar blob.
 
 ## P1
 
@@ -17,11 +17,12 @@
 4. Add MP4 export sync diagnostics.
 5. Make MP4 export write to a temp file instead of an in-memory `BufferTarget`.
 6. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
+7. Add automated tests for custom recording directories and manifest paths.
 
 ## P2
 
-1. Improve UI to show current recording directory in the HUD or editor settings.
-2. Add "Show Recording Folder" action after recording.
+1. Add "Show Recording Folder" action after recording.
+2. Add recording directory management to editor settings.
 3. Add project relink flow if a media file moves.
 4. Add focused automated tests for project persistence with custom recording directories.
 
@@ -32,5 +33,5 @@
 3. Confirm editor auto zoom suggestions still appear from cursor telemetry.
 4. Confirm manual zoom with Auto-Focus follows cursor.
 5. Confirm export MP4 remains in sync.
-6. Confirm selected recording directory contains video, cursor JSON, and session manifest.
+6. Confirm selected recording directory contains video, cursor JSON, session manifest, and macOS diagnostics.
 7. Kill the app mid-recording and verify recoverable artifacts remain in the chosen folder.

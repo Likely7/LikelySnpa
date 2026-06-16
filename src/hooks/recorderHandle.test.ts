@@ -70,27 +70,25 @@ describe("createRecorderHandle", () => {
 		expect(handle.isStreaming()).toBe(true);
 	});
 
-	it("falls back to a complete in-memory blob when the stream fails to open", async () => {
+	it("rejects and stops when the stream fails to open", async () => {
 		const openRecordingStream = vi.fn(async () => ({ success: false, error: "nope" }));
 		const appendRecordingChunk = vi.fn(async () => ({ success: true }));
 		stubElectronAPI({ openRecordingStream, appendRecordingChunk });
 
 		const handle = createRecorderHandle({} as MediaStream, { mimeType: "video/webm" }, "rec.webm");
 		const fake = driver(handle);
+		const rejection = expect(handle.recordedBlobPromise).rejects.toThrow(/nope/);
 
 		fake.emit(new Blob(["a"]));
-		await tick(); // open resolves false -> buffering, keep everything in memory
-		fake.emit(new Blob(["bc"]));
-		fake.stop();
+		await tick(); // open resolves false -> fail fast
 
-		const blob = await handle.recordedBlobPromise;
 		expect(appendRecordingChunk).not.toHaveBeenCalled();
 		expect(handle.isStreaming()).toBe(false);
-		expect(blob.size).toBe(3);
-		expect(decode(await blob.arrayBuffer())).toBe("abc");
+		expect(fake.state).toBe("inactive");
+		await rejection;
 	});
 
-	it("falls back to in-memory buffering when the open IPC call rejects", async () => {
+	it("rejects and stops when the open IPC call rejects", async () => {
 		const openRecordingStream = vi.fn(async () => {
 			throw new Error("ipc channel closed");
 		});
@@ -101,16 +99,14 @@ describe("createRecorderHandle", () => {
 
 		const handle = createRecorderHandle({} as MediaStream, { mimeType: "video/webm" }, "rec.webm");
 		const fake = driver(handle);
+		const rejection = expect(handle.recordedBlobPromise).rejects.toThrow(/ipc channel closed/);
 
 		fake.emit(new Blob(["a"]));
-		await tick(); // open rejects -> treated as a failed open, keep buffering
-		fake.emit(new Blob(["b"]));
-		fake.stop();
+		await tick(); // open rejects -> fail fast
 
-		const blob = await handle.recordedBlobPromise;
 		expect(handle.isStreaming()).toBe(false);
-		expect(blob.size).toBe(2);
-		expect(decode(await blob.arrayBuffer())).toBe("ab");
+		expect(fake.state).toBe("inactive");
+		await rejection;
 	});
 
 	it("waits for in-flight chunk writes before stop resolves (no truncation)", async () => {
@@ -205,24 +201,23 @@ describe("createRecorderHandle", () => {
 		expect(blob.size).toBe(2);
 	});
 
-	it("buffers in memory when appendRecordingChunk is unavailable (version skew)", async () => {
+	it("rejects when appendRecordingChunk is unavailable (version skew)", async () => {
 		const openRecordingStream = vi.fn(async () => ({ success: true }));
 		// appendRecordingChunk intentionally omitted to simulate renderer/main skew.
 		stubElectronAPI({ openRecordingStream });
 
 		const handle = createRecorderHandle({} as MediaStream, { mimeType: "video/webm" }, "rec.webm");
 		const fake = driver(handle);
+		const rejection = expect(handle.recordedBlobPromise).rejects.toThrow(
+			/Failed to open recording stream/,
+		);
 
 		fake.emit(new Blob(["a"]));
 		await tick();
-		fake.emit(new Blob(["b"]));
-		fake.stop();
 
-		const blob = await handle.recordedBlobPromise;
-		// Never even attempts to open the stream when it can't append to it.
 		expect(openRecordingStream).not.toHaveBeenCalled();
 		expect(handle.isStreaming()).toBe(false);
-		expect(blob.size).toBe(2);
+		await rejection;
 	});
 
 	it("discard closes the disk stream for a streamed recording", async () => {
@@ -253,10 +248,9 @@ describe("createRecorderHandle", () => {
 		});
 
 		const handle = createRecorderHandle({} as MediaStream, { mimeType: "video/webm" }, "rec.webm");
-		const fake = driver(handle);
+		const rejection = expect(handle.recordedBlobPromise).rejects.toThrow();
 		await tick();
-		fake.stop();
-		await handle.recordedBlobPromise;
+		await rejection;
 
 		await handle.discard();
 		expect(closeRecordingStream).not.toHaveBeenCalled();

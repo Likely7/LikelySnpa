@@ -87,6 +87,21 @@ interface Window {
 			chunk: ArrayBuffer,
 		) => Promise<{ success: boolean; error?: string }>;
 		closeRecordingStream: (fileName: string) => Promise<{ success: boolean; error?: string }>;
+		getRecordingDirectory: () => Promise<{
+			success: boolean;
+			path: string;
+			isDefault: boolean;
+			writable: boolean;
+			error?: string;
+		}>;
+		pickRecordingDirectory: () => Promise<{
+			success: boolean;
+			path?: string;
+			isDefault?: boolean;
+			writable?: boolean;
+			canceled?: boolean;
+			error?: string;
+		}>;
 		getRecordedVideoPath: () => Promise<{
 			success: boolean;
 			path?: string;
@@ -146,6 +161,7 @@ interface Window {
 			success: boolean;
 			path?: string;
 			session?: import("../src/lib/recordingSession").RecordingSession;
+			diagnostics?: Record<string, unknown>;
 			message?: string;
 			discarded?: boolean;
 			error?: string;
@@ -159,6 +175,7 @@ interface Window {
 			success: boolean;
 			path?: string;
 			session?: import("../src/lib/recordingSession").RecordingSession;
+			diagnostics?: Record<string, unknown>;
 			message?: string;
 			error?: string;
 		}>;

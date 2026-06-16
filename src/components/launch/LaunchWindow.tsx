@@ -143,6 +143,8 @@ export function LaunchWindow() {
 		() => loadUserPreferences().trayLayout,
 	);
 	const [supportsCursorModeToggle, setSupportsCursorModeToggle] = useState(false);
+	const [recordingDirectoryPath, setRecordingDirectoryPath] = useState("");
+	const [recordingDirectoryWritable, setRecordingDirectoryWritable] = useState(true);
 	const languageTriggerRef = useRef<HTMLButtonElement | null>(null);
 	const languageMenuPanelRef = useRef<HTMLDivElement | null>(null);
 	const hudBarRef = useRef<HTMLDivElement | null>(null);
@@ -190,6 +192,48 @@ export function LaunchWindow() {
 		enabled: showMicControls,
 		deviceId: microphoneDeviceId,
 	});
+	const recordingDirectoryTooltip = recordingDirectoryPath
+		? `${t("tooltips.chooseRecordingDirectory")}: ${recordingDirectoryPath}`
+		: t("tooltips.chooseRecordingDirectory");
+
+	const refreshRecordingDirectory = useCallback(async () => {
+		try {
+			const result = await window.electronAPI?.getRecordingDirectory?.();
+			if (!result?.success) {
+				setRecordingDirectoryWritable(false);
+				return;
+			}
+			setRecordingDirectoryPath(result.path);
+			setRecordingDirectoryWritable(result.writable);
+		} catch (error) {
+			console.error("Failed to load recording directory:", error);
+			setRecordingDirectoryWritable(false);
+		}
+	}, []);
+
+	const pickRecordingDirectory = useCallback(async () => {
+		try {
+			const result = await window.electronAPI?.pickRecordingDirectory?.();
+			if (!result || result.canceled) {
+				return;
+			}
+			if (!result.success || !result.path) {
+				setRecordingDirectoryWritable(false);
+				alert(result.error ?? "Failed to set recording directory");
+				return;
+			}
+			setRecordingDirectoryPath(result.path);
+			setRecordingDirectoryWritable(result.writable !== false);
+		} catch (error) {
+			console.error("Failed to pick recording directory:", error);
+			setRecordingDirectoryWritable(false);
+			alert(error instanceof Error ? error.message : "Failed to set recording directory");
+		}
+	}, []);
+
+	useEffect(() => {
+		void refreshRecordingDirectory();
+	}, [refreshRecordingDirectory]);
 
 	useEffect(() => {
 		if (selectedMicId && selectedMicId !== "default") {
@@ -901,15 +945,29 @@ export function LaunchWindow() {
 				)}
 
 				{!recording && (
-					<Tooltip content={t("tooltips.openStudio")}>
-						<button
-							data-testid="launch-open-studio-button"
-							className={`${hudIconBtnClasses} ${styles.electronNoDrag}`}
-							onClick={() => window.electronAPI.switchToEditor()}
-						>
-							<Clapperboard size={ICON_SIZE} className="text-white/60" />
-						</button>
-					</Tooltip>
+					<>
+						<Tooltip content={recordingDirectoryTooltip}>
+							<button
+								data-testid="launch-recording-directory-button"
+								type="button"
+								aria-label={t("tooltips.chooseRecordingDirectory")}
+								title={recordingDirectoryPath}
+								className={`${hudIconBtnClasses} ${styles.electronNoDrag}`}
+								onClick={pickRecordingDirectory}
+							>
+								{getIcon("folder", recordingDirectoryWritable ? "text-white/60" : "text-red-400")}
+							</button>
+						</Tooltip>
+						<Tooltip content={t("tooltips.openStudio")}>
+							<button
+								data-testid="launch-open-studio-button"
+								className={`${hudIconBtnClasses} ${styles.electronNoDrag}`}
+								onClick={() => window.electronAPI.switchToEditor()}
+							>
+								<Clapperboard size={ICON_SIZE} className="text-white/60" />
+							</button>
+						</Tooltip>
+					</>
 				)}
 
 				{/* Right sidebar controls */}

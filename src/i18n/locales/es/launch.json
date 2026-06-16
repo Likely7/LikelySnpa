@@ -9,7 +9,8 @@
 		"openVideoFile": "Abrir archivo de video",
 		"openProject": "Abrir proyecto",
 		"useVerticalTray": "Usar bandeja vertical",
-		"useHorizontalTray": "Usar bandeja horizontal"
+		"useHorizontalTray": "Usar bandeja horizontal",
+		"chooseRecordingDirectory": "Choose recording folder"
 	},
 	"audio": {
 		"enableSystemAudio": "Activar audio del sistema",
