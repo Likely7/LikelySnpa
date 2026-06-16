@@ -42,7 +42,7 @@
 		"cameraDisconnected": "تم فصل كاميرا الويب.",
 		"cameraNotFound": "لم يتم العثور على كاميرا.",
 		"permissionDenied": "تم رفض إذن التسجيل. يرجى السماح بتسجيل الشاشة.",
-		"accessibilityAllowAndRetry": "اسمح بوصول تسهيلات الاستخدام لـ OpenScreen، ثم اضغط على التسجيل مرة أخرى لبدء العد التنازلي."
+		"accessibilityAllowAndRetry": "اسمح بوصول تسهيلات الاستخدام لـ LikelySnap، ثم اضغط على التسجيل مرة أخرى لبدء العد التنازلي."
 	},
 	"autoCaptions": {
 		"button": "التسميات التوضيحية التلقائية",
@@ -65,15 +65,15 @@
 	},
 	"emptyState": {
 		"title": "لا يوجد مشروع مفتوح",
-		"description": "استورد مقطع فيديو للبدء في التحرير، أو حمّل مشروع OpenScreen موجود.",
+		"description": "استورد مقطع فيديو للبدء في التحرير، أو حمّل مشروع LikelySnap موجود.",
 		"importVideoButton": "استيراد ملف فيديو...",
 		"loadProjectButton": "تحميل مشروع...",
 		"supportedFormats": "الصيغ المدعومة: MP4، MOV، WebM، MKV، AVI، M4V، WMV",
-		"dragDropHint": "أو اسحب وأفلت ملف مشروع .openscreen هنا",
+		"dragDropHint": "أو اسحب وأفلت ملف مشروع .likelysnap هنا",
 		"dropOverlay": "أفلت ملف المشروع لفتحه",
 		"dropErrors": {
 			"unsupportedFormatTitle": "تنسيق غير مدعوم",
-			"unsupportedFormatMessage": "يمكن إسقاط ملفات مشروع .openscreen فقط هنا. لاستيراد مقطع فيديو، استخدم زر \"استيراد ملف فيديو...\" بدلاً من ذلك.",
+			"unsupportedFormatMessage": "يمكن إسقاط ملفات مشروع .likelysnap فقط هنا. لاستيراد مقطع فيديو، استخدم زر \"استيراد ملف فيديو...\" بدلاً من ذلك.",
 			"couldNotOpenTitle": "تعذّر فتح الملف",
 			"couldNotOpenMessage": "تعذّر فتح ملف المشروع. ربما تم نقل الفيديو المرجعي أو حذفه."
 		}

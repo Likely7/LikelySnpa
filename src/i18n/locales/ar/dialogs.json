@@ -65,12 +65,12 @@
 		"saveGif": "حفظ GIF المصدر",
 		"saveVideo": "حفظ الفيديو المصدر",
 		"selectVideo": "حدد ملف فيديو",
-		"saveProject": "حفظ مشروع OpenScreen",
-		"openProject": "فتح مشروع OpenScreen",
+		"saveProject": "حفظ مشروع LikelySnap",
+		"openProject": "فتح مشروع LikelySnap",
 		"gifImage": "صورة GIF",
 		"mp4Video": "فيديو MP4",
 		"videoFiles": "ملفات فيديو",
-		"openscreenProject": "مشروع OpenScreen",
+		"openscreenProject": "مشروع LikelySnap",
 		"allFiles": "جميع الملفات"
 	}
 }

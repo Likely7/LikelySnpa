@@ -1,12 +1,13 @@
 import { type Rectangle, screen } from "electron";
 import type { CursorRecordingData, CursorRecordingSample } from "../../../../src/native/contracts";
-import type { CursorRecordingSession } from "./session";
+import type { CursorRecordingSession, CursorRecordingUpdate } from "./session";
 
 interface TelemetryRecordingSessionOptions {
 	getDisplayBounds: () => Rectangle | null;
 	maxSamples: number;
 	sampleIntervalMs: number;
 	startTimeMs?: number;
+	onUpdate?: CursorRecordingUpdate;
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -59,5 +60,11 @@ export class TelemetryRecordingSession implements CursorRecordingSession {
 		if (this.samples.length > this.options.maxSamples) {
 			this.samples.shift();
 		}
+		this.options.onUpdate?.({
+			version: 2,
+			provider: "none",
+			samples: this.samples,
+			assets: [],
+		});
 	}
 }

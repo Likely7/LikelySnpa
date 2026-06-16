@@ -1,5 +1,6 @@
 import type { Rectangle } from "electron";
 import type { NativeCursorType } from "../../../../src/native/contracts";
+import type { CursorRecordingUpdate } from "./session";
 
 export interface WindowsCursorSampleEvent {
 	type: "sample";
@@ -53,4 +54,5 @@ export interface WindowsNativeRecordingSessionOptions {
 	sampleIntervalMs: number;
 	sourceId?: string | null;
 	startTimeMs?: number;
+	onUpdate?: CursorRecordingUpdate;
 }

@@ -1,6 +1,6 @@
 import type { Rectangle } from "electron";
 import { MacNativeCursorRecordingSession } from "./macNativeCursorRecordingSession";
-import type { CursorRecordingSession } from "./session";
+import type { CursorRecordingSession, CursorRecordingUpdate } from "./session";
 import { TelemetryRecordingSession } from "./telemetryRecordingSession";
 import { WindowsNativeRecordingSession } from "./windowsNativeRecordingSession";
 
@@ -11,6 +11,7 @@ interface CreateCursorRecordingSessionOptions {
 	sampleIntervalMs: number;
 	sourceId?: string | null;
 	startTimeMs?: number;
+	onUpdate?: CursorRecordingUpdate;
 }
 
 export function createCursorRecordingSession(
@@ -23,6 +24,7 @@ export function createCursorRecordingSession(
 			sampleIntervalMs: options.sampleIntervalMs,
 			sourceId: options.sourceId,
 			startTimeMs: options.startTimeMs,
+			onUpdate: options.onUpdate,
 		});
 	}
 
@@ -32,6 +34,7 @@ export function createCursorRecordingSession(
 			maxSamples: options.maxSamples,
 			sampleIntervalMs: options.sampleIntervalMs,
 			startTimeMs: options.startTimeMs,
+			onUpdate: options.onUpdate,
 		});
 	}
 
@@ -42,5 +45,6 @@ export function createCursorRecordingSession(
 		maxSamples: options.maxSamples,
 		sampleIntervalMs: options.sampleIntervalMs,
 		startTimeMs: options.startTimeMs,
+		onUpdate: options.onUpdate,
 	});
 }

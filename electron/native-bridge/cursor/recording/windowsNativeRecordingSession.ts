@@ -206,6 +206,7 @@ export class WindowsNativeRecordingSession implements CursorRecordingSession {
 				hotspotY: payload.asset.hotspotY,
 				scaleFactor: assetDisplay.scaleFactor,
 			});
+			this.emitUpdate();
 		}
 
 		const normalized = this.normalizeSample(payload);
@@ -219,6 +220,16 @@ export class WindowsNativeRecordingSession implements CursorRecordingSession {
 		if (this.samples.length > this.options.maxSamples) {
 			this.samples.shift();
 		}
+		this.emitUpdate();
+	}
+
+	private emitUpdate() {
+		this.options.onUpdate?.({
+			version: 2,
+			provider: this.assets.size > 0 ? "native" : "none",
+			samples: this.samples,
+			assets: [...this.assets.values()],
+		});
 	}
 
 	private normalizeSample(

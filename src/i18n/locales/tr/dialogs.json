@@ -65,12 +65,12 @@
 		"saveGif": "Dışa Aktarılan GIF'i Kaydet",
 		"saveVideo": "Dışa Aktarılan Videoyu Kaydet",
 		"selectVideo": "Video Dosyası Seç",
-		"saveProject": "OpenScreen Projesini Kaydet",
-		"openProject": "OpenScreen Projesini Aç",
+		"saveProject": "LikelySnap Projesini Kaydet",
+		"openProject": "LikelySnap Projesini Aç",
 		"gifImage": "GIF Görüntüsü",
 		"mp4Video": "MP4 Video",
 		"videoFiles": "Video Dosyaları",
-		"openscreenProject": "OpenScreen Projesi",
+		"openscreenProject": "LikelySnap Projesi",
 		"allFiles": "Tüm Dosyalar"
 	}
 }

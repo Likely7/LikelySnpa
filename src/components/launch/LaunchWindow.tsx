@@ -782,7 +782,7 @@ export function LaunchWindow() {
 						}
 					>
 						{systemAudioEnabled
-							? getIcon("volumeOn", "text-green-400")
+							? getIcon("volumeOn", "text-rose-400")
 							: getIcon("volumeOff", "text-white/40")}
 					</button>
 					<button
@@ -796,7 +796,7 @@ export function LaunchWindow() {
 						}}
 					>
 						{microphoneEnabled
-							? getIcon("micOn", "text-green-400")
+							? getIcon("micOn", "text-rose-400")
 							: getIcon("micOff", "text-white/40")}
 					</button>
 					<button
@@ -809,7 +809,7 @@ export function LaunchWindow() {
 						title={webcamEnabled ? t("webcam.disableWebcam") : t("webcam.enableWebcam")}
 					>
 						{webcamEnabled
-							? getIcon("webcamOn", "text-green-400")
+							? getIcon("webcamOn", "text-rose-400")
 							: getIcon("webcamOff", "text-white/40")}
 					</button>
 					{supportsCursorModeToggle && (
@@ -835,7 +835,7 @@ export function LaunchWindow() {
 						>
 							{getIcon(
 								"cursor",
-								cursorCaptureMode === "editable-overlay" ? "text-green-400" : "text-white/40",
+								cursorCaptureMode === "editable-overlay" ? "text-rose-400" : "text-white/40",
 							)}
 						</button>
 					)}

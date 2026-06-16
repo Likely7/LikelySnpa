@@ -88,6 +88,7 @@ type NativeMacRecordingHandle = {
 	captureStartedAtMs: number;
 	webcamStartedAtMs?: number;
 	webcamStartOffsetMs?: number;
+	webcamFileName?: string;
 };
 
 export function useScreenRecorder(): UseScreenRecorderReturn {
@@ -553,16 +554,23 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						activeWebcamRecorder.recorder.stop();
 					}
 					const webcamBlob = await activeWebcamRecorder.recordedBlobPromise;
+					const fileName =
+						activeNativeRecording.webcamFileName ??
+						`${RECORDING_FILE_PREFIX}${activeNativeRecording.recordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`;
+					if (activeWebcamRecorder.isStreaming()) {
+						return { fileName };
+					}
 					if (!webcamBlob || webcamBlob.size === 0) {
 						return undefined;
 					}
 					const fixedWebcamBlob = await fixWebmDuration(webcamBlob, webcamDuration);
 					return {
 						videoData: await fixedWebcamBlob.arrayBuffer(),
-						fileName: `${RECORDING_FILE_PREFIX}${activeNativeRecording.recordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`,
+						fileName,
 					};
 				} catch (error) {
 					console.error("Failed to finalize native macOS webcam recording:", error);
+					await activeWebcamRecorder.discard().catch(() => undefined);
 					return undefined;
 				}
 			})();
@@ -596,6 +604,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						recordingId: activeNativeRecording.recordingId,
 						webcam: webcamAsset,
 						webcamStartOffsetMs: activeNativeRecording.webcamStartOffsetMs,
+						webcamDurationMs: webcamDuration,
 						cursorCaptureMode,
 					});
 					if (attachResult.success) {
@@ -1020,13 +1029,19 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			let nativeWebcamRecorder: RecorderHandle | null = null;
 			let webcamStartedAtMs: number | undefined;
 			let webcamStartOffsetMs: number | undefined;
+			let webcamFileName: string | undefined;
 			if (webcamEnabled && webcamStream.current) {
 				try {
 					webcamStartedAtMs = Date.now();
-					nativeWebcamRecorder = createRecorderHandle(webcamStream.current, {
-						mimeType: selectMimeType(),
-						videoBitsPerSecond: BITRATE_BASE,
-					});
+					webcamFileName = `${RECORDING_FILE_PREFIX}${result.recordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`;
+					nativeWebcamRecorder = createRecorderHandle(
+						webcamStream.current,
+						{
+							mimeType: selectMimeType(),
+							videoBitsPerSecond: BITRATE_BASE,
+						},
+						webcamFileName,
+					);
 					webcamStartOffsetMs = Math.max(
 						0,
 						webcamStartedAtMs - (result.captureStartedAtMs ?? webcamStartedAtMs),
@@ -1045,6 +1060,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				captureStartedAtMs: result.captureStartedAtMs ?? Date.now(),
 				...(webcamStartedAtMs !== undefined ? { webcamStartedAtMs } : {}),
 				...(webcamStartOffsetMs !== undefined ? { webcamStartOffsetMs } : {}),
+				...(webcamFileName ? { webcamFileName } : {}),
 			};
 			webcamRecorder.current = nativeWebcamRecorder;
 			accumulatedDurationMs.current = 0;

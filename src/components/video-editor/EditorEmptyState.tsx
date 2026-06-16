@@ -68,7 +68,9 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 			const files = Array.from(e.dataTransfer.files);
 			if (files.length === 0) return;
 
-			const projectFile = files.find((f) => f.name.endsWith(".openscreen"));
+			const projectFile = files.find(
+				(f) => f.name.endsWith(".likelysnap") || f.name.endsWith(".openscreen"),
+			);
 			if (!projectFile) {
 				setDropError("unsupported-format");
 				return;
@@ -113,9 +115,9 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 		>
 			{/* Drop overlay */}
 			{isDraggingOver && (
-				<div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#34B27B] bg-[#34B27B]/10">
-					<Upload className="mb-3 h-10 w-10 text-[#34B27B]" />
-					<p className="text-base font-semibold text-[#34B27B]">{te("emptyState.dropOverlay")}</p>
+				<div className="pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#C24B72] bg-[#C24B72]/10">
+					<Upload className="mb-3 h-10 w-10 text-[#C24B72]" />
+					<p className="text-base font-semibold text-[#C24B72]">{te("emptyState.dropOverlay")}</p>
 				</div>
 			)}
 
@@ -125,7 +127,7 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 					<DialogHeader className="mb-4">
 						<div className="flex items-center gap-3">
 							<img
-								src="./openscreen.png"
+								src="./likelysnap.png"
 								alt=""
 								aria-hidden="true"
 								className="w-9 h-9 rounded-xl flex-shrink-0"
@@ -163,7 +165,7 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 			<div className="relative flex flex-col items-center gap-8 px-6 text-center">
 				{/* Logo */}
 				<img
-					src="./openscreen.png"
+					src="./likelysnap.png"
 					alt=""
 					aria-hidden="true"
 					className="h-16 w-16 rounded-2xl opacity-90"
@@ -181,7 +183,7 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 					<button
 						type="button"
 						onClick={handleImportVideo}
-						className="flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl bg-[#34B27B] hover:bg-[#2d9e6c] active:bg-[#27885c] text-white font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#34B27B] focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
+						className="flex items-center justify-center gap-2.5 w-full px-4 py-3 rounded-xl bg-[#C24B72] hover:bg-[#A83A5F] active:bg-[#8F2F52] text-white font-medium text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#C24B72] focus-visible:ring-offset-2 focus-visible:ring-offset-[#09090b]"
 					>
 						<Film className="h-4 w-4" />
 						{te("emptyState.importVideoButton")}

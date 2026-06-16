@@ -31,9 +31,9 @@
 		"zoomOut": "Zoom Out",
 		"toggleFullScreen": "Toggle Full Screen",
 		"recordingStatus": "Recording: {{source}}",
-		"about": "About OpenScreen",
+		"about": "About LikelySnap",
 		"services": "Services",
-		"hide": "Hide OpenScreen",
+		"hide": "Hide LikelySnap",
 		"hideOthers": "Hide Others",
 		"unhide": "Show All"
 	},

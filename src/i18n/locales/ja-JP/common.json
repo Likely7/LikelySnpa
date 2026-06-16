@@ -31,9 +31,9 @@
 		"zoomOut": "縮小",
 		"toggleFullScreen": "フルスクリーンを切り替え",
 		"recordingStatus": "録画中: {{source}}",
-		"about": "OpenScreenについて",
+		"about": "LikelySnapについて",
 		"services": "サービス",
-		"hide": "OpenScreenを隠す",
+		"hide": "LikelySnapを隠す",
 		"hideOthers": "ほかを隠す",
 		"unhide": "すべて表示"
 	},

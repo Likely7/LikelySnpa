@@ -13,7 +13,7 @@ export interface RecordingSession extends ProjectMedia {
 
 export interface RecordedVideoAssetInput {
 	fileName: string;
-	videoData: ArrayBuffer;
+	videoData?: ArrayBuffer;
 }
 
 export interface StoreRecordedSessionInput {

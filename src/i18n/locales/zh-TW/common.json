@@ -31,9 +31,9 @@
 		"zoomOut": "縮小",
 		"toggleFullScreen": "切換全螢幕",
 		"recordingStatus": "錄製中：{{source}}",
-		"about": "關於 OpenScreen",
+		"about": "關於 LikelySnap",
 		"services": "服務",
-		"hide": "隱藏 OpenScreen",
+		"hide": "隱藏 LikelySnap",
 		"hideOthers": "隱藏其他",
 		"unhide": "全部顯示"
 	},

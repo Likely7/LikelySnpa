@@ -43,7 +43,7 @@
 	"language": "Lingua",
 	"systemLanguagePrompt": {
 		"title": "Usare la lingua del sistema?",
-		"description": "Abbiamo rilevato {{language}} come lingua del sistema. Vuoi passare OpenScreen a {{language}}?",
+		"description": "Abbiamo rilevato {{language}} come lingua del sistema. Vuoi passare LikelySnap a {{language}}?",
 		"switch": "Passa a {{language}}",
 		"keepDefault": "Mantieni la lingua corrente"
 	}

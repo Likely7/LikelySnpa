@@ -31,9 +31,9 @@
 		"zoomOut": "축소",
 		"toggleFullScreen": "전체 화면 전환",
 		"recordingStatus": "녹화 중: {{source}}",
-		"about": "OpenScreen 정보",
+		"about": "LikelySnap 정보",
 		"services": "서비스",
-		"hide": "OpenScreen 숨기기",
+		"hide": "LikelySnap 숨기기",
 		"hideOthers": "다른 항목 숨기기",
 		"unhide": "모두 보기"
 	},

@@ -9,7 +9,7 @@ import type {
 	NativeCursorAsset,
 	NativeCursorType,
 } from "../../../../src/native/contracts";
-import type { CursorRecordingSession } from "./session";
+import type { CursorRecordingSession, CursorRecordingUpdate } from "./session";
 
 interface MacCursorAssetPayload {
 	id: string;
@@ -26,6 +26,7 @@ interface MacNativeCursorRecordingSessionOptions {
 	maxSamples: number;
 	sampleIntervalMs: number;
 	startTimeMs?: number;
+	onUpdate?: CursorRecordingUpdate;
 }
 
 type MacCursorEvent =
@@ -309,6 +310,7 @@ export class MacNativeCursorRecordingSession implements CursorRecordingSession {
 			hotspotY: asset.hotspotY,
 			scaleFactor: asset.scaleFactor ?? displayScaleFactor,
 		});
+		this.emitUpdate();
 	}
 
 	private handleStdoutChunk(chunk: string) {
@@ -401,6 +403,16 @@ export class MacNativeCursorRecordingSession implements CursorRecordingSession {
 		if (this.samples.length > this.options.maxSamples) {
 			this.samples.shift();
 		}
+		this.emitUpdate();
+	}
+
+	private emitUpdate() {
+		this.options.onUpdate?.({
+			version: 2,
+			provider: this.assets.size > 0 ? "native" : "none",
+			samples: this.samples,
+			assets: [...this.assets.values()],
+		});
 	}
 
 	private waitUntilReady() {

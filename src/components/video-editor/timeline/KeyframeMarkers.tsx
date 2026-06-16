@@ -75,7 +75,7 @@ const KeyframeMarkers: React.FC<KeyframeMarkersProps> = ({
 				return (
 					<div
 						key={kf.id}
-						className={`absolute top-8 cursor-grab active:cursor-grabbing ${isSelected ? "ring-2 ring-[#34B27B]" : ""}`}
+						className={`absolute top-8 cursor-grab active:cursor-grabbing ${isSelected ? "ring-2 ring-[#C24B72]" : ""}`}
 						style={{
 							left: `${sidebarWidth + offset - 8}px`,
 							zIndex: isDragging ? 50 : 40,

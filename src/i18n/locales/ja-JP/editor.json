@@ -42,7 +42,7 @@
 		"permissionDenied": "録画の権限が拒否されました。画面録画を許可してください。",
 		"cameraDisconnected": "ウェブカメラが切断されました。",
 		"cameraNotFound": "カメラが見つかりません。",
-		"accessibilityAllowAndRetry": "OpenScreenにアクセシビリティアクセスを許可してから、もう一度録画を押してカウントダウンを開始してください。"
+		"accessibilityAllowAndRetry": "LikelySnapにアクセシビリティアクセスを許可してから、もう一度録画を押してカウントダウンを開始してください。"
 	},
 	"autoCaptions": {
 		"button": "自動キャプション",
@@ -65,15 +65,15 @@
 	},
 	"emptyState": {
 		"title": "プロジェクトが開かれていません",
-		"description": "動画をインポートして編集を開始するか、既存の OpenScreen プロジェクトを読み込んでください。",
+		"description": "動画をインポートして編集を開始するか、既存の LikelySnap プロジェクトを読み込んでください。",
 		"importVideoButton": "動画ファイルをインポート…",
 		"loadProjectButton": "プロジェクトを読み込む…",
 		"supportedFormats": "対応フォーマット：MP4、MOV、WebM、MKV、AVI、M4V、WMV",
-		"dragDropHint": ".openscreen プロジェクトファイルをここにドラッグ＆ドロップ",
+		"dragDropHint": ".likelysnap プロジェクトファイルをここにドラッグ＆ドロップ",
 		"dropOverlay": "プロジェクトファイルをドロップして開く",
 		"dropErrors": {
 			"unsupportedFormatTitle": "非対応フォーマット",
-			"unsupportedFormatMessage": "ここにドロップできるのは .openscreen プロジェクトファイルのみです。動画をインポートするには「動画ファイルをインポート...」ボタンをご使用ください。",
+			"unsupportedFormatMessage": "ここにドロップできるのは .likelysnap プロジェクトファイルのみです。動画をインポートするには「動画ファイルをインポート...」ボタンをご使用ください。",
 			"couldNotOpenTitle": "ファイルを開けませんでした",
 			"couldNotOpenMessage": "プロジェクトファイルを開けませんでした。参照している動画が移動または削除された可能性があります。"
 		}

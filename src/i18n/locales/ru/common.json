@@ -31,9 +31,9 @@
 		"zoomOut": "Уменьшить",
 		"toggleFullScreen": "Полноэкранный режим",
 		"recordingStatus": "Запись: {{source}}",
-		"about": "О OpenScreen",
+		"about": "О LikelySnap",
 		"services": "Сервисы",
-		"hide": "Скрыть OpenScreen",
+		"hide": "Скрыть LikelySnap",
 		"hideOthers": "Скрыть остальные",
 		"unhide": "Показать все"
 	},

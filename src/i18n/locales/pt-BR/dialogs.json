@@ -60,12 +60,12 @@
 		"saveGif": "Salvar GIF Exportado",
 		"saveVideo": "Salvar Vídeo Exportado",
 		"selectVideo": "Selecionar Arquivo de Vídeo",
-		"saveProject": "Salvar Projeto OpenScreen",
-		"openProject": "Abrir Projeto OpenScreen",
+		"saveProject": "Salvar Projeto LikelySnap",
+		"openProject": "Abrir Projeto LikelySnap",
 		"gifImage": "Imagem GIF",
 		"mp4Video": "Vídeo MP4",
 		"videoFiles": "Arquivos de Vídeo",
-		"openscreenProject": "Projeto OpenScreen",
+		"openscreenProject": "Projeto LikelySnap",
 		"allFiles": "Todos os Arquivos"
 	}
 }

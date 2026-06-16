@@ -47,7 +47,8 @@ import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
-const PROJECT_FILE_EXTENSION = "openscreen";
+const PROJECT_FILE_EXTENSION = "likelysnap";
+const LEGACY_PROJECT_FILE_EXTENSION = "openscreen";
 export const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
 const RECORDING_FILE_PREFIX = "recording-";
 const RECORDING_SESSION_SUFFIX = ".session.json";
@@ -64,7 +65,7 @@ const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
 ]);
 const PREVIEW_AUDIO_DIR = path.join(app.getPath("userData"), "preview-audio");
 const RECORDING_SETTINGS_FILE = path.join(app.getPath("userData"), "recording-settings.json");
-const RECORDING_DIRECTORY_WRITE_TEST_FILE = ".openscreen-write-test";
+const RECORDING_DIRECTORY_WRITE_TEST_FILE = ".likelysnap-write-test";
 const nativeMacCaptureEvents = new EventEmitter();
 let activeRecordingsDir = getDefaultRecordingsDir();
 
@@ -81,7 +82,7 @@ function getAllowedReadDirs(): string[] {
 
 function getDefaultRecordingsDir() {
 	const baseDir = process.platform === "darwin" ? "Movies" : "Videos";
-	return path.join(os.homedir(), baseDir, "OpenScreen");
+	return path.join(os.homedir(), baseDir, "LikelySnap");
 }
 
 function normalizeRecordingDirectoryPath(value: unknown): string | null {
@@ -441,6 +442,7 @@ type AttachNativeMacWebcamRecordingInput = {
 	recordingId?: number;
 	webcam?: RecordedVideoAssetInput;
 	webcamStartOffsetMs?: number;
+	webcamDurationMs?: number;
 	cursorCaptureMode?: CursorCaptureMode;
 };
 
@@ -490,10 +492,15 @@ function isTrustedProjectPath(filePath?: string | null) {
 
 const CURSOR_TELEMETRY_VERSION = 2;
 const CURSOR_SAMPLE_INTERVAL_MS = 33;
+const CURSOR_TELEMETRY_FLUSH_INTERVAL_MS = 500;
 const MAX_CURSOR_SAMPLES = 60 * 60 * 30; // 1 hour @ 30Hz
 
 let cursorRecordingSession: CursorRecordingSession | null = null;
 let pendingCursorRecordingData: CursorRecordingData | null = null;
+let cursorTelemetryLivePath: string | null = null;
+let cursorTelemetryLiveOffsetMs = 0;
+let cursorTelemetryLastFlushMs = 0;
+let cursorTelemetryWriteChain: Promise<void> = Promise.resolve();
 let nativeWindowsCaptureProcess: ChildProcessWithoutNullStreams | null = null;
 let nativeWindowsCaptureOutput = "";
 let nativeWindowsCaptureTargetPath: string | null = null;
@@ -875,13 +882,16 @@ async function resolveDirectShowWebcamClsid(deviceName?: string) {
 	return best.clsid;
 }
 
-async function startCursorRecording(recordingId?: number) {
+async function startCursorRecording(recordingId?: number, telemetryPath?: string) {
 	if (cursorRecordingSession) {
 		pendingCursorRecordingData = await cursorRecordingSession.stop();
 		cursorRecordingSession = null;
 	}
 
 	pendingCursorRecordingData = null;
+	if (telemetryPath) {
+		await beginLiveCursorTelemetry(telemetryPath);
+	}
 	cursorRecordingSession = createCursorRecordingSession({
 		getDisplayBounds: getSelectedSourceBounds,
 		maxSamples: MAX_CURSOR_SAMPLES,
@@ -890,6 +900,10 @@ async function startCursorRecording(recordingId?: number) {
 		sourceId: getSelectedSourceId(),
 		startTimeMs:
 			typeof recordingId === "number" && Number.isFinite(recordingId) ? recordingId : undefined,
+		onUpdate: (data) => {
+			pendingCursorRecordingData = data;
+			void queueCursorTelemetryWrite(data);
+		},
 	});
 
 	try {
@@ -897,6 +911,7 @@ async function startCursorRecording(recordingId?: number) {
 	} catch (error) {
 		console.error("Failed to start cursor recording session:", error);
 		cursorRecordingSession = null;
+		await endLiveCursorTelemetry(null);
 	}
 }
 
@@ -915,11 +930,72 @@ async function stopCursorRecording() {
 	}
 }
 
+function buildCursorTelemetrySnapshot(
+	data: CursorRecordingData,
+	offsetMs = cursorTelemetryLiveOffsetMs,
+): CursorRecordingData {
+	const normalizedOffset = Number.isFinite(offsetMs) && offsetMs > 0 ? offsetMs : 0;
+	return {
+		...data,
+		samples: data.samples
+			.map((sample) => ({
+				...sample,
+				timeMs: Math.max(0, sample.timeMs - normalizedOffset),
+			}))
+			.sort((a, b) => a.timeMs - b.timeMs),
+		assets: data.assets,
+	};
+}
+
+function queueCursorTelemetryWrite(data: CursorRecordingData, force = false) {
+	if (!cursorTelemetryLivePath) {
+		return cursorTelemetryWriteChain;
+	}
+
+	const now = Date.now();
+	if (!force && now - cursorTelemetryLastFlushMs < CURSOR_TELEMETRY_FLUSH_INTERVAL_MS) {
+		return cursorTelemetryWriteChain;
+	}
+
+	cursorTelemetryLastFlushMs = now;
+	const targetPath = cursorTelemetryLivePath;
+	const content = JSON.stringify(buildCursorTelemetrySnapshot(data), null, 2);
+	cursorTelemetryWriteChain = cursorTelemetryWriteChain
+		.catch(() => undefined)
+		.then(() => fs.writeFile(targetPath, content, "utf-8"))
+		.catch((error) => {
+			console.error("Failed to write live cursor telemetry:", error);
+		});
+	return cursorTelemetryWriteChain;
+}
+
+async function beginLiveCursorTelemetry(telemetryPath: string) {
+	cursorTelemetryLivePath = telemetryPath;
+	cursorTelemetryLiveOffsetMs = 0;
+	cursorTelemetryLastFlushMs = 0;
+	await queueCursorTelemetryWrite(
+		{ version: CURSOR_TELEMETRY_VERSION, provider: "none", samples: [], assets: [] },
+		true,
+	);
+}
+
+async function endLiveCursorTelemetry(finalData?: CursorRecordingData | null) {
+	if (finalData) {
+		await queueCursorTelemetryWrite(finalData, true);
+	} else {
+		await cursorTelemetryWriteChain.catch(() => undefined);
+	}
+	cursorTelemetryLivePath = null;
+	cursorTelemetryLiveOffsetMs = 0;
+	cursorTelemetryLastFlushMs = 0;
+}
+
 async function writePendingCursorTelemetry(videoPath: string) {
 	const telemetryPath = `${videoPath}.cursor.json`;
 	if (pendingCursorRecordingData && pendingCursorRecordingData.samples.length > 0) {
 		await fs.writeFile(telemetryPath, JSON.stringify(pendingCursorRecordingData, null, 2), "utf-8");
 	}
+	await endLiveCursorTelemetry(null);
 	pendingCursorRecordingData = null;
 }
 
@@ -1304,6 +1380,18 @@ function getSessionManifestPathForVideo(videoPath: string) {
 	return path.join(parsedPath.dir, `${baseName}${RECORDING_SESSION_SUFFIX}`);
 }
 
+async function writeRecordingSessionManifest(
+	session: RecordingSession,
+	extras?: Record<string, unknown> | null,
+) {
+	const sessionManifestPath = getSessionManifestPathForVideo(session.screenVideoPath);
+	await fs.writeFile(
+		sessionManifestPath,
+		JSON.stringify(extras ? { ...session, ...extras } : session, null, 2),
+		"utf-8",
+	);
+}
+
 async function loadRecordedSessionForVideoPath(
 	videoPath: string,
 ): Promise<RecordingSession | null> {
@@ -1394,7 +1482,7 @@ export function registerIpcHandlers(
 			}
 
 			// Screen recording has no askForMediaAccess equivalent, so trigger the
-			// TCC prompt without opening OpenScreen's source selector above it.
+			// TCC prompt without opening LikelySnap's source selector above it.
 			if (status === "not-determined") {
 				const mainWin = getMainWindow();
 				if (mainWin && !mainWin.isDestroyed()) {
@@ -1509,7 +1597,7 @@ export function registerIpcHandlers(
 		if (process.platform === "darwin" && !access.granted) {
 			const mainWin = getMainWindow();
 			const detail =
-				"Allow OpenScreen under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.";
+				"Allow LikelySnap under System Settings → Privacy & Security → Accessibility, then press record again to start the countdown.";
 			const messageOptions = {
 				type: "warning",
 				buttons: ["Open Accessibility Settings", "Cancel"],
@@ -1544,7 +1632,7 @@ export function registerIpcHandlers(
 					cancelId: 1,
 					message: "Screen Recording permission is required",
 					detail:
-						"Allow OpenScreen in macOS System Settings, then come back and choose a screen or window.",
+						"Allow LikelySnap in macOS System Settings, then come back and choose a screen or window.",
 				} satisfies Electron.MessageBoxOptions;
 				const result =
 					mainWin && !mainWin.isDestroyed()
@@ -1764,6 +1852,11 @@ export function registerIpcHandlers(
 				});
 
 				await fs.mkdir(recordingDir, { recursive: true });
+				await writeRecordingSessionManifest({
+					screenVideoPath: outputPath,
+					createdAt: recordingId,
+					cursorCaptureMode,
+				});
 				nativeWindowsCaptureOutput = "";
 				nativeWindowsCaptureTargetPath = outputPath;
 				nativeWindowsCaptureWebcamTargetPath = request.webcam.enabled ? webcamOutputPath : null;
@@ -1778,7 +1871,7 @@ export function registerIpcHandlers(
 				const cursorStartTimeMs = Date.now();
 				if (cursorCaptureMode === "editable-overlay") {
 					nativeWindowsCursorRecordingStartMs = cursorStartTimeMs;
-					await startCursorRecording(cursorStartTimeMs);
+					await startCursorRecording(cursorStartTimeMs, `${outputPath}.cursor.json`);
 					console.info("[native-wgc] cursor sampler ready", {
 						cursorStartTimeMs,
 						warmupMs: Date.now() - cursorStartTimeMs,
@@ -1800,6 +1893,10 @@ export function registerIpcHandlers(
 					cursorCaptureMode === "editable-overlay"
 						? Math.max(0, captureStartedAtMs - cursorStartTimeMs)
 						: 0;
+				cursorTelemetryLiveOffsetMs = nativeWindowsCursorOffsetMs;
+				if (pendingCursorRecordingData) {
+					await queueCursorTelemetryWrite(pendingCursorRecordingData, true);
+				}
 				const webcamFormat = readNativeWindowsWebcamFormat(nativeWindowsCaptureOutput);
 				console.info("[native-wgc] capture started", {
 					captureStartedAtMs,
@@ -1820,6 +1917,7 @@ export function registerIpcHandlers(
 				};
 			} catch (error) {
 				console.error("Failed to start native Windows recording:", error);
+				const failedOutputPath = nativeWindowsCaptureTargetPath;
 				nativeWindowsCaptureProcess?.kill();
 				nativeWindowsCaptureProcess = null;
 				nativeWindowsCaptureTargetPath = null;
@@ -1832,6 +1930,12 @@ export function registerIpcHandlers(
 				nativeWindowsPauseRanges = [];
 				nativeWindowsIsPaused = false;
 				await stopCursorRecording();
+				await endLiveCursorTelemetry(null);
+				if (failedOutputPath) {
+					await fs.rm(getSessionManifestPathForVideo(failedOutputPath), {
+						force: true,
+					});
+				}
 				return { success: false, error: String(error) };
 			}
 		},
@@ -1925,6 +2029,11 @@ export function registerIpcHandlers(
 			});
 
 			await fs.mkdir(recordingDir, { recursive: true });
+			await writeRecordingSessionManifest({
+				screenVideoPath: outputPath,
+				createdAt: recordingId,
+				cursorCaptureMode,
+			});
 			nativeMacCaptureOutput = "";
 			nativeMacCaptureTargetPath = outputPath;
 			nativeMacCaptureDiagnostics = null;
@@ -1939,7 +2048,7 @@ export function registerIpcHandlers(
 			const cursorStartTimeMs = Date.now();
 			if (cursorCaptureMode === "editable-overlay") {
 				nativeMacCursorRecordingStartMs = cursorStartTimeMs;
-				await startCursorRecording(cursorStartTimeMs);
+				await startCursorRecording(cursorStartTimeMs, `${outputPath}.cursor.json`);
 			} else {
 				pendingCursorRecordingData = null;
 			}
@@ -1956,6 +2065,10 @@ export function registerIpcHandlers(
 				cursorCaptureMode === "editable-overlay"
 					? Math.max(0, captureStartedAtMs - cursorStartTimeMs)
 					: 0;
+			cursorTelemetryLiveOffsetMs = nativeMacCursorOffsetMs;
+			if (pendingCursorRecordingData) {
+				await queueCursorTelemetryWrite(pendingCursorRecordingData, true);
+			}
 
 			const source = selectedSource || { name: "Screen" };
 			if (onRecordingStateChange) {
@@ -1971,6 +2084,7 @@ export function registerIpcHandlers(
 			};
 		} catch (error) {
 			console.error("Failed to start native macOS recording:", error);
+			const failedOutputPath = nativeMacCaptureTargetPath;
 			nativeMacCaptureProcess?.kill();
 			nativeMacCaptureProcess = null;
 			nativeMacCaptureTargetPath = null;
@@ -1983,6 +2097,10 @@ export function registerIpcHandlers(
 			nativeMacPauseRanges = [];
 			nativeMacIsPaused = false;
 			await stopCursorRecording();
+			await endLiveCursorTelemetry(null);
+			if (failedOutputPath) {
+				await fs.rm(getSessionManifestPathForVideo(failedOutputPath), { force: true });
+			}
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
 		}
 	});
@@ -2111,10 +2229,12 @@ export function registerIpcHandlers(
 			}
 			if (discard) {
 				pendingCursorRecordingData = null;
+				await endLiveCursorTelemetry(null);
 				await Promise.all([
 					fs.rm(screenVideoPath, { force: true }),
 					preferredWebcamPath ? fs.rm(preferredWebcamPath, { force: true }) : Promise.resolve(),
 					fs.rm(`${screenVideoPath}.cursor.json`, { force: true }),
+					fs.rm(getSessionManifestPathForVideo(screenVideoPath), { force: true }),
 				]);
 				return { success: true, discarded: true };
 			}
@@ -2139,8 +2259,7 @@ export function registerIpcHandlers(
 			setCurrentRecordingSessionState(session);
 			currentProjectPath = null;
 
-			const sessionManifestPath = getSessionManifestPathForVideo(screenVideoPath);
-			await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
+			await writeRecordingSessionManifest(session);
 
 			return {
 				success: true,
@@ -2201,9 +2320,11 @@ export function registerIpcHandlers(
 			}
 			if (discard) {
 				pendingCursorRecordingData = null;
+				await endLiveCursorTelemetry(null);
 				await Promise.all([
 					fs.rm(screenVideoPath, { force: true }),
 					fs.rm(`${screenVideoPath}.cursor.json`, { force: true }),
+					fs.rm(getSessionManifestPathForVideo(screenVideoPath), { force: true }),
 				]);
 				return { success: true, discarded: true };
 			}
@@ -2223,12 +2344,7 @@ export function registerIpcHandlers(
 			setCurrentRecordingSessionState(session);
 			currentProjectPath = null;
 
-			const sessionManifestPath = getSessionManifestPathForVideo(screenVideoPath);
-			await fs.writeFile(
-				sessionManifestPath,
-				JSON.stringify(diagnostics ? { ...session, diagnostics } : session, null, 2),
-				"utf-8",
-			);
+			await writeRecordingSessionManifest(session, diagnostics ? { diagnostics } : null);
 
 			return {
 				success: true,
@@ -2276,15 +2392,31 @@ export function registerIpcHandlers(
 
 				await fs.access(screenVideoPath, fsConstants.R_OK);
 
-				if (!payload.webcam?.fileName || !payload.webcam.videoData) {
+				if (!payload.webcam?.fileName) {
 					return { success: false, error: "Native macOS webcam attachment is missing video data." };
 				}
 
-				const webcamVideoPath = resolveRecordingOutputPath(
+				const webcamVideoPath =
+					recordingStreams.getPath(payload.webcam.fileName) ??
+					resolveRecordingOutputPath(payload.webcam.fileName, path.dirname(screenVideoPath));
+				const webcamStreamed = await finalizeRecordingFile(
+					recordingStreams,
 					payload.webcam.fileName,
-					path.dirname(screenVideoPath),
+					webcamVideoPath,
+					payload.webcam.videoData,
 				);
-				await fs.writeFile(webcamVideoPath, Buffer.from(payload.webcam.videoData));
+				if (
+					!webcamStreamed &&
+					(!payload.webcam.videoData || payload.webcam.videoData.byteLength === 0)
+				) {
+					return {
+						success: false,
+						error: "Native macOS webcam attachment has no streamed file or buffered data.",
+					};
+				}
+				if (webcamStreamed && isValidDurationMs(payload.webcamDurationMs)) {
+					await patchWebmDurationOnDisk(webcamVideoPath, payload.webcamDurationMs);
+				}
 
 				const createdAt =
 					typeof payload.recordingId === "number" && Number.isFinite(payload.recordingId)
@@ -2307,12 +2439,7 @@ export function registerIpcHandlers(
 				setCurrentRecordingSessionState(session);
 				currentProjectPath = null;
 
-				const sessionManifestPath = getSessionManifestPathForVideo(screenVideoPath);
-				await fs.writeFile(
-					sessionManifestPath,
-					JSON.stringify(diagnostics ? { ...session, diagnostics } : session, null, 2),
-					"utf-8",
-				);
+				await writeRecordingSessionManifest(session, diagnostics ? { diagnostics } : null);
 
 				return {
 					success: true,
@@ -2409,8 +2536,7 @@ export function registerIpcHandlers(
 
 		await writePendingCursorTelemetry(screenVideoPath);
 
-		const sessionManifestPath = getSessionManifestPathForVideo(screenVideoPath);
-		await fs.writeFile(sessionManifestPath, JSON.stringify(session, null, 2), "utf-8");
+		await writeRecordingSessionManifest(session);
 
 		return {
 			success: true,
@@ -2783,7 +2909,7 @@ export function registerIpcHandlers(
 					filters: [
 						{
 							name: mainT("dialogs", "fileDialogs.openscreenProject"),
-							extensions: [PROJECT_FILE_EXTENSION],
+							extensions: [PROJECT_FILE_EXTENSION, LEGACY_PROJECT_FILE_EXTENSION],
 						},
 						{ name: "JSON", extensions: ["json"] },
 					],
@@ -2850,7 +2976,7 @@ export function registerIpcHandlers(
 					filters: [
 						{
 							name: mainT("dialogs", "fileDialogs.openscreenProject"),
-							extensions: [PROJECT_FILE_EXTENSION],
+							extensions: [PROJECT_FILE_EXTENSION, LEGACY_PROJECT_FILE_EXTENSION],
 						},
 						{ name: "JSON", extensions: ["json"] },
 						{ name: mainT("dialogs", "fileDialogs.allFiles"), extensions: ["*"] },
@@ -2896,8 +3022,12 @@ export function registerIpcHandlers(
 				return { success: false, message: "Invalid file path" };
 			}
 			// Validate extension and readability
-			if (path.extname(filePath).toLowerCase() !== `.${PROJECT_FILE_EXTENSION}`) {
-				return { success: false, message: "Not an Openscreen project file" };
+			const extension = path.extname(filePath).toLowerCase();
+			if (
+				extension !== `.${PROJECT_FILE_EXTENSION}` &&
+				extension !== `.${LEGACY_PROJECT_FILE_EXTENSION}`
+			) {
+				return { success: false, message: "Not an LikelySnap project file" };
 			}
 			const stats = await fs.stat(filePath).catch(() => null);
 			if (!stats?.isFile()) {
@@ -3048,7 +3178,7 @@ export function registerIpcHandlers(
 		) => {
 			const { filePath, canceled } = await dialog.showSaveDialog({
 				title: "Save Diagnostic File",
-				defaultPath: `openscreen-diagnostic-${Date.now()}.json`,
+				defaultPath: `likelysnap-diagnostic-${Date.now()}.json`,
 				filters: [{ name: "JSON", extensions: ["json"] }],
 			});
 

@@ -65,12 +65,12 @@
 		"saveGif": "Lưu GIF đã xuất",
 		"saveVideo": "Lưu Video đã xuất",
 		"selectVideo": "Chọn tệp video",
-		"saveProject": "Lưu dự án OpenScreen",
-		"openProject": "Mở dự án OpenScreen",
+		"saveProject": "Lưu dự án LikelySnap",
+		"openProject": "Mở dự án LikelySnap",
 		"gifImage": "Hình ảnh GIF",
 		"mp4Video": "Video MP4",
 		"videoFiles": "Tệp Video",
-		"openscreenProject": "Dự án OpenScreen",
+		"openscreenProject": "Dự án LikelySnap",
 		"allFiles": "Tất cả các tệp"
 	}
 }

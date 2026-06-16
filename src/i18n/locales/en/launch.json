@@ -37,8 +37,8 @@
 		"screens": "Screens ({{count}})",
 		"windows": "Windows ({{count}})",
 		"emptyTitle": "No screens or windows found",
-		"emptyDescription": "If you just granted screen recording permission, reload this picker. On macOS you may need to reopen OpenScreen.",
-		"loadFailedDescription": "OpenScreen could not load capture sources. Reload this picker and try again.",
+		"emptyDescription": "If you just granted screen recording permission, reload this picker. On macOS you may need to reopen LikelySnap.",
+		"loadFailedDescription": "LikelySnap could not load capture sources. Reload this picker and try again.",
 		"defaultSourceName": "Screen"
 	},
 	"recording": {
@@ -47,7 +47,7 @@
 	"language": "Language",
 	"systemLanguagePrompt": {
 		"title": "Use your system language?",
-		"description": "We detected {{language}} as your system language. Do you want to switch OpenScreen to {{language}}?",
+		"description": "We detected {{language}} as your system language. Do you want to switch LikelySnap to {{language}}?",
 		"switch": "Switch to {{language}}",
 		"keepDefault": "Keep current language"
 	}
