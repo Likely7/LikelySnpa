@@ -99,7 +99,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const [webcamDeviceName, setWebcamDeviceName] = useState<string | undefined>(undefined);
 	const [systemAudioEnabled, setSystemAudioEnabled] = useState(false);
 	const [webcamEnabled, setWebcamEnabledState] = useState(false);
-	const [cursorCaptureMode, setCursorCaptureMode] = useState<CursorCaptureMode>("editable-overlay");
+	const [cursorCaptureMode, setCursorCaptureModeState] =
+		useState<CursorCaptureMode>("editable-overlay");
+	const cursorCaptureModeRef = useRef<CursorCaptureMode>("editable-overlay");
 	const screenRecorder = useRef<RecorderHandle | null>(null);
 	const webcamRecorder = useRef<RecorderHandle | null>(null);
 	const nativeWindowsRecording = useRef<NativeWindowsRecordingHandle | null>(null);
@@ -127,6 +129,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				(nativeMacRecording.current && !nativeMacRecording.current.finalizing) ||
 				(screenRecorder.current && screenRecorder.current.recorder.state !== "inactive"),
 		);
+
+	const setCursorCaptureMode = useCallback((mode: CursorCaptureMode) => {
+		cursorCaptureModeRef.current = mode;
+		setCursorCaptureModeState(mode);
+	}, []);
 
 	const getRecordingDurationMs = useCallback(() => {
 		const segmentDuration =
@@ -805,6 +812,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				return true;
 			}
 
+			const effectiveCursorCaptureMode = cursorCaptureModeRef.current;
 			const activeRecordingId = Date.now();
 			const displayId = Number(selectedSource.display_id);
 			const sourceType = selectedSource.id.startsWith("window:") ? "window" : "display";
@@ -858,7 +866,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					fps: WEBCAM_TARGET_FRAME_RATE,
 				},
 				cursor: {
-					mode: cursorCaptureMode,
+					mode: effectiveCursorCaptureMode,
 				},
 			};
 			const result = await window.electronAPI.startNativeWindowsRecording(request);
@@ -920,6 +928,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				return true;
 			}
 
+			const effectiveCursorCaptureMode = cursorCaptureModeRef.current;
 			const activeRecordingId = Date.now();
 			const sourceType = selectedSource.id.startsWith("window:") ? "window" : "display";
 			const displayId =
@@ -974,7 +983,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					width: TARGET_WIDTH,
 					height: TARGET_HEIGHT,
 					bitrate: computeBitrate(TARGET_WIDTH, TARGET_HEIGHT),
-					hideSystemCursor: cursorCaptureMode === "editable-overlay",
+					hideSystemCursor: effectiveCursorCaptureMode === "editable-overlay",
 				},
 				audio: {
 					system: {
@@ -996,7 +1005,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					fps: WEBCAM_TARGET_FRAME_RATE,
 				},
 				cursor: {
-					mode: cursorCaptureMode,
+					mode: effectiveCursorCaptureMode,
 				},
 				outputs: {
 					screenPath: "",
@@ -1066,12 +1075,17 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 		try {
 			const platform = await window.electronAPI.getPlatform();
-			if (platform === "darwin" && cursorCaptureMode === "editable-overlay") {
-				// The main process shows a native dialog that deep-links to the
-				// Accessibility settings pane when access is missing, so we just stop
-				// here and let the user grant it and press record again.
+			if (platform === "darwin" && cursorCaptureModeRef.current === "editable-overlay") {
+				// If the helper exists but Accessibility is missing, the main process
+				// shows a native dialog and we stop. If the helper is absent in this
+				// build, fall back to the system cursor and keep this recording attempt.
 				const access = await window.electronAPI.requestNativeMacCursorAccess();
-				if (!access.granted) {
+				if (access.status === "missing-helper") {
+					console.warn("macOS cursor helper is not available; recording with system cursor.");
+					setCursorCaptureMode("system");
+					cursorCaptureModeRef.current = "system";
+				}
+				if (access.status !== "missing-helper" && !access.granted) {
 					return;
 				}
 			}
@@ -1158,9 +1172,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				// getDisplayMedia + setDisplayMediaRequestHandler (main.ts) supplies the
 				// pre-selected source. Editable cursor mode excludes the system cursor so
 				// the editor can render a replacement; system mode bakes it into the video.
+				const effectiveCursorCaptureMode = cursorCaptureModeRef.current;
 				screenMediaStream = await navigator.mediaDevices.getDisplayMedia({
 					video: {
-						cursor: cursorCaptureMode === "editable-overlay" ? "never" : "always",
+						cursor: effectiveCursorCaptureMode === "editable-overlay" ? "never" : "always",
 						width: { max: TARGET_WIDTH },
 						height: { max: TARGET_HEIGHT },
 						frameRate: { ideal: TARGET_FRAME_RATE },
@@ -1371,7 +1386,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			setRecording(true);
 			setPaused(false);
 			setElapsedSeconds(0);
-			window.electronAPI?.setRecordingState(true, recordingId.current, cursorCaptureMode);
+			window.electronAPI?.setRecordingState(
+				true,
+				recordingId.current,
+				cursorCaptureModeRef.current,
+			);
 
 			const activeScreenRecorder = screenRecorder.current;
 			const activeWebcamRecorder = webcamRecorder.current;
