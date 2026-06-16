@@ -70,11 +70,19 @@ ipcMain.on("hud-overlay-set-size", (_event, width: number, height: number) => {
 	}
 
 	const centerX = bounds.x + bounds.width / 2;
-	const bottomY = bounds.y + bounds.height;
+	const bottomY = Math.min(bounds.y + bounds.height, workArea.y + workArea.height);
+	const nextX = Math.min(
+		workArea.x + workArea.width - nextWidth,
+		Math.max(workArea.x, Math.round(centerX - nextWidth / 2)),
+	);
+	const nextY = Math.min(
+		workArea.y + workArea.height - nextHeight,
+		Math.max(workArea.y, Math.round(bottomY - nextHeight)),
+	);
 
 	hudOverlayWindow.setBounds({
-		x: Math.round(centerX - nextWidth / 2),
-		y: Math.round(bottomY - nextHeight),
+		x: nextX,
+		y: nextY,
 		width: nextWidth,
 		height: nextHeight,
 	});
