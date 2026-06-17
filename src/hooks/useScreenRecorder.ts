@@ -38,8 +38,9 @@ const CODEC_ALIGNMENT = 2;
 const BITS_PER_MEGABIT = 1_000_000;
 const CHROME_MEDIA_SOURCE = "desktop";
 const RECORDING_FILE_PREFIX = "recording-";
-const VIDEO_FILE_EXTENSION = ".webm";
-const WEBCAM_FILE_SUFFIX = "-webcam";
+const RECORDING_PACKAGE_EXTENSION = ".likelysnap";
+const RECORDING_PACKAGE_SCREEN_VIDEO = "screen.mp4";
+const RECORDING_PACKAGE_WEBCAM_VIDEO = "webcam.webm";
 
 const AUDIO_BITRATE_VOICE = 128_000;
 const AUDIO_BITRATE_SYSTEM = 192_000;
@@ -90,6 +91,18 @@ type NativeMacRecordingHandle = {
 	webcamStartOffsetMs?: number;
 	webcamFileName?: string;
 };
+
+function recordingPackageFileName(recordingId: number, childName: string) {
+	return `${RECORDING_FILE_PREFIX}${recordingId}${RECORDING_PACKAGE_EXTENSION}/${childName}`;
+}
+
+function recordingPackageFileNameFromPath(filePath: string, fallbackRecordingId: number) {
+	const normalized = filePath.replace(/\\/g, "/");
+	const match = normalized.match(/(recording-\d+\.likelysnap)\/([^/]+)$/);
+	return match
+		? `${match[1]}/${match[2]}`
+		: recordingPackageFileName(fallbackRecordingId, RECORDING_PACKAGE_SCREEN_VIDEO);
+}
 
 export function useScreenRecorder(): UseScreenRecorderReturn {
 	const t = useScopedT("editor");
@@ -354,8 +367,14 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						return;
 					}
 
-					const screenFileName = `${RECORDING_FILE_PREFIX}${activeRecordingId}${VIDEO_FILE_EXTENSION}`;
-					const webcamFileName = `${RECORDING_FILE_PREFIX}${activeRecordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`;
+					const screenFileName = recordingPackageFileName(
+						activeRecordingId,
+						RECORDING_PACKAGE_SCREEN_VIDEO,
+					);
+					const webcamFileName = recordingPackageFileName(
+						activeRecordingId,
+						RECORDING_PACKAGE_WEBCAM_VIDEO,
+					);
 
 					// Only fix duration / convert to ArrayBuffer for in-memory data;
 					// streamed recordings are patched on disk by the main process.
@@ -482,10 +501,14 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					const screenRead = await window.electronAPI.readBinaryFile(nativeScreenPath);
 					if (webcamBlob && webcamBlob.size > 0 && screenRead.success && screenRead.data) {
 						const fixedWebcamBlob = await fixWebmDuration(webcamBlob, duration);
-						const nativeScreenFileName =
-							nativeScreenPath.split(/[\\/]/).pop() ??
-							`${RECORDING_FILE_PREFIX}${activeNativeRecording.recordingId}.mp4`;
-						const webcamFileName = `${RECORDING_FILE_PREFIX}${activeNativeRecording.recordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`;
+						const nativeScreenFileName = recordingPackageFileNameFromPath(
+							nativeScreenPath,
+							activeNativeRecording.recordingId,
+						);
+						const webcamFileName = recordingPackageFileName(
+							activeNativeRecording.recordingId,
+							RECORDING_PACKAGE_WEBCAM_VIDEO,
+						);
 						const stored = await window.electronAPI.storeRecordedSession({
 							screen: {
 								videoData: screenRead.data,
@@ -556,7 +579,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					const webcamBlob = await activeWebcamRecorder.recordedBlobPromise;
 					const fileName =
 						activeNativeRecording.webcamFileName ??
-						`${RECORDING_FILE_PREFIX}${activeNativeRecording.recordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`;
+						recordingPackageFileName(
+							activeNativeRecording.recordingId,
+							RECORDING_PACKAGE_WEBCAM_VIDEO,
+						);
 					if (activeWebcamRecorder.isStreaming()) {
 						return { fileName };
 					}
@@ -1033,7 +1059,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			if (webcamEnabled && webcamStream.current) {
 				try {
 					webcamStartedAtMs = Date.now();
-					webcamFileName = `${RECORDING_FILE_PREFIX}${result.recordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`;
+					webcamFileName = recordingPackageFileName(
+						result.recordingId,
+						RECORDING_PACKAGE_WEBCAM_VIDEO,
+					);
 					nativeWebcamRecorder = createRecorderHandle(
 						webcamStream.current,
 						{
@@ -1392,7 +1421,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						? { audioBitsPerSecond: systemAudioTrack ? AUDIO_BITRATE_SYSTEM : AUDIO_BITRATE_VOICE }
 						: {}),
 				},
-				`${RECORDING_FILE_PREFIX}${activeRecordingId}${VIDEO_FILE_EXTENSION}`,
+				recordingPackageFileName(activeRecordingId, RECORDING_PACKAGE_SCREEN_VIDEO),
 			);
 			screenRecorder.current.recorder.addEventListener(
 				"error",
@@ -1406,7 +1435,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				webcamRecorder.current = createRecorderHandle(
 					webcamStream.current,
 					{ mimeType, videoBitsPerSecond: Math.min(videoBitsPerSecond, BITRATE_BASE) },
-					`${RECORDING_FILE_PREFIX}${activeRecordingId}${WEBCAM_FILE_SUFFIX}${VIDEO_FILE_EXTENSION}`,
+					recordingPackageFileName(activeRecordingId, RECORDING_PACKAGE_WEBCAM_VIDEO),
 				);
 			}
 

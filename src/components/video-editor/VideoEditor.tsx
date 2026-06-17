@@ -810,6 +810,26 @@ export default function VideoEditor() {
 			return;
 		}
 
+		if (!result.project) {
+			const sessionResult = await window.electronAPI.getCurrentRecordingSession();
+			if (sessionResult.success && sessionResult.session) {
+				const session = sessionResult.session;
+				const sourcePath = fromFileUrl(session.screenVideoPath);
+				const webcamSourcePath = session.webcamVideoPath
+					? fromFileUrl(session.webcamVideoPath)
+					: null;
+				setVideoSourcePath(sourcePath);
+				setVideoPath(toFileUrl(sourcePath));
+				setWebcamVideoSourcePath(webcamSourcePath);
+				setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
+				setWebcamStartOffsetMs(session.webcamStartOffsetMs ?? 0);
+				setRecordingCursorCaptureMode(session.cursorCaptureMode ?? null);
+				setCurrentProjectPath(null);
+				setLastSavedSnapshot(createProjectSnapshot(session, INITIAL_EDITOR_STATE));
+				return;
+			}
+		}
+
 		const restored = await applyLoadedProject(result.project, result.path ?? null);
 		if (!restored) {
 			toast.error(t("project.invalidFormat"));
@@ -2556,11 +2576,15 @@ export default function VideoEditor() {
 			{!videoPath && (
 				<div className="flex-1 min-h-0 relative">
 					<EditorEmptyState
-						onVideoImported={(path) => {
-							setVideoPath(toFileUrl(path));
-							setVideoSourcePath(path);
-							setWebcamVideoPath(null);
-							setWebcamVideoSourcePath(null);
+						onVideoImported={(path, session) => {
+							const sourcePath = session?.screenVideoPath ?? path;
+							const webcamSourcePath = session?.webcamVideoPath ?? null;
+							setVideoPath(toFileUrl(sourcePath));
+							setVideoSourcePath(sourcePath);
+							setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
+							setWebcamVideoSourcePath(webcamSourcePath);
+							setWebcamStartOffsetMs(session?.webcamStartOffsetMs ?? 0);
+							setRecordingCursorCaptureMode(session?.cursorCaptureMode ?? null);
 						}}
 						onProjectOpened={async (project, path) => {
 							const restored = await applyLoadedProject(project, path);

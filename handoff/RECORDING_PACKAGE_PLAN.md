@@ -2,6 +2,8 @@
 
 ## Goal
 
+Implementation status: package model is implemented in code and now needs real macOS recording validation.
+
 Move new recordings from four loose sibling files to one Finder-friendly recording package:
 
 ```text

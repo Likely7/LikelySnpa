@@ -23,6 +23,11 @@
 19. Added live cursor telemetry file creation and throttled `.cursor.json` snapshots during recording.
 20. Added session manifest creation at recording start, with later stop/attach updates.
 21. Documented the next `.likelysnap` package directory design in `handoff/RECORDING_PACKAGE_PLAN.md`.
+22. Implemented `recording-<id>.likelysnap/` packages for new recordings.
+23. Moved new package outputs to package-local `screen.mp4`, `webcam.webm`, `cursor.json`, and `manifest.json`.
+24. Added package manifest path helpers, safe package-child path validation, relative manifest normalization, and missing-manifest recovery.
+25. Updated editor/video/project open paths so `.likelysnap` package directories load as recordings while `.likelysnap` files still load as projects.
+26. Registered `.likelysnap` as a macOS document/package association in Electron Builder.
 
 ## Implemented This Pass
 
@@ -48,16 +53,21 @@
 - `package.json`
 - `package-lock.json`
 - `electron-builder.json5`
+- `electron/ipc/recordingPackage.ts`
+- `electron/ipc/recordingPackage.test.ts`
 - `README.md`
 - `public/likelysnap.png`
 - `handoff/RECORDING_PACKAGE_PLAN.md`
 - `src/i18n/locales/*/launch.json`
+- `src/hooks/useScreenRecorder.ts`
+- `src/components/video-editor/EditorEmptyState.tsx`
 
 ## Verification
 
 - `npm test -- src/hooks/recorderHandle.test.ts` passes.
 - `npm test -- src/components/video-editor/projectPersistence.test.ts src/hooks/recorderHandle.test.ts` passes.
 - `npm test -- src/hooks/recorderHandle.test.ts electron/ipc/recordingStream.test.ts src/components/video-editor/projectPersistence.test.ts` passes.
+- `npm test -- electron/ipc/recordingPackage.test.ts electron/ipc/recordingStream.test.ts src/hooks/recorderHandle.test.ts src/components/video-editor/projectPersistence.test.ts` passes.
 - `./node_modules/.bin/tsc --noEmit` passes.
 - `npm run build-vite` passes.
 - `npm run lint` passes.
@@ -67,10 +77,10 @@
 
 ## Next Engineering Step
 
-Implement and validate the `.likelysnap` recording package model:
+Run real macOS package validation:
 
-1. Create package directories named `recording-<id>.likelysnap`.
-2. Write `screen.mp4`, `webcam.webm`, `cursor.json`, and `manifest.json` inside the package during recording.
-3. Load packages through the editor and retain legacy loose-file loading.
-4. Add startup/open recovery for missing manifests and interrupted packages.
-5. Validate package recording with webcam, microphone, cursor telemetry, preview, and exported MP4.
+1. Record with microphone, webcam, and editable cursor enabled.
+2. Confirm the selected folder shows one `recording-<id>.likelysnap` package.
+3. Confirm package contents grow/update during capture and end as `screen.mp4`, `webcam.webm`, `cursor.json`, `manifest.json`.
+4. Confirm opening/moving the package keeps webcam, cursor telemetry, and `webcamStartOffsetMs`.
+5. Confirm editor preview and exported MP4 remain in sync.

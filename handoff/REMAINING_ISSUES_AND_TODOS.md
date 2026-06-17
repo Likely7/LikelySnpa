@@ -2,22 +2,19 @@
 
 ## P0
 
-1. Implement `recording-<id>.likelysnap/` package directory creation for new recordings.
-2. Move new recording outputs into package-relative files: `screen.mp4`, `webcam.webm`, `cursor.json`, `manifest.json`.
-3. Make package `manifest.json` use relative paths and support move-safe loading.
-4. Add editor/open dialog support for `.likelysnap` packages as the primary recording open path.
-5. Keep legacy loose `recording-<id>.mp4` plus sidecar loading.
-6. Add package recovery scanning and manifest rebuilding for interrupted recordings.
-7. Register `.likelysnap` as a macOS document/package type in build metadata.
-8. Validate package recording with webcam and microphone enabled.
+1. Validate a real macOS recording with microphone, webcam, and editable cursor enabled.
+2. Validate a long macOS recording stops cleanly and leaves a ready `.likelysnap` package.
+3. Validate moving a package to another folder and reopening it.
+4. Validate deleting `manifest.json` and reopening the package rebuilds a recoverable manifest.
+5. Validate killing the app mid-recording leaves recoverable package artifacts.
 
 ## P1
 
 1. Add MP4 export sync diagnostics.
 2. Make MP4 export write to a temp file instead of an in-memory `BufferTarget`.
 3. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
-4. Add automated tests for package path helpers, recovery scanning, custom recording directories, and manifest paths.
-5. Add real macOS long-recording validation evidence after package model lands.
+4. Add broader automated tests for custom recording directories and interrupted package recovery.
+5. Add real macOS long-recording validation evidence.
 
 ## P2
 

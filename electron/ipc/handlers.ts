@@ -45,12 +45,22 @@ import {
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
+import {
+	buildRecordingPackageManifest,
+	buildRecoveredRecordingPackageManifest,
+	getCursorTelemetryPathForVideo,
+	getRecordingManifestPathForVideo,
+	getRecordingPackageDirForVideoPath,
+	getRecordingPackagePaths,
+	isRecordingPackagePath,
+	normalizeRecordingPackageManifest,
+	resolveRecordingOutputPathInDirectory,
+} from "./recordingPackage";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
 const PROJECT_FILE_EXTENSION = "likelysnap";
 const LEGACY_PROJECT_FILE_EXTENSION = "openscreen";
 export const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
-const RECORDING_FILE_PREFIX = "recording-";
 const RECORDING_SESSION_SUFFIX = ".session.json";
 const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
 	".webm",
@@ -344,23 +354,7 @@ async function approveReadableVideoPath(
 }
 
 function resolveRecordingOutputPath(fileName: string, recordingDir = activeRecordingsDir): string {
-	const trimmed = fileName.trim();
-	if (!trimmed) {
-		throw new Error("Invalid recording file name");
-	}
-
-	const parsedPath = path.parse(trimmed);
-	const hasTraversalSegments = trimmed.split(/[\\/]+/).some((segment) => segment === "..");
-	const isNestedPath =
-		parsedPath.dir !== "" ||
-		path.isAbsolute(trimmed) ||
-		trimmed.includes("/") ||
-		trimmed.includes("\\");
-	if (hasTraversalSegments || isNestedPath || parsedPath.base !== trimmed) {
-		throw new Error("Recording file name must not contain path segments");
-	}
-
-	return path.join(recordingDir, parsedPath.base);
+	return resolveRecordingOutputPathInDirectory(fileName, recordingDir);
 }
 
 function isValidDurationMs(value: number | undefined): value is number {
@@ -591,7 +585,7 @@ function normalizeCursorAsset(asset: unknown): NativeCursorAsset | null {
 }
 
 async function readCursorRecordingFile(targetVideoPath: string): Promise<CursorRecordingData> {
-	const telemetryPath = `${targetVideoPath}.cursor.json`;
+	const telemetryPath = getCursorTelemetryPathForVideo(targetVideoPath);
 	try {
 		const content = await fs.readFile(telemetryPath, "utf-8");
 		const parsed = JSON.parse(content);
@@ -991,7 +985,7 @@ async function endLiveCursorTelemetry(finalData?: CursorRecordingData | null) {
 }
 
 async function writePendingCursorTelemetry(videoPath: string) {
-	const telemetryPath = `${videoPath}.cursor.json`;
+	const telemetryPath = getCursorTelemetryPathForVideo(videoPath);
 	if (pendingCursorRecordingData && pendingCursorRecordingData.samples.length > 0) {
 		await fs.writeFile(telemetryPath, JSON.stringify(pendingCursorRecordingData, null, 2), "utf-8");
 	}
@@ -1373,11 +1367,7 @@ function setCurrentRecordingSessionState(session: RecordingSession | null) {
 }
 
 function getSessionManifestPathForVideo(videoPath: string) {
-	const parsedPath = path.parse(videoPath);
-	const baseName = parsedPath.name.endsWith("-webcam")
-		? parsedPath.name.slice(0, -"-webcam".length)
-		: parsedPath.name;
-	return path.join(parsedPath.dir, `${baseName}${RECORDING_SESSION_SUFFIX}`);
+	return getRecordingManifestPathForVideo(videoPath, RECORDING_SESSION_SUFFIX);
 }
 
 async function writeRecordingSessionManifest(
@@ -1385,17 +1375,47 @@ async function writeRecordingSessionManifest(
 	extras?: Record<string, unknown> | null,
 ) {
 	const sessionManifestPath = getSessionManifestPathForVideo(session.screenVideoPath);
+	const packageManifest = buildRecordingPackageManifest(
+		session,
+		extras?.status === "recording" ||
+			extras?.status === "finalizing" ||
+			extras?.status === "recoverable" ||
+			extras?.status === "failed"
+			? extras.status
+			: "ready",
+		extras,
+	);
 	await fs.writeFile(
 		sessionManifestPath,
-		JSON.stringify(extras ? { ...session, ...extras } : session, null, 2),
+		JSON.stringify(packageManifest ?? (extras ? { ...session, ...extras } : session), null, 2),
 		"utf-8",
 	);
+}
+
+async function removeRecordingArtifacts(screenVideoPath: string, webcamVideoPath?: string | null) {
+	const packageDir = getRecordingPackageDirForVideoPath(screenVideoPath);
+	if (packageDir) {
+		await fs.rm(packageDir, { recursive: true, force: true });
+		return;
+	}
+
+	await Promise.all([
+		fs.rm(screenVideoPath, { force: true }),
+		webcamVideoPath ? fs.rm(webcamVideoPath, { force: true }) : Promise.resolve(),
+		fs.rm(getCursorTelemetryPathForVideo(screenVideoPath), { force: true }),
+		fs.rm(getSessionManifestPathForVideo(screenVideoPath), { force: true }),
+	]);
 }
 
 async function loadRecordedSessionForVideoPath(
 	videoPath: string,
 ): Promise<RecordingSession | null> {
 	try {
+		const packageDir = getRecordingPackageDirForVideoPath(videoPath);
+		if (packageDir) {
+			return loadRecordingPackageSession(packageDir);
+		}
+
 		const manifestPath = getSessionManifestPathForVideo(videoPath);
 		if (!isPathAllowed(manifestPath)) {
 			const parsedVideoPath = path.parse(videoPath);
@@ -1454,6 +1474,117 @@ async function loadRecordedSessionForVideoPath(
 		}
 		return null;
 	}
+}
+
+async function loadRecordingPackageSession(packageDir: string): Promise<RecordingSession | null> {
+	const resolvedPackageDir = path.resolve(packageDir);
+	if (!isRecordingPackagePath(resolvedPackageDir)) {
+		return null;
+	}
+
+	const manifestPath = getSessionManifestPathForVideo(path.join(resolvedPackageDir, "screen.mp4"));
+	if (!isPathAllowed(resolvedPackageDir)) {
+		const withinAllowedDir = getAllowedReadDirs().some((dir) =>
+			isPathWithinDir(resolvedPackageDir, dir),
+		);
+		if (!withinAllowedDir) {
+			return null;
+		}
+	}
+
+	let session: RecordingSession | null = null;
+	try {
+		const content = await fs.readFile(manifestPath, "utf-8");
+		session = normalizeRecordingPackageManifest(JSON.parse(content), resolvedPackageDir);
+	} catch (error) {
+		const nodeError = error as NodeJS.ErrnoException;
+		if (nodeError.code !== "ENOENT") {
+			console.error("Failed to read recording package manifest:", error);
+		}
+	}
+
+	if (!session) {
+		const screenVideoPath = path.join(resolvedPackageDir, "screen.mp4");
+		try {
+			const screenStats = await fs.stat(screenVideoPath);
+			if (!screenStats.isFile()) {
+				return null;
+			}
+		} catch {
+			const failedManifest = buildRecoveredRecordingPackageManifest(Date.now(), "failed");
+			await fs
+				.writeFile(manifestPath, JSON.stringify(failedManifest, null, 2), "utf-8")
+				.catch(() => undefined);
+			return null;
+		}
+
+		const webcamVideoPath = path.join(resolvedPackageDir, "webcam.webm");
+		let hasWebcam = false;
+		try {
+			const webcamStats = await fs.stat(webcamVideoPath);
+			hasWebcam = webcamStats.isFile();
+		} catch {
+			hasWebcam = false;
+		}
+
+		session = {
+			screenVideoPath,
+			...(hasWebcam ? { webcamVideoPath } : {}),
+			createdAt: Date.now(),
+		};
+		const recoveredManifest = buildRecordingPackageManifest(session, "recoverable");
+		if (recoveredManifest) {
+			await fs
+				.writeFile(manifestPath, JSON.stringify(recoveredManifest, null, 2), "utf-8")
+				.catch(() => undefined);
+		}
+	}
+
+	const approvedScreen = await approveReadableVideoPath(session.screenVideoPath, [
+		resolvedPackageDir,
+		...getAllowedReadDirs(),
+	]);
+	if (!approvedScreen) {
+		return null;
+	}
+
+	let approvedWebcam: string | undefined;
+	if (session.webcamVideoPath) {
+		approvedWebcam =
+			(await approveReadableVideoPath(session.webcamVideoPath, [
+				resolvedPackageDir,
+				...getAllowedReadDirs(),
+			])) ?? undefined;
+	}
+
+	approveFilePath(resolvedPackageDir);
+	approveFilePath(manifestPath);
+	session.screenVideoPath = approvedScreen;
+	session.webcamVideoPath = approvedWebcam;
+	return session;
+}
+
+async function findLatestRecordingPackageSession(
+	recordingDir: string,
+): Promise<RecordingSession | null> {
+	const entries = await fs.readdir(recordingDir, { withFileTypes: true });
+	const packageDirs = await Promise.all(
+		entries
+			.filter((entry) => entry.isDirectory() && isRecordingPackagePath(entry.name))
+			.map(async (entry) => {
+				const packageDir = path.join(recordingDir, entry.name);
+				const stats = await fs.stat(packageDir).catch(() => null);
+				return stats ? { packageDir, mtimeMs: stats.mtimeMs } : null;
+			}),
+	);
+	const latest = packageDirs
+		.filter((entry): entry is { packageDir: string; mtimeMs: number } => Boolean(entry))
+		.sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
+	if (!latest) {
+		return null;
+	}
+
+	return loadRecordingPackageSession(latest.packageDir);
 }
 
 export function registerIpcHandlers(
@@ -1770,11 +1901,9 @@ export function registerIpcHandlers(
 						? request.recordingId
 						: Date.now();
 				const recordingDir = await getWritableRecordingsDir();
-				const outputPath = path.join(recordingDir, `${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
-				const webcamOutputPath = path.join(
-					recordingDir,
-					`${RECORDING_FILE_PREFIX}${recordingId}-webcam.mp4`,
-				);
+				const packagePaths = getRecordingPackagePaths(recordingDir, recordingId);
+				const outputPath = packagePaths.screenVideoPath;
+				const webcamOutputPath = packagePaths.webcamVideoPath;
 				const sourceDisplay =
 					request.source.type === "display" && typeof request.source.displayId === "number"
 						? (screen.getAllDisplays().find((display) => display.id === request.source.displayId) ??
@@ -1851,12 +1980,15 @@ export function registerIpcHandlers(
 					outputPath,
 				});
 
-				await fs.mkdir(recordingDir, { recursive: true });
-				await writeRecordingSessionManifest({
-					screenVideoPath: outputPath,
-					createdAt: recordingId,
-					cursorCaptureMode,
-				});
+				await fs.mkdir(packagePaths.packageDir, { recursive: true });
+				await writeRecordingSessionManifest(
+					{
+						screenVideoPath: outputPath,
+						createdAt: recordingId,
+						cursorCaptureMode,
+					},
+					{ status: "recording" },
+				);
 				nativeWindowsCaptureOutput = "";
 				nativeWindowsCaptureTargetPath = outputPath;
 				nativeWindowsCaptureWebcamTargetPath = request.webcam.enabled ? webcamOutputPath : null;
@@ -1871,7 +2003,7 @@ export function registerIpcHandlers(
 				const cursorStartTimeMs = Date.now();
 				if (cursorCaptureMode === "editable-overlay") {
 					nativeWindowsCursorRecordingStartMs = cursorStartTimeMs;
-					await startCursorRecording(cursorStartTimeMs, `${outputPath}.cursor.json`);
+					await startCursorRecording(cursorStartTimeMs, getCursorTelemetryPathForVideo(outputPath));
 					console.info("[native-wgc] cursor sampler ready", {
 						cursorStartTimeMs,
 						warmupMs: Date.now() - cursorStartTimeMs,
@@ -1881,7 +2013,7 @@ export function registerIpcHandlers(
 				}
 
 				const proc = spawn(helperPath, [JSON.stringify(config)], {
-					cwd: recordingDir,
+					cwd: packagePaths.packageDir,
 					stdio: ["pipe", "pipe", "pipe"],
 					windowsHide: true,
 				});
@@ -1932,9 +2064,7 @@ export function registerIpcHandlers(
 				await stopCursorRecording();
 				await endLiveCursorTelemetry(null);
 				if (failedOutputPath) {
-					await fs.rm(getSessionManifestPathForVideo(failedOutputPath), {
-						force: true,
-					});
+					await removeRecordingArtifacts(failedOutputPath);
 				}
 				return { success: false, error: String(error) };
 			}
@@ -1964,7 +2094,8 @@ export function registerIpcHandlers(
 					? request.recordingId
 					: Date.now();
 			const recordingDir = await getWritableRecordingsDir();
-			const outputPath = path.join(recordingDir, `${RECORDING_FILE_PREFIX}${recordingId}.mp4`);
+			const packagePaths = getRecordingPackagePaths(recordingDir, recordingId);
+			const outputPath = packagePaths.screenVideoPath;
 			const requestedCursorCaptureMode =
 				normalizeCursorCaptureMode(request.cursor?.mode) ?? "editable-overlay";
 			const cursorCaptureMode =
@@ -2012,10 +2143,7 @@ export function registerIpcHandlers(
 				},
 				outputs: {
 					screenPath: outputPath,
-					manifestPath: path.join(
-						recordingDir,
-						`${RECORDING_FILE_PREFIX}${recordingId}${RECORDING_SESSION_SUFFIX}`,
-					),
+					manifestPath: packagePaths.manifestPath,
 				},
 			};
 
@@ -2028,12 +2156,15 @@ export function registerIpcHandlers(
 				outputPath,
 			});
 
-			await fs.mkdir(recordingDir, { recursive: true });
-			await writeRecordingSessionManifest({
-				screenVideoPath: outputPath,
-				createdAt: recordingId,
-				cursorCaptureMode,
-			});
+			await fs.mkdir(packagePaths.packageDir, { recursive: true });
+			await writeRecordingSessionManifest(
+				{
+					screenVideoPath: outputPath,
+					createdAt: recordingId,
+					cursorCaptureMode,
+				},
+				{ status: "recording" },
+			);
 			nativeMacCaptureOutput = "";
 			nativeMacCaptureTargetPath = outputPath;
 			nativeMacCaptureDiagnostics = null;
@@ -2048,13 +2179,13 @@ export function registerIpcHandlers(
 			const cursorStartTimeMs = Date.now();
 			if (cursorCaptureMode === "editable-overlay") {
 				nativeMacCursorRecordingStartMs = cursorStartTimeMs;
-				await startCursorRecording(cursorStartTimeMs, `${outputPath}.cursor.json`);
+				await startCursorRecording(cursorStartTimeMs, getCursorTelemetryPathForVideo(outputPath));
 			} else {
 				pendingCursorRecordingData = null;
 			}
 
 			const proc = spawn(helperPath, [JSON.stringify(config)], {
-				cwd: recordingDir,
+				cwd: packagePaths.packageDir,
 				stdio: ["pipe", "pipe", "pipe"],
 			});
 			nativeMacCaptureProcess = proc;
@@ -2099,7 +2230,7 @@ export function registerIpcHandlers(
 			await stopCursorRecording();
 			await endLiveCursorTelemetry(null);
 			if (failedOutputPath) {
-				await fs.rm(getSessionManifestPathForVideo(failedOutputPath), { force: true });
+				await removeRecordingArtifacts(failedOutputPath);
 			}
 			return { success: false, error: error instanceof Error ? error.message : String(error) };
 		}
@@ -2230,12 +2361,7 @@ export function registerIpcHandlers(
 			if (discard) {
 				pendingCursorRecordingData = null;
 				await endLiveCursorTelemetry(null);
-				await Promise.all([
-					fs.rm(screenVideoPath, { force: true }),
-					preferredWebcamPath ? fs.rm(preferredWebcamPath, { force: true }) : Promise.resolve(),
-					fs.rm(`${screenVideoPath}.cursor.json`, { force: true }),
-					fs.rm(getSessionManifestPathForVideo(screenVideoPath), { force: true }),
-				]);
+				await removeRecordingArtifacts(screenVideoPath, preferredWebcamPath);
 				return { success: true, discarded: true };
 			}
 
@@ -2321,11 +2447,7 @@ export function registerIpcHandlers(
 			if (discard) {
 				pendingCursorRecordingData = null;
 				await endLiveCursorTelemetry(null);
-				await Promise.all([
-					fs.rm(screenVideoPath, { force: true }),
-					fs.rm(`${screenVideoPath}.cursor.json`, { force: true }),
-					fs.rm(getSessionManifestPathForVideo(screenVideoPath), { force: true }),
-				]);
+				await removeRecordingArtifacts(screenVideoPath);
 				return { success: true, discarded: true };
 			}
 
@@ -2396,9 +2518,13 @@ export function registerIpcHandlers(
 					return { success: false, error: "Native macOS webcam attachment is missing video data." };
 				}
 
+				const screenPackageDir = getRecordingPackageDirForVideoPath(screenVideoPath);
 				const webcamVideoPath =
 					recordingStreams.getPath(payload.webcam.fileName) ??
-					resolveRecordingOutputPath(payload.webcam.fileName, path.dirname(screenVideoPath));
+					resolveRecordingOutputPath(
+						payload.webcam.fileName,
+						screenPackageDir ? path.dirname(screenPackageDir) : path.dirname(screenVideoPath),
+					);
 				const webcamStreamed = await finalizeRecordingFile(
 					recordingStreams,
 					payload.webcam.fileName,
@@ -2461,9 +2587,11 @@ export function registerIpcHandlers(
 	// On-disk write streams for in-progress recordings, keyed by output file name.
 	// Chunks append as they arrive so the renderer never buffers the full video (#616).
 	const recordingStreams = new RecordingStreamRegistry();
-	registerRecordingStreamHandlers(ipcMain, recordingStreams, async (fileName) =>
-		resolveRecordingOutputPath(fileName, await getWritableRecordingsDir()),
-	);
+	registerRecordingStreamHandlers(ipcMain, recordingStreams, async (fileName) => {
+		const targetPath = resolveRecordingOutputPath(fileName, await getWritableRecordingsDir());
+		await fs.mkdir(path.dirname(targetPath), { recursive: true });
+		return targetPath;
+	});
 
 	ipcMain.handle("store-recorded-session", async (_, payload: StoreRecordedSessionInput) => {
 		try {
@@ -2569,6 +2697,13 @@ export function registerIpcHandlers(
 			}
 
 			const recordingDir = await refreshActiveRecordingsDir();
+			const latestPackageSession = await findLatestRecordingPackageSession(recordingDir);
+			if (latestPackageSession) {
+				setCurrentRecordingSessionState(latestPackageSession);
+				currentProjectPath = null;
+				return { success: true, path: latestPackageSession.screenVideoPath };
+			}
+
 			const files = await fs.readdir(recordingDir);
 			const videoFiles = files.filter((file) => {
 				const lower = file.toLowerCase();
@@ -2636,7 +2771,24 @@ export function registerIpcHandlers(
 			const normalizedCursorCaptureMode =
 				normalizeCursorCaptureMode(cursorCaptureMode) ?? "editable-overlay";
 			if (recording && normalizedCursorCaptureMode === "editable-overlay") {
-				await startCursorRecording(recordingId);
+				const normalizedRecordingId =
+					typeof recordingId === "number" && Number.isFinite(recordingId)
+						? recordingId
+						: Date.now();
+				const packagePaths = getRecordingPackagePaths(
+					await getWritableRecordingsDir(),
+					normalizedRecordingId,
+				);
+				await fs.mkdir(packagePaths.packageDir, { recursive: true });
+				await writeRecordingSessionManifest(
+					{
+						screenVideoPath: packagePaths.screenVideoPath,
+						createdAt: normalizedRecordingId,
+						cursorCaptureMode: normalizedCursorCaptureMode,
+					},
+					{ status: "recording" },
+				);
+				await startCursorRecording(normalizedRecordingId, packagePaths.cursorTelemetryPath);
 			} else {
 				await stopCursorRecording();
 			}
@@ -2765,12 +2917,16 @@ export function registerIpcHandlers(
 					defaultPath: recordingDir,
 					filters: [
 						{
+							name: "LikelySnap Recording",
+							extensions: ["likelysnap"],
+						},
+						{
 							name: mainT("dialogs", "fileDialogs.videoFiles"),
 							extensions: ["webm", "mp4", "mov", "avi", "mkv", "m4v", "wmv", "flv", "ts"],
 						},
 						{ name: mainT("dialogs", "fileDialogs.allFiles"), extensions: ["*"] },
 					],
-					properties: ["openFile"],
+					properties: ["openFile", "openDirectory"],
 				},
 				getMainWindow(),
 			);
@@ -2780,7 +2936,26 @@ export function registerIpcHandlers(
 				return { success: false, canceled: true };
 			}
 
-			const normalizedPath = await approveReadableVideoPath(result.filePaths[0]);
+			const selectedPath = path.resolve(result.filePaths[0]);
+			const selectedStats = await fs.stat(selectedPath).catch(() => null);
+			if (selectedStats?.isDirectory() && isRecordingPackagePath(selectedPath)) {
+				approveFilePath(selectedPath);
+				const session = await loadRecordingPackageSession(selectedPath);
+				if (!session) {
+					return {
+						success: false,
+						message: "Selected recording package is not recoverable",
+					};
+				}
+				setCurrentRecordingSessionState(session);
+				currentProjectPath = null;
+				return {
+					success: true,
+					path: session.screenVideoPath,
+				};
+			}
+
+			const normalizedPath = await approveReadableVideoPath(selectedPath);
 			if (!normalizedPath) {
 				return {
 					success: false,
@@ -2981,7 +3156,7 @@ export function registerIpcHandlers(
 						{ name: "JSON", extensions: ["json"] },
 						{ name: mainT("dialogs", "fileDialogs.allFiles"), extensions: ["*"] },
 					],
-					properties: ["openFile"],
+					properties: ["openFile", "openDirectory"],
 				},
 				getMainWindow(),
 			);
@@ -2991,7 +3166,20 @@ export function registerIpcHandlers(
 				return { success: false, canceled: true, message: "Open project canceled" };
 			}
 
-			const filePath = result.filePaths[0];
+			const filePath = path.resolve(result.filePaths[0]);
+			if (isRecordingPackagePath(filePath)) {
+				const stats = await fs.stat(filePath).catch(() => null);
+				if (stats?.isDirectory()) {
+					approveFilePath(filePath);
+					const session = await loadRecordingPackageSession(filePath);
+					if (!session) {
+						return { success: false, message: "Recording package is not recoverable" };
+					}
+					setCurrentRecordingSessionState(session);
+					currentProjectPath = null;
+					return { success: true, path: filePath };
+				}
+			}
 			const content = await fs.readFile(filePath, "utf-8");
 			const project = JSON.parse(content);
 			currentProjectPath = filePath;
@@ -3021,27 +3209,41 @@ export function registerIpcHandlers(
 			if (!filePath || typeof filePath !== "string") {
 				return { success: false, message: "Invalid file path" };
 			}
+			const resolvedPath = path.resolve(filePath);
+			if (isRecordingPackagePath(resolvedPath)) {
+				const stats = await fs.stat(resolvedPath).catch(() => null);
+				if (stats?.isDirectory()) {
+					approveFilePath(resolvedPath);
+					const session = await loadRecordingPackageSession(resolvedPath);
+					if (!session) {
+						return { success: false, message: "Recording package is not recoverable" };
+					}
+					setCurrentRecordingSessionState(session);
+					currentProjectPath = null;
+					return { success: true, path: resolvedPath };
+				}
+			}
 			// Validate extension and readability
-			const extension = path.extname(filePath).toLowerCase();
+			const extension = path.extname(resolvedPath).toLowerCase();
 			if (
 				extension !== `.${PROJECT_FILE_EXTENSION}` &&
 				extension !== `.${LEGACY_PROJECT_FILE_EXTENSION}`
 			) {
 				return { success: false, message: "Not an LikelySnap project file" };
 			}
-			const stats = await fs.stat(filePath).catch(() => null);
+			const stats = await fs.stat(resolvedPath).catch(() => null);
 			if (!stats?.isFile()) {
 				return { success: false, message: "File not found" };
 			}
-			const content = await fs.readFile(filePath, "utf-8");
+			const content = await fs.readFile(resolvedPath, "utf-8");
 			const project = JSON.parse(content);
-			currentProjectPath = filePath;
+			currentProjectPath = resolvedPath;
 
 			// Approve session paths but tolerate failures (e.g. video moved outside trusted
 			// dirs) so the project still loads and the renderer can show "video not found".
 			let session: import("../../src/lib/recordingSession").RecordingSession | null = null;
 			try {
-				session = await getApprovedProjectSession(project, filePath);
+				session = await getApprovedProjectSession(project, resolvedPath);
 			} catch (sessionError) {
 				console.warn(
 					"[loadProjectFileFromPath] Could not approve session paths, proceeding without session:",
@@ -3049,7 +3251,7 @@ export function registerIpcHandlers(
 				);
 			}
 			setCurrentRecordingSessionState(session);
-			return { success: true, path: filePath, project };
+			return { success: true, path: resolvedPath, project };
 		} catch (error) {
 			console.error("Failed to load project file from path:", error);
 			return {
@@ -3108,7 +3310,35 @@ export function registerIpcHandlers(
 
 	async function setCurrentVideoPath(path: string): Promise<ProjectPathResult> {
 		const normalizedPath = normalizeVideoSourcePath(path);
-		if (!normalizedPath || !isPathAllowed(normalizedPath)) {
+		if (!normalizedPath) {
+			return {
+				success: false,
+				message: "Video path has not been approved",
+			};
+		}
+
+		if (isRecordingPackagePath(normalizedPath)) {
+			const stats = await fs.stat(normalizedPath).catch(() => null);
+			if (!stats?.isDirectory() || !isPathAllowed(normalizedPath)) {
+				return {
+					success: false,
+					message: "Recording package has not been approved",
+				};
+			}
+
+			const packageSession = await loadRecordingPackageSession(normalizedPath);
+			if (!packageSession) {
+				return {
+					success: false,
+					message: "Recording package is not recoverable",
+				};
+			}
+			setCurrentRecordingSessionState(packageSession);
+			currentProjectPath = null;
+			return { success: true, path: packageSession.screenVideoPath };
+		}
+
+		if (!isPathAllowed(normalizedPath)) {
 			return {
 				success: false,
 				message: "Video path has not been approved",

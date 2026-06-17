@@ -2,11 +2,12 @@ import { AlertCircle, Film, FolderOpen, Upload, X } from "lucide-react";
 import { useCallback, useRef, useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useScopedT } from "@/contexts/I18nContext";
+import type { RecordingSession } from "@/lib/recordingSession";
 import { getProjectFolder, parentDirectoryOf, saveUserPreferences } from "@/lib/userPreferences";
 import { nativeBridgeClient } from "@/native";
 
 interface EditorEmptyStateProps {
-	onVideoImported: (videoPath: string) => void;
+	onVideoImported: (videoPath: string, session?: RecordingSession | null) => void;
 	/** Called with the loaded project data; handles both button click and drag-drop */
 	onProjectOpened: (project: unknown, path: string | null) => void;
 }
@@ -32,12 +33,23 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 		const setResult = await nativeBridgeClient.project.setCurrentVideoPath(result.path);
 		if (!setResult.success) return;
 
-		onVideoImported(result.path);
+		const sessionResult = await window.electronAPI.getCurrentRecordingSession();
+		onVideoImported(
+			setResult.path ?? result.path,
+			sessionResult.success ? sessionResult.session : null,
+		);
 	}, [onVideoImported]);
 
 	const handleLoadProject = useCallback(async () => {
 		const result = await nativeBridgeClient.project.loadProjectFile(getProjectFolder());
-		if (result.canceled || !result.success || !result.project) return;
+		if (result.canceled || !result.success) return;
+		if (!result.project) {
+			const sessionResult = await window.electronAPI.getCurrentRecordingSession();
+			if (sessionResult.success && sessionResult.session) {
+				onVideoImported(sessionResult.session.screenVideoPath, sessionResult.session);
+			}
+			return;
+		}
 		if (result.path) {
 			const folder = parentDirectoryOf(result.path);
 			if (folder) {
@@ -45,7 +57,7 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 			}
 		}
 		onProjectOpened(result.project, result.path ?? null);
-	}, [onProjectOpened]);
+	}, [onProjectOpened, onVideoImported]);
 
 	const handleDragOver = useCallback((e: React.DragEvent) => {
 		e.preventDefault();
@@ -96,14 +108,23 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 				setDropError("load-failed");
 				return;
 			}
-			if (!result.success || !result.project) {
+			if (!result.success) {
+				setDropError("load-failed");
+				return;
+			}
+			if (!result.project) {
+				const sessionResult = await window.electronAPI.getCurrentRecordingSession();
+				if (sessionResult.success && sessionResult.session) {
+					onVideoImported(sessionResult.session.screenVideoPath, sessionResult.session);
+					return;
+				}
 				setDropError("load-failed");
 				return;
 			}
 
 			onProjectOpened(result.project, result.path ?? null);
 		},
-		[onProjectOpened],
+		[onProjectOpened, onVideoImported],
 	);
 
 	return (

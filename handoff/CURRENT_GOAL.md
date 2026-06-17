@@ -16,11 +16,11 @@ Build a durable macOS-first LikelySnap recorder/editor that can record long vide
 
 ## Current Priority
 
-Implement the `.likelysnap` recording package model:
+Validate the implemented `.likelysnap` recording package model on macOS:
 
-- Create `recording-<id>.likelysnap/` package directories for new recordings.
-- Write `screen.mp4`, `webcam.webm`, `cursor.json`, and `manifest.json` inside the package during capture.
-- Make editor/open dialogs load `.likelysnap` packages as the primary path.
-- Keep fallback loading for legacy loose `recording-<id>.mp4` plus sidecars.
-- Add package recovery scanning and manifest rebuilding.
-- Register `.likelysnap` as a macOS package/document type for Finder-level single-file behavior.
+- Record with microphone, webcam, and editable cursor enabled.
+- Confirm package contents live-update while recording.
+- Confirm editor/open dialogs load `.likelysnap` package directories as recordings.
+- Confirm moved packages reopen from relative `manifest.json` paths.
+- Confirm missing-manifest recovery rebuilds a usable package session.
+- Confirm editor preview and exported MP4 stay in sync.
