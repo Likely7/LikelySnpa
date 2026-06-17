@@ -75,3 +75,12 @@ Current implementation:
 - Settings currently cover recording directory, project directory, cache directory, cache size/clear, recording quality, frame rate, editable cursor default, microphone default, system audio default, and webcam default.
 - Recording quality/FPS settings are consumed by macOS native capture, Windows native capture, and browser fallback.
 - Project open/save dialogs prefer the configured project directory, and waveform/preview cache paths use the configured cache directory.
+
+## Export Pipeline
+
+- MP4/GIF export lives in `src/lib/exporter/*` and is separate from raw recording. Recording durability does not automatically mean edited export durability.
+- MP4 export uses `StreamingVideoDecoder` to decode frames, `FrameRenderer` to composite zoom/background/webcam/cursor/annotations, WebCodecs `VideoEncoder` for H.264, `AudioProcessor` for audio, and `VideoMuxer` for MP4 muxing.
+- The current MP4 muxer uses `mediabunny` `BufferTarget`, then returns a Blob that the renderer passes to `write-export-to-path`. Final MP4 export output is still memory-backed and is not yet a temp-file/streaming writer.
+- A source-copy fast path exists for no-op MP4 exports when dimensions and effects allow it, but normal edited projects with webcam, cursor overlay, zoom, annotations, padding, crop, blur, shadow, trim, or speed changes must re-render and re-encode frame by frame.
+- Windows export currently tries WebCodecs `prefer-software` before `prefer-hardware`; macOS/Linux try hardware first. This makes Windows exports likely CPU-bound until an explicit encoder policy is added.
+- MP4 export currently targets 60 FPS from `VideoEditor.tsx`; source-aware/default export FPS is still a P1 optimization.

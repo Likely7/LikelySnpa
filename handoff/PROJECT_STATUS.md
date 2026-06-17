@@ -11,7 +11,8 @@
 - Current product name: `LikelySnap`
 - Current npm package name: `likelysnap`
 - Current Electron appId: `com.likelysnap.app`
-- Latest local checkpoint before this update: `7d1a3c2 fix: open app settings in standalone window`
+- Latest pushed checkpoint: `b3ae601 chore: set version to 1.0.0`
+- Latest durable app/settings checkpoint: `7d1a3c2 fix: open app settings in standalone window`
 - App settings checkpoints: `eb0f2c4 feat: add app settings center`, `7d1a3c2 fix: open app settings in standalone window`
 - Archive before app settings center work: `archive/before-app-settings-20260617`
 - Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
@@ -65,6 +66,10 @@
 - Opening a `.likelysnap` package through the video picker/project picker resolves the package session, including webcam path and webcam offset.
 - If `manifest.json` is missing, package open/recovery can rebuild a recoverable manifest from package files.
 - macOS build metadata now registers `.likelysnap` as a document package type.
+- macOS ARM64 1.0.0 DMG was built with `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --arm64 --config.npmRebuild=false` and copied to `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`. It is ARM64-only, ad-hoc signed, and not notarized.
+- Edited MP4 export currently decodes source media incrementally and renders frames through the WebCodecs/Pixi/canvas export pipeline, but the final MP4 mux target is still `mediabunny` `BufferTarget` in `src/lib/exporter/muxer.ts`. The final export is accumulated in memory as a Blob before `write-export-to-path`; it is not yet a temp-file/streaming muxer.
+- Windows MP4 export currently prefers WebCodecs `prefer-software` before `prefer-hardware` in `src/lib/exporter/videoExporter.ts`, so Windows exports are likely CPU-encoded unless software encode fails and the hardware fallback is used. Frame compositing may use GPU/WebGL, but the H.264 encode preference is software-first on Windows.
+- MP4 export currently uses a fixed 60 FPS target in `src/components/video-editor/VideoEditor.tsx`, which can double frame work for 30 FPS sources and is a likely contributor to slow Windows export.
 
 ## Current Risk Summary
 
@@ -77,10 +82,12 @@
 - Cursor telemetry is live-written, and package open can recover missing manifests; interrupted-session UX still needs real-world validation.
 - Follow Mouse zoom has targeted automated coverage and is now being refined for product feel: upstream behavior was confirmed to mix tight zoom-in tracking with smoother full-zoom tracking, so LikelySnap uses stable fixed-position auto zoom by default plus explicit per-zoom Follow Mouse.
 - Current highest remaining long-recording risk is export and multi-hour editor scale, not recording package write-out. Main screen MP4 can remain large but referenced on disk; webcam sidecars are now native MP4 for native capture and unsafe legacy WebM files are skipped at editor open.
+- Export is still the main multi-hour risk: edited MP4 export does not yet write to a temp file or streaming file target, so very long/high-resolution exports can still pressure renderer/main memory at final mux/save time even though recording itself no longer depends on whole-file renderer buffers.
 - The previous editor-load stall from waveform generation has been addressed architecturally with ranged reads and cache reuse; waveform display is default-on again, and the known ~17 minute package still needs an in-app retest to verify the UI remains responsive while peaks are generated or loaded from cache.
 - App settings are implemented and verified at the type/build level, but still need an end-to-end product retest from both entry points: launch HUD gear and editor top-bar gear.
 - Windows native webcam code is implemented and now has a persisted sidecar timeline offset, but it is still not truth-tested on Windows hardware from this macOS machine.
 - Windows x64 portable packaging must be produced on Windows, or on a machine that already has `electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`. This Apple Silicon Mac cannot build the WGC helper and electron-builder's Windows resource step fails here because the cached x64 Wine binary cannot run (`bad CPU type in executable`).
+- Windows export performance has been reviewed at code level only. The next durable fix is to add an explicit export encoder setting (`auto`, `prefer hardware`, `compatibility CPU`), make Windows hardware-first by default when available, expose the actual encoder mode used, and make MP4 mux/save stream to a temp file.
 
 ## Latest Verification
 
@@ -100,6 +107,12 @@
 - `npm test -- src/lib/nativeWindowsRecording.test.ts electron/ipc/recordingPackage.test.ts src/components/video-editor/projectPersistence.test.ts` passes after the Windows webcam sidecar offset fix.
 - `npx biome check electron/ipc/handlers.ts src/lib/nativeWindowsRecording.ts src/lib/nativeWindowsRecording.test.ts scripts/build-windows-wgc-helper.mjs package.json` passes after the Windows x64 packaging guard.
 - `node scripts/build-windows-wgc-helper.mjs` now correctly fails on non-Windows when `win32-x64` helper binaries are missing, preventing a broken Windows package from being produced.
+- `npx tsc` passes after setting the app/package version to `1.0.0`.
+- `npx vite build` passes for the 1.0.0 macOS ARM64 DMG build.
+- `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --arm64 --config.npmRebuild=false` produced `release/1.0.0/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`.
+- `lipo -archs release/1.0.0/mac-arm64/LikelySnap.app/Contents/MacOS/LikelySnap` returns `arm64`.
+- `Info.plist` in the built app reports `CFBundleShortVersionString` and `CFBundleVersion` as `1.0.0`.
+- Built app resources include the `darwin-arm64` cursor and ScreenCaptureKit helper binaries.
 
 ## Windows x64 Portable Build Notes
 

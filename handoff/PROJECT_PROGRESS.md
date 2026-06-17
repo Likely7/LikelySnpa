@@ -59,6 +59,10 @@
 55. Wired project file save/open dialogs to prefer the configured project directory and cache operations to the configured cache directory.
 56. Moved app settings out of the transparent HUD overlay into a standalone Electron settings BrowserWindow so the lower half is visible and all controls remain clickable.
 57. Added the same settings entry to the editor top bar beside the language selector, sharing the standalone settings window and persisted `app-settings.json` behavior.
+58. Detached the repository from the original upstream remote and aligned the README as a professional LikelySnap document while keeping attribution that the codebase is based on OpenScreen 1.5.0.
+59. Set the LikelySnap package/app version to `1.0.0`, updated package metadata and handoff status, committed `b3ae601 chore: set version to 1.0.0`, and pushed it to `origin/main`.
+60. Built a macOS ARM64-only 1.0.0 DMG and copied it to `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`; the build is ad-hoc signed and not notarized.
+61. Reviewed Windows MP4 export performance at source level. Current edited MP4 export uses WebCodecs plus canvas/Pixi frame compositing, but Windows prefers `prefer-software` before `prefer-hardware`, so exports are likely CPU-encoded unless software fails. The final MP4 mux target is still in-memory `BufferTarget`, not a temp-file/streaming writer.
 
 ## Implemented This Pass
 
@@ -116,6 +120,11 @@
 - `electron/windows.ts`
 - `src/App.tsx`
 - `src/main.tsx`
+- `.github/workflows/bump-nix-package.yml`
+- `handoff/PROJECT_STATUS.md`
+- `handoff/PROJECT_OVERVIEW.md`
+- `handoff/CURRENT_GOAL.md`
+- `handoff/REMAINING_ISSUES_AND_TODOS.md`
 
 ## Verification
 
@@ -148,6 +157,11 @@
 - `npm run i18n:check` still fails on pre-existing translation drift; the new `tooltips.chooseRecordingDirectory` key is no longer listed as missing.
 - Latest verified checkpoint before this handoff update: `7d1a3c2 fix: open app settings in standalone window`.
 - Archive before app settings center work: `archive/before-app-settings-20260617`.
+- `npx tsc` passes after the 1.0.0 version update.
+- `npx vite build` passes during the 1.0.0 macOS ARM64 DMG build.
+- `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --arm64 --config.npmRebuild=false` produced `release/1.0.0/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`.
+- `lipo -archs release/1.0.0/mac-arm64/LikelySnap.app/Contents/MacOS/LikelySnap` returns `arm64`.
+- The built app `Info.plist` reports `CFBundleShortVersionString = 1.0.0` and `CFBundleVersion = 1.0.0`.
 
 ## Next Engineering Step
 
@@ -163,3 +177,4 @@ Run real macOS durability validation against the native `webcam.mp4` path:
 8. Validate the native Windows webcam sidecar on a Windows machine with `npm run build:native:win` and `npm run test:wgc-full:win`.
 9. Open `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap`, confirm the editor remains interactive with waveform visible by default, and confirm the waveform uses cached peaks on the next load.
 10. Open the standalone settings window from both the HUD gear and the editor top-bar gear, then verify recording/project/cache directories, cache size/clear, quality, FPS, and default recording toggles persist across app restarts and affect the next recording.
+11. Implement the next export durability pass: replace MP4 `BufferTarget` with a temp-file/streaming output path, add source-aware export FPS, and add a Windows encoder policy that defaults to hardware where supported while retaining CPU fallback.

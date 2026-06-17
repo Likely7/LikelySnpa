@@ -19,6 +19,8 @@ Build a durable macOS/Windows LikelySnap recorder/editor that can record long vi
 13. User-facing settings must be real, persistent, and wired to the recorder/editor behavior: recording directory, project directory, cache directory, cache clearing, recording quality, frame rate, and default recording toggles.
 14. App settings must open from both the launch HUD and the editor as a standalone, fully clickable Electron window, not as a clipped modal inside the transparent HUD overlay.
 15. Windows deliverables are x64-only for now. Portable Windows builds must include the x64 WGC helper binaries and must not silently package without them.
+16. Edited MP4 export must move to a temp-file/streaming output path before LikelySnap claims multi-hour export support. Current recording writes are durable, but final edited exports still accumulate the muxed MP4 in memory.
+17. Windows export should not be CPU-only by accident. The product needs an explicit encoder strategy with hardware-first default where supported, software fallback, and UI/diagnostics that report the actual encoder mode used.
 
 ## Current Priority
 
@@ -38,3 +40,4 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Confirm the known ~17 minute package stays interactive with waveform on by default and uses the ranged/cached waveform path.
 - Confirm the standalone settings window opens from both the launch HUD gear and editor top-bar gear, then persists and applies recording/project/cache directories, cache cleanup, quality, FPS, editable cursor, microphone, system audio, and webcam defaults.
 - Keep export durability on the next P1 track: MP4 export still needs streaming/temp-file output before claiming multi-hour export support.
+- Keep Windows export performance on the next P1 track: current WebCodecs MP4 export tries `prefer-software` before `prefer-hardware` on Windows, and MP4 export is fixed at 60 FPS, so long 30 FPS recordings can do unnecessary work.

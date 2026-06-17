@@ -15,7 +15,7 @@
 ## P1
 
 1. Add MP4 export sync diagnostics.
-2. Make MP4 export write to a temp file instead of an in-memory `BufferTarget`.
+2. Make MP4 export write to a temp file or streaming file target instead of an in-memory `mediabunny` `BufferTarget`; this is required before claiming reliable multi-hour edited exports.
 3. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
 4. Add broader automated tests for custom recording directories and interrupted package recovery.
 5. Add real macOS long-recording validation evidence.
@@ -25,6 +25,8 @@
 9. Add Windows CI or documented manual verification for `npm run build:native:win`, `npm run build:win:portable`, and `npm run test:wgc-full:win`.
 10. Consider progressive waveform progress reporting if first-time generation on multi-hour recordings needs a visible percentage instead of the current lightweight skeleton.
 11. Add automated IPC coverage for `app-settings.json` migration, cache directory changes, and project-directory save/open defaults.
+12. Add a durable Windows export encoder policy: hardware-first by default when supported, software fallback for compatibility, a user-facing encoder setting (`auto`, `prefer hardware`, `compatibility CPU`), and diagnostics showing whether the finished export used GPU or CPU encoding.
+13. Make MP4 export frame rate source-aware instead of hard-coded to 60 FPS; default to source FPS or a user-selected export FPS so 30 FPS recordings do not pay for double-frame export work.
 
 ## P2
 
@@ -50,3 +52,4 @@
 14. Open settings from the editor top-bar gear and confirm the same persisted values are shown as the launch HUD settings entry.
 15. On a Windows x64 build machine, run `npm run build:win:portable` and confirm the produced zip contains `resources/electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`.
 16. On Windows x64, record with webcam enabled and inspect `.likelysnap/manifest.json`; confirm `media.webcamStartOffsetMs` is present when `webcam.mp4` exists, then verify preview/export webcam sync.
+17. On Windows x64, export the same project with Task Manager's CPU/GPU video encode graphs visible and confirm the UI/diagnostics report the actual encoder path. Current code-level expectation is CPU-first because Windows uses WebCodecs `prefer-software` before `prefer-hardware`.
