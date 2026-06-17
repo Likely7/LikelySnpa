@@ -17,7 +17,7 @@ Build a durable macOS-first LikelySnap recorder/editor that can record long vide
 
 ## Current Priority
 
-Validate the implemented `.likelysnap` recording package model on macOS:
+Validate the implemented `.likelysnap` recording package model on macOS and push the app toward release-grade durability:
 
 - Record with microphone, webcam, and editable cursor enabled.
 - Confirm package contents live-update while recording.
@@ -25,4 +25,4 @@ Validate the implemented `.likelysnap` recording package model on macOS:
 - Confirm moved packages reopen from relative `manifest.json` paths.
 - Confirm missing-manifest recovery rebuilds a usable package session.
 - Confirm editor preview and exported MP4 stay in sync.
-- Confirm generated zoom suggestions track the cursor accurately in real macOS screen and window recordings.
+- Keep cursor-follow zoom in the validation pass, but consider it fixed after checkpoint `2ecbca8` unless a new reproducible offset is found.
