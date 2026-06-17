@@ -5,6 +5,11 @@ export const MAX_DWELL_DURATION_MS = 2600;
 export const DWELL_MOVE_THRESHOLD = 0.02;
 export const CLICK_SUGGESTION_STRENGTH_MS = MAX_DWELL_DURATION_MS + 1;
 export const MIN_DRAG_FOLLOW_DURATION_MS = 250;
+export const MIN_AUTO_ZOOM_DURATION_MS = 1200;
+export const MAX_AUTO_ZOOM_DURATION_MS = 30_000;
+export const AUTO_ZOOM_CONTEXT_PADDING_MS = 600;
+export const DWELL_MERGE_GAP_MS = 800;
+export const DWELL_MERGE_DISTANCE = 0.04;
 /** Minimum spacing between two accepted suggestion centres. */
 export const SUGGESTION_SPACING_MS = 1800;
 
@@ -12,6 +17,8 @@ export interface ZoomDwellCandidate {
 	centerTimeMs: number;
 	focus: ZoomFocus;
 	strength: number;
+	span: { start: number; end: number };
+	kind: "dwell" | "click";
 }
 
 function isClickInteractionType(interactionType: CursorTelemetryPoint["interactionType"]) {
@@ -76,6 +83,8 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 			centerTimeMs: Math.round((start.timeMs + end.timeMs) / 2),
 			focus: { cx: avgCx, cy: avgCy },
 			strength: Math.min(runDuration, MAX_DWELL_DURATION_MS),
+			span: { start: start.timeMs, end: end.timeMs },
+			kind: "dwell",
 		});
 	};
 
@@ -91,19 +100,30 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 	}
 	pushRunIfDwell(runStart, samples.length);
 
+	const mergedDwellCandidates = mergeAdjacentDwellCandidates(dwellCandidates);
+
 	for (const sample of samples) {
 		if (!isClickInteractionType(sample.interactionType)) {
 			continue;
 		}
+		if (
+			mergedDwellCandidates.some(
+				(candidate) => sample.timeMs >= candidate.span.start && sample.timeMs <= candidate.span.end,
+			)
+		) {
+			continue;
+		}
 
-		dwellCandidates.push({
+		mergedDwellCandidates.push({
 			centerTimeMs: Math.round(sample.timeMs),
 			focus: { cx: sample.cx, cy: sample.cy },
 			strength: CLICK_SUGGESTION_STRENGTH_MS,
+			span: { start: sample.timeMs, end: sample.timeMs },
+			kind: "click",
 		});
 	}
 
-	return dwellCandidates;
+	return mergedDwellCandidates;
 }
 
 export interface AutoZoomSuggestion {
@@ -128,7 +148,7 @@ export function buildAutoZoomSuggestions(options: {
 		return [];
 	}
 
-	const defaultDuration = Math.min(defaultDurationMs, totalMs);
+	const defaultDuration = clampDuration(defaultDurationMs, totalMs);
 	if (defaultDuration <= 0) {
 		return [];
 	}
@@ -159,9 +179,9 @@ export function buildAutoZoomSuggestions(options: {
 			continue;
 		}
 
-		const centeredStart = Math.round(candidate.centerTimeMs - defaultDuration / 2);
-		const candidateStart = Math.max(0, Math.min(centeredStart, totalMs - defaultDuration));
-		const candidateEnd = candidateStart + defaultDuration;
+		const span = buildSuggestionSpan(candidate, totalMs, defaultDuration);
+		const candidateStart = span.start;
+		const candidateEnd = span.end;
 		const hasOverlap = reservedSpans.some(
 			(span) => candidateEnd > span.start && candidateStart < span.end,
 		);
@@ -171,7 +191,6 @@ export function buildAutoZoomSuggestions(options: {
 
 		reservedSpans.push({ start: candidateStart, end: candidateEnd });
 		acceptedCenters.push(candidate.centerTimeMs);
-		const span = { start: candidateStart, end: candidateEnd };
 		suggestions.push({
 			span,
 			focus: candidate.focus,
@@ -180,6 +199,78 @@ export function buildAutoZoomSuggestions(options: {
 	}
 
 	return suggestions;
+}
+
+function mergeAdjacentDwellCandidates(candidates: ZoomDwellCandidate[]): ZoomDwellCandidate[] {
+	const sorted = [...candidates].sort((a, b) => a.span.start - b.span.start);
+	const merged: ZoomDwellCandidate[] = [];
+
+	for (const candidate of sorted) {
+		const previous = merged.at(-1);
+		if (!previous) {
+			merged.push(candidate);
+			continue;
+		}
+
+		const gap = candidate.span.start - previous.span.end;
+		const focusDistance = Math.hypot(
+			candidate.focus.cx - previous.focus.cx,
+			candidate.focus.cy - previous.focus.cy,
+		);
+		if (gap > DWELL_MERGE_GAP_MS || focusDistance > DWELL_MERGE_DISTANCE) {
+			merged.push(candidate);
+			continue;
+		}
+
+		const previousDuration = Math.max(1, previous.span.end - previous.span.start);
+		const candidateDuration = Math.max(1, candidate.span.end - candidate.span.start);
+		const totalDuration = previousDuration + candidateDuration;
+		const span = {
+			start: previous.span.start,
+			end: Math.max(previous.span.end, candidate.span.end),
+		};
+		const spanDuration = span.end - span.start;
+		merged[merged.length - 1] = {
+			centerTimeMs: Math.round((span.start + span.end) / 2),
+			focus: {
+				cx:
+					(previous.focus.cx * previousDuration + candidate.focus.cx * candidateDuration) /
+					totalDuration,
+				cy:
+					(previous.focus.cy * previousDuration + candidate.focus.cy * candidateDuration) /
+					totalDuration,
+			},
+			strength: Math.min(spanDuration, MAX_DWELL_DURATION_MS),
+			span,
+			kind: "dwell",
+		};
+	}
+
+	return merged;
+}
+
+function clampDuration(durationMs: number, totalMs: number): number {
+	if (totalMs <= 0) {
+		return 0;
+	}
+	const minDuration = Math.min(MIN_AUTO_ZOOM_DURATION_MS, totalMs);
+	const maxDuration = Math.min(MAX_AUTO_ZOOM_DURATION_MS, totalMs);
+	return Math.max(minDuration, Math.min(Math.round(durationMs), maxDuration));
+}
+
+function buildSuggestionSpan(
+	candidate: ZoomDwellCandidate,
+	totalMs: number,
+	defaultDuration: number,
+): { start: number; end: number } {
+	const rawDuration = candidate.span.end - candidate.span.start;
+	const desiredDuration =
+		candidate.kind === "dwell"
+			? clampDuration(rawDuration + AUTO_ZOOM_CONTEXT_PADDING_MS * 2, totalMs)
+			: defaultDuration;
+	const centeredStart = Math.round(candidate.centerTimeMs - desiredDuration / 2);
+	const start = Math.max(0, Math.min(centeredStart, totalMs - desiredDuration));
+	return { start, end: start + desiredDuration };
 }
 
 export function hasPressedCursorDuringSpan(

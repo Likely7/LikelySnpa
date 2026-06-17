@@ -28,8 +28,7 @@ export interface EditorState {
 	zoomRegions: ZoomRegion[];
 	/** Magic-wand auto-zoom toggle. When on, fresh recordings get suggested zooms. */
 	autoZoomEnabled: boolean;
-	/** Global Auto-Focus toggle: when on, all zooms follow the cursor and the
-	 * per-zoom Focus Mode selector is locked. */
+	/** Global Follow Mouse toggle: when on, all zooms follow the recorded cursor. */
 	autoFocusAll: boolean;
 	trimRegions: TrimRegion[];
 	speedRegions: SpeedRegion[];

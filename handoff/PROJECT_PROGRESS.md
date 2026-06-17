@@ -28,14 +28,14 @@
 24. Added package manifest path helpers, safe package-child path validation, relative manifest normalization, and missing-manifest recovery.
 25. Updated editor/video/project open paths so `.likelysnap` package directories load as recordings while `.likelysnap` files still load as projects.
 26. Registered `.likelysnap` as a macOS document/package association in Electron Builder.
-27. Restored cursor-follow zoom for auto-generated zoom regions by always storing auto focus mode on generated zoom suggestions.
+27. Restored Follow Mouse zoom for auto-generated zoom regions by storing cursor-follow mode where appropriate.
 28. Corrected macOS native window cursor normalization by passing ScreenCaptureKit capture bounds from the helper to the Electron cursor recorder.
-29. Restarted the local dev app after refreshing the macOS helper binary so the cursor-follow fix is active for user testing.
-30. Captured the cursor-follow fix in Git checkpoint `2ecbca8 fix: restore cursor-follow zoom focus`.
-31. User reported the result is approximately acceptable, so the current project state is ready to move past cursor-follow repair.
-32. Compared upstream OpenScreen auto zoom/cursor-follow implementation against LikelySnap. Upstream only detects cursor dwells, drops dwells longer than 2600ms, ignores click intent for suggestions, and smooths cursor-follow only after zoom-in has completed.
-33. Clarified the product model: auto zoom suggestions choose spans, while each zoom region's focus mode independently controls whether the camera follows cursor telemetry. The global Auto-Focus toggle is a batch/default control, not a permanent lock.
-34. Added auto zoom focus inference from mouse-button hold spans: click-to-mouseup intervals inside a suggested zoom default that zoom to cursor-follow; ordinary dwells/clicks default to stable manual focus.
+29. Restarted the local dev app after refreshing the macOS helper binary so the Follow Mouse fix is active for user testing.
+30. Captured the Follow Mouse fix in Git checkpoint `2ecbca8 fix: restore cursor-follow zoom focus`.
+31. User reported the result is approximately acceptable, so the current project state is ready to move past Follow Mouse repair.
+32. Compared upstream OpenScreen auto zoom/Follow Mouse implementation against LikelySnap. Upstream only detects cursor dwells, drops dwells longer than 2600ms, ignores click intent for suggestions, and smooths Follow Mouse only after zoom-in has completed.
+33. Clarified the product model: auto zoom suggestions choose spans, while each zoom region independently controls whether the camera follows cursor telemetry. The global Follow Mouse toggle is a batch control, not a permanent lock.
+34. Added auto zoom Follow Mouse inference from mouse-button hold spans: click-to-mouseup intervals inside a suggested zoom default that zoom to Follow Mouse; ordinary dwells/clicks default to stable fixed-position zoom.
 35. Investigated a real ~32 minute macOS recording that opened poorly in the editor. Main `screen.mp4` was healthy (~310 MB), but `webcam.webm` was ~4 GB and stop-time WebM duration patch failed above Node's 2 GB read limit.
 36. Documented the long-recording native webcam plan in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`, covering macOS `AVCaptureSession + AVAssetWriter`, Windows Media Foundation sidecars, WebM fallback, editor degradation, and NLE-style large media handling.
 37. Implemented macOS native webcam sidecar recording in the ScreenCaptureKit helper with `AVCaptureSession + AVAssetWriter`, producing package-local `webcam.mp4`.
@@ -45,6 +45,9 @@
 41. Added a 2 GB safety guard for whole-file WebM duration patching.
 42. Added editor-side webcam sidecar stat checks so huge legacy webcam files are skipped without blocking main screen editing.
 43. Kept legacy `webcam.webm` packages loadable while making `webcam.mp4` the canonical package webcam sidecar.
+44. Replaced the app logo/icon chain from the user-provided square logo and added a reproducible `npm run generate:icons` pipeline that creates rounded-corner PNG, macOS `.icns`, Windows `.ico`, and public favicon assets.
+45. Changed user-facing zoom wording from Focus Mode/Auto-Focus to Follow Mouse/跟随鼠标 while keeping the internal `focusMode` field for old project compatibility.
+46. Refined auto zoom span generation so long explanations produce longer stable zooms instead of repeated fixed-length jumps: dwell spans use their real duration plus padding, nearby same-area dwell runs merge, click-only suggestions stay short, and held mouse-button spans default to Follow Mouse.
 
 ## Implemented This Pass
 
@@ -83,6 +86,11 @@
 - `src/components/video-editor/timeline/zoomSuggestionUtils.test.ts`
 - `src/components/video-editor/videoPlayback/cursorFollowUtils.ts`
 - `src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts`
+- `scripts/generate-icons.mjs`
+- `icons/source/logo.png`
+- `icons/icons/*`
+- `public/likelysnap.png`
+- `public/openscreen.png`
 - `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`
 - `electron/recording/webm-duration.ts`
 - `electron/native/wgc-capture/src/main.cpp`
@@ -105,9 +113,10 @@
 - `./node_modules/.bin/tsc --noEmit` passes after native webcam sidecar refactor.
 - `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after native webcam sidecar refactor with deprecation warnings only.
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local macOS helper binary.
+- `npm run generate:icons -- /Users/macbook/Downloads/logo.png` passes and regenerates all app icon assets from the stored source logo.
 - `npm run build:native:mac` is blocked by the local machine using Command Line Tools instead of full Xcode.
 - `npm run i18n:check` still fails on pre-existing translation drift; the new `tooltips.chooseRecordingDirectory` key is no longer listed as missing.
-- Latest verified checkpoint before native webcam implementation: `7c59ac4 fix: stabilize auto zoom focus model`.
+- Latest verified checkpoint before native webcam implementation: `7c59ac4 fix: stabilize auto zoom follow model`.
 
 ## Next Engineering Step
 
@@ -118,6 +127,6 @@ Run real macOS durability validation against the native `webcam.mp4` path:
 3. Confirm package contents grow/update during capture and end as `screen.mp4`, `webcam.mp4`, `cursor.json`, `manifest.json`.
 4. Confirm opening/moving the package keeps webcam, cursor telemetry, and `webcamStartOffsetMs`.
 5. Confirm editor preview and exported MP4 remain in sync.
-6. Confirm normal auto-generated zooms are stable by default, held-click/drag suggestions default to cursor-follow, and selected zooms can still be manually switched between Manual and Auto in the settings panel.
+6. Confirm normal auto-generated zooms are stable by default, long same-area explanations become one longer zoom, held-click/drag suggestions default to Follow Mouse, and selected zooms can still be manually switched between Follow Mouse off/on in the settings panel.
 7. Open the known package `/Users/macbook/Movies/LikelySnap/recording-1781670268254.likelysnap`; the editor should open `screen.mp4` and skip the 4 GB legacy `webcam.webm` with a warning instead of freezing.
 8. Validate the native Windows webcam sidecar on a Windows machine with `npm run build:native:win` and `npm run test:wgc-full:win`.

@@ -412,7 +412,7 @@ export class FrameRenderer {
 		// Feed the spring-smoothed transform (appliedScale/x/y) via transformOverride, like the
 		// preview. Without it applyZoomTransform recomputes the camera from the raw eased target and
 		// the spring is discarded, so the export snaps to the target every frame while the preview
-		// glides (very visible for auto-focus, whose target pans with the cursor). It also keeps the
+		// glides (very visible for Follow Mouse, whose target pans with the cursor). It also keeps the
 		// camera, mask, and cursor (which already read appliedScale/x/y) consistent.
 		applyZoomTransform({
 			cameraContainer: this.cameraContainer,
@@ -792,7 +792,7 @@ export class FrameRenderer {
 			targetFocus = regionFocus;
 			targetProgress = strength;
 
-			// Stable camera follow for auto-focus mode. This mirrors preview so exports do
+			// Stable camera follow for Follow Mouse mode. This mirrors preview so exports do
 			// not switch between tightly locked zoom-in motion and smoother full-zoom motion.
 			if (region.focusMode === "auto" && !transition) {
 				const raw = targetFocus;

@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { findDominantRegion } from "./zoomRegionUtils";
 
 describe("findDominantRegion cursor follow", () => {
-	it("resolves auto-focus zoom regions from cursor telemetry at playback time", () => {
+	it("resolves Follow Mouse zoom regions from cursor telemetry at playback time", () => {
 		const result = findDominantRegion(
 			[
 				{

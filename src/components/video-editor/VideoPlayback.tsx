@@ -1384,7 +1384,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					targetFocus = regionFocus;
 					targetProgress = strength;
 
-					// Stable camera follow for auto-focus mode. Keep the same smoothing during
+					// Stable camera follow for Follow Mouse mode. Keep the same smoothing during
 					// zoom-in, full zoom, and zoom-out so generated regions do not alternate
 					// between floaty and tightly locked motion.
 					if (region.focusMode === "auto" && !transition) {

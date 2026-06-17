@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+	AUTO_ZOOM_CONTEXT_PADDING_MS,
 	buildAutoZoomSuggestions,
 	detectZoomDwellCandidates,
 	hasPressedCursorDuringSpan,
@@ -17,6 +18,44 @@ describe("zoomSuggestionUtils", () => {
 		expect(candidates[0].strength).toBe(MAX_DWELL_DURATION_MS);
 	});
 
+	it("uses the real dwell span plus context padding for auto zoom duration", () => {
+		const suggestions = buildAutoZoomSuggestions({
+			cursorTelemetry: [
+				{ timeMs: 0, cx: 0.4, cy: 0.4 },
+				{ timeMs: 5_000, cx: 0.405, cy: 0.405 },
+			],
+			totalMs: 10_000,
+			existingRegions: [],
+			defaultDurationMs: 1000,
+		});
+
+		expect(suggestions).toHaveLength(1);
+		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(
+			5_000 + AUTO_ZOOM_CONTEXT_PADDING_MS * 2,
+		);
+		expect(suggestions[0].focusMode).toBe("manual");
+	});
+
+	it("merges nearby dwell runs in the same area so long explanations do not jump", () => {
+		const suggestions = buildAutoZoomSuggestions({
+			cursorTelemetry: [
+				{ timeMs: 0, cx: 0.4, cy: 0.4 },
+				{ timeMs: 1_000, cx: 0.405, cy: 0.405 },
+				{ timeMs: 1_200, cx: 0.45, cy: 0.45 },
+				{ timeMs: 1_700, cx: 0.41, cy: 0.41 },
+				{ timeMs: 4_000, cx: 0.412, cy: 0.412 },
+			],
+			totalMs: 8_000,
+			existingRegions: [],
+			defaultDurationMs: 1000,
+		});
+
+		expect(suggestions).toHaveLength(1);
+		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(
+			4_000 + AUTO_ZOOM_CONTEXT_PADDING_MS * 2,
+		);
+	});
+
 	it("uses click telemetry as an auto zoom candidate", () => {
 		const suggestions = buildAutoZoomSuggestions({
 			cursorTelemetry: [
@@ -30,7 +69,7 @@ describe("zoomSuggestionUtils", () => {
 		});
 
 		expect(suggestions).toHaveLength(1);
-		expect(suggestions[0].span).toEqual({ start: 500, end: 1500 });
+		expect(suggestions[0].span).toEqual({ start: 400, end: 1600 });
 		expect(suggestions[0].focus).toEqual({ cx: 0.7, cy: 0.3 });
 		expect(suggestions[0].focusMode).toBe("manual");
 	});

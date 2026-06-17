@@ -1109,7 +1109,7 @@ export default function VideoEditor() {
 				cursorTelemetry,
 				totalMs,
 				existingRegions,
-				defaultDurationMs: Math.max(1000, Math.round(totalMs * 0.05)),
+				defaultDurationMs: 1600,
 			});
 			return suggestions.map((suggestion) => ({
 				id: `zoom-${nextZoomIdRef.current++}`,
