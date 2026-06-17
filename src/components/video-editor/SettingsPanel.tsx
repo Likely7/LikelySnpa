@@ -1,10 +1,8 @@
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import {
 	Brackets,
-	Bug,
 	Crop,
 	Download,
-	FileDown,
 	Film,
 	Image,
 	Info,
@@ -14,7 +12,6 @@ import {
 	Palette,
 	SlidersHorizontal,
 	Sparkles,
-	Star,
 	Trash2,
 	Unlock,
 	Upload,
@@ -331,7 +328,6 @@ interface SettingsPanelProps {
 	webcamSizePreset?: WebcamSizePreset;
 	onWebcamSizePresetChange?: (size: WebcamSizePreset) => void;
 	onWebcamSizePresetCommit?: () => void;
-	onSaveDiagnostic?: () => Promise<void>;
 	showCursor?: boolean;
 	onShowCursorChange?: (show: boolean) => void;
 	cursorSize?: number;
@@ -467,7 +463,6 @@ export function SettingsPanel({
 	webcamSizePreset = DEFAULT_WEBCAM_SETTINGS.sizePreset,
 	onWebcamSizePresetChange,
 	onWebcamSizePresetCommit,
-	onSaveDiagnostic,
 	showCursor = DEFAULT_CURSOR_SETTINGS.show,
 	onShowCursorChange,
 	cursorSize = DEFAULT_CURSOR_SETTINGS.size,
@@ -741,39 +736,8 @@ export function SettingsPanel({
 		? blurRegions.find((region) => region.id === selectedBlurId)
 		: null;
 	const commonFooterLinks = (
-		<div className="flex gap-2 mt-3">
-			<button
-				type="button"
-				onClick={() => {
-					window.electronAPI?.openExternalUrl(
-						"https://github.com/likelysnap/likelysnap/issues/new/choose",
-					);
-				}}
-				className="flex-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 py-1.5 transition-colors"
-			>
-				<Bug className="w-3 h-3 text-[#C24B72]" />
-				{t("support.reportBug")}
-			</button>
-			{onSaveDiagnostic && (
-				<button
-					type="button"
-					onClick={onSaveDiagnostic}
-					className="flex-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 py-1.5 transition-colors"
-				>
-					<FileDown className="w-3 h-3 text-slate-400" />
-					{t("support.saveDiagnostics")}
-				</button>
-			)}
-			<button
-				type="button"
-				onClick={() => {
-					window.electronAPI?.openExternalUrl("https://github.com/likelysnap/likelysnap");
-				}}
-				className="flex-1 flex items-center justify-center gap-1.5 text-[10px] text-slate-500 hover:text-slate-300 py-1.5 transition-colors"
-			>
-				<Star className="w-3 h-3 text-yellow-400" />
-				{t("support.starOnGithub")}
-			</button>
+		<div className="mt-3 text-center text-[10px] leading-snug text-slate-500">
+			抖音小红书：Likely7&nbsp;&nbsp;反馈问题
 		</div>
 	);
 
