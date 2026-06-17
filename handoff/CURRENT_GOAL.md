@@ -21,11 +21,17 @@ Build a durable macOS/Windows LikelySnap recorder/editor that can record long vi
 15. Windows deliverables are x64-only for now. Portable Windows builds must include the x64 WGC helper binaries and must not silently package without them.
 16. Edited MP4 export must move to a temp-file/streaming output path before LikelySnap claims multi-hour export support. Current recording writes are durable, but final edited exports still accumulate the muxed MP4 in memory.
 17. Windows export should not be CPU-only by accident. The product needs an explicit encoder strategy with hardware-first default where supported, software fallback, and UI/diagnostics that report the actual encoder mode used.
+18. The editor must move toward a mainstream NLE architecture: instant timeline open, asynchronous media preparation, package/cache indexes, waveform/proxy/background jobs, and original-media export.
 
 ## Current Priority
 
-Push the package model from "recording works" to "long recordings remain editable":
+Push the package model from "recording works" to "long recordings remain editable", using the architecture in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`:
 
+- Make editor-open interactive before waveform, cursor, auto zoom, thumbnails, and proxy generation finish.
+- Keep the newly implemented staged editor-open path intact: cursor preview data, main-process cursor cache, idle auto zoom, idle waveform preparation, and first-screen timing logs.
+- Add package-local media/cursor caches so cold app launches do not need to parse/index from scratch.
+- Avoid whole-file media reads and packet scans in first-screen editor open.
+- Add the remaining timing instrumentation for video metadata readiness and future proxy/cache jobs.
 - Record with microphone, webcam, and editable cursor enabled.
 - Confirm package contents live-update while recording.
 - Confirm editor/open dialogs load `.likelysnap` package directories as recordings.
@@ -38,6 +44,7 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Produce the Windows x64 portable zip on a Windows x64 build machine with `npm run build:win:portable`; this macOS Apple Silicon machine cannot produce the final Windows zip because the WGC helper binary is missing and electron-builder's Wine resource step cannot execute.
 - Confirm the existing 4.4 GB `webcam.webm` package opens the main video without freezing by skipping the unsafe webcam sidecar.
 - Confirm the known ~17 minute package stays interactive with waveform on by default and uses the ranged/cached waveform path.
+- Confirm the Windows one-hour package opens interactively after the first architecture pass: preview cursor samples should load instead of full cursor recording data, waveform should prepare in idle time, and auto zoom should not block the editor.
 - Confirm the standalone settings window opens from both the launch HUD gear and editor top-bar gear, then persists and applies recording/project/cache directories, cache cleanup, quality, FPS, editable cursor, microphone, system audio, and webcam defaults.
 - Keep export durability on the next P1 track: MP4 export still needs streaming/temp-file output before claiming multi-hour export support.
 - Keep Windows export performance on the next P1 track: current WebCodecs MP4 export tries `prefer-software` before `prefer-hardware` on Windows, and MP4 export is fixed at 60 FPS, so long 30 FPS recordings can do unnecessary work.

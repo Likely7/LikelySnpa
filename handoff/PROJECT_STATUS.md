@@ -11,9 +11,10 @@
 - Current product name: `LikelySnap`
 - Current npm package name: `likelysnap`
 - Current Electron appId: `com.likelysnap.app`
-- Latest pushed checkpoint: `b3ae601 chore: set version to 1.0.0`
+- Latest pushed checkpoint before local NLE editor pass: `80338cd docs: remove public packaging noise`
 - Latest durable app/settings checkpoint: `7d1a3c2 fix: open app settings in standalone window`
 - Public GitHub cleanup checkpoint: removed obsolete release/build workflows and public README platform packaging instructions; internal build scripts remain in `package.json`.
+- Archive before NLE-style editor architecture work: `archive/before-nle-editor-architecture-20260618-000347`
 - App settings checkpoints: `eb0f2c4 feat: add app settings center`, `7d1a3c2 fix: open app settings in standalone window`
 - Archive before app settings center work: `archive/before-app-settings-20260617`
 - Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
@@ -71,6 +72,10 @@
 - Edited MP4 export currently decodes source media incrementally and renders frames through the WebCodecs/Pixi/canvas export pipeline, but the final MP4 mux target is still `mediabunny` `BufferTarget` in `src/lib/exporter/muxer.ts`. The final export is accumulated in memory as a Blob before `write-export-to-path`; it is not yet a temp-file/streaming muxer.
 - Windows MP4 export currently prefers WebCodecs `prefer-software` before `prefer-hardware` in `src/lib/exporter/videoExporter.ts`, so Windows exports are likely CPU-encoded unless software encode fails and the hardware fallback is used. Frame compositing may use GPU/WebGL, but the H.264 encode preference is software-first on Windows.
 - MP4 export currently uses a fixed 60 FPS target in `src/components/video-editor/VideoEditor.tsx`, which can double frame work for 30 FPS sources and is a likely contributor to slow Windows export.
+- A real Windows one-hour recording on a high-end RTX 5070 PC opened but stayed non-interactive for more than five minutes while CPU/GPU/memory utilization stayed low. This points to low-efficiency serialized editor preparation work, not insufficient user hardware.
+- New editor architecture direction is documented in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`: instant timeline open, background waveform/cursor/auto-zoom/proxy jobs, package-local cache indexes, and no heavy analysis on first screen.
+- First NLE-style editor-open pass is implemented locally: editor cursor loading now uses preview-level native bridge data instead of full cursor recording data, the main process caches parsed cursor files, automatic zoom suggestions run in idle time, waveform generation starts in idle time, and editor-open timing logs are emitted.
+- Export still loads full cursor recording data on demand, so the preview downsampling does not reduce final cursor overlay quality.
 
 ## Current Risk Summary
 
@@ -89,6 +94,7 @@
 - Windows native webcam code is implemented and now has a persisted sidecar timeline offset, but it is still not truth-tested on Windows hardware from this macOS machine.
 - Windows x64 packaging still depends on the native WGC helper binaries being built on Windows. Public GitHub release/build automation was removed until the project has a clean LikelySnap-owned release pipeline.
 - Windows export performance has been reviewed at code level only. The next durable fix is to add an explicit export encoder setting (`auto`, `prefer hardware`, `compatibility CPU`), make Windows hardware-first by default when available, expose the actual encoder mode used, and make MP4 mux/save stream to a temp file.
+- Current P0 is to validate and continue the editor-open architecture. The first code pass removes the largest known first-screen cursor/waveform/auto-zoom blockers, but package-local media info/cursor indexes, preview proxies, and streaming export are still open.
 
 ## Latest Verification
 
@@ -114,3 +120,6 @@
 - `lipo -archs release/1.0.0/mac-arm64/LikelySnap.app/Contents/MacOS/LikelySnap` returns `arm64`.
 - `Info.plist` in the built app reports `CFBundleShortVersionString` and `CFBundleVersion` as `1.0.0`.
 - Built app resources include the `darwin-arm64` cursor and ScreenCaptureKit helper binaries.
+- `npx tsc --noEmit` passes after the first NLE editor-open architecture pass.
+- `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/lib/cursor/nativeCursor.test.ts src/lib/cursor/cursorPathSmoothing.test.ts` passes after the first NLE editor-open architecture pass.
+- `npm run build-vite` passes after the first NLE editor-open architecture pass.

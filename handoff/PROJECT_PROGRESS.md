@@ -64,6 +64,10 @@
 60. Built a macOS ARM64-only 1.0.0 DMG and copied it to `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`; the build is ad-hoc signed and not notarized.
 61. Reviewed Windows MP4 export performance at source level. Current edited MP4 export uses WebCodecs plus canvas/Pixi frame compositing, but Windows prefers `prefer-software` before `prefer-hardware`, so exports are likely CPU-encoded unless software fails. The final MP4 mux target is still in-memory `BufferTarget`, not a temp-file/streaming writer.
 62. Pruned public GitHub packaging noise: removed old release/build workflows that still referenced upstream signing/notarization/Nix/Discord automation and removed macOS/Windows packaging command sections from the public README.
+63. Created archive `archive/before-nle-editor-architecture-20260618-000347` before starting the long-recording editor architecture pass.
+64. Documented the new NLE-style editor architecture plan in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md` after a one-hour Windows recording stayed non-interactive for more than five minutes despite low CPU/GPU/memory utilization.
+65. Implemented the first editor-open architecture pass: added native bridge `CursorPreviewData`, preview cursor loading, main-process cursor parse cache, single-source `useCursorEditorData()`, idle auto zoom suggestion generation, idle waveform generation startup, and editor-open timing logs.
+66. Preserved full-fidelity export behavior by loading full cursor recording data only when export starts, while keeping editor preview and auto zoom on bounded preview samples.
 
 ## Implemented This Pass
 
@@ -125,6 +129,14 @@
 - `handoff/PROJECT_OVERVIEW.md`
 - `handoff/CURRENT_GOAL.md`
 - `handoff/REMAINING_ISSUES_AND_TODOS.md`
+- `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`
+- `src/native/contracts.ts`
+- `src/native/client.ts`
+- `src/native/hooks/useCursorEditorData.ts`
+- `electron/ipc/nativeBridge.ts`
+- `electron/native-bridge/cursor/adapter.ts`
+- `electron/native-bridge/cursor/telemetryCursorAdapter.ts`
+- `electron/native-bridge/services/cursorService.ts`
 - `.github/workflows/build.yml`
 - `.github/workflows/bump-nix-package.yml`
 - `.github/workflows/discord.yaml`
@@ -165,6 +177,9 @@
 - `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --arm64 --config.npmRebuild=false` produced `release/1.0.0/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`.
 - `lipo -archs release/1.0.0/mac-arm64/LikelySnap.app/Contents/MacOS/LikelySnap` returns `arm64`.
 - The built app `Info.plist` reports `CFBundleShortVersionString = 1.0.0` and `CFBundleVersion = 1.0.0`.
+- `npx tsc --noEmit` passes after the first NLE editor-open architecture pass.
+- `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/lib/cursor/nativeCursor.test.ts src/lib/cursor/cursorPathSmoothing.test.ts` passes after the first NLE editor-open architecture pass.
+- `npm run build-vite` passes after the first NLE editor-open architecture pass.
 
 ## Next Engineering Step
 
@@ -180,4 +195,6 @@ Run real macOS durability validation against the native `webcam.mp4` path:
 8. Validate the native Windows webcam sidecar on a Windows machine with `npm run build:native:win` and `npm run test:wgc-full:win`.
 9. Open `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap`, confirm the editor remains interactive with waveform visible by default, and confirm the waveform uses cached peaks on the next load.
 10. Open the standalone settings window from both the HUD gear and the editor top-bar gear, then verify recording/project/cache directories, cache size/clear, quality, FPS, and default recording toggles persist across app restarts and affect the next recording.
-11. Implement the next export durability pass: replace MP4 `BufferTarget` with a temp-file/streaming output path, add source-aware export FPS, and add a Windows encoder policy that defaults to hardware where supported while retaining CPU fallback.
+11. Validate the Windows one-hour package against the first editor-open architecture pass and inspect `[editor-open]` logs for initial data, cursor preview/cache, waveform cache/generation, and auto zoom timing.
+12. Implement package-local `cache/media-info.json` and `cache/cursor-index.json` so cold app launches do not need to recompute preview metadata/indexes.
+13. Implement the next export durability pass: replace MP4 `BufferTarget` with a temp-file/streaming output path, add source-aware export FPS, and add a Windows encoder policy that defaults to hardware where supported while retaining CPU fallback.

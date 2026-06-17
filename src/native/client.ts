@@ -1,5 +1,6 @@
 import {
 	type CursorCapabilities,
+	type CursorPreviewData,
 	type CursorRecordingData,
 	type CursorTelemetryPoint,
 	NATIVE_BRIDGE_CHANNEL,
@@ -129,6 +130,15 @@ export const nativeBridgeClient = {
 				domain: "cursor",
 				action: "getRecordingData",
 				payload: videoPath ? { videoPath } : {},
+			}),
+		getPreviewData: (videoPath?: string, sampleIntervalMs?: number) =>
+			requireNativeBridgeData<CursorPreviewData>({
+				domain: "cursor",
+				action: "getPreviewData",
+				payload: {
+					...(videoPath ? { videoPath } : {}),
+					...(sampleIntervalMs ? { sampleIntervalMs } : {}),
+				},
 			}),
 		getTelemetry: (videoPath?: string) =>
 			requireNativeBridgeData<CursorTelemetryPoint[]>({

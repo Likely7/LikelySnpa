@@ -18,6 +18,8 @@ type PeakCachePayload = {
 	peaks: number[];
 };
 
+type IdleTaskHandle = number;
+
 function fileUrlToPath(fileUrl: string): string | null {
 	try {
 		const url = new URL(fileUrl);
@@ -214,6 +216,30 @@ async function computeAudioPeaks(videoUrl: string, signal: AbortSignal): Promise
 	}
 }
 
+function scheduleIdleTask(callback: IdleRequestCallback, timeout = 5_000): IdleTaskHandle {
+	if (typeof window.requestIdleCallback === "function") {
+		return window.requestIdleCallback(callback, { timeout });
+	}
+
+	return window.setTimeout(
+		() =>
+			callback({
+				didTimeout: false,
+				timeRemaining: () => 0,
+			} as IdleDeadline),
+		1,
+	);
+}
+
+function cancelIdleTask(handle: IdleTaskHandle) {
+	if (typeof window.cancelIdleCallback === "function") {
+		window.cancelIdleCallback(handle);
+		return;
+	}
+
+	window.clearTimeout(handle);
+}
+
 /**
  * Lazily prepares timeline waveform peaks without loading the full media file
  * into renderer memory. Local Electron files are read through ranged IPC and
@@ -242,9 +268,12 @@ export function useAudioPeaks(videoUrl?: string): AudioPeaksState {
 
 		let cancelled = false;
 		const controller = new AbortController();
+		let idleTask: IdleTaskHandle | null = null;
 		setState({ peaks: null, loading: true, error: null });
 
-		(async () => {
+		idleTask = scheduleIdleTask(async () => {
+			idleTask = null;
+			const startedAt = performance.now();
 			try {
 				const localPath = fileUrlToPath(videoUrl);
 				if (localPath && window.electronAPI?.readWaveformPeaksCache) {
@@ -254,6 +283,11 @@ export function useAudioPeaks(videoUrl?: string): AudioPeaksState {
 						const peaks = Float32Array.from(diskCache.peaks);
 						memoryCacheRef.current.set(videoUrl, peaks);
 						setState({ peaks, loading: false, error: null });
+						console.info("[editor-open] waveform peaks cache hit", {
+							videoUrl,
+							blocks: peaks.length / 2,
+							durationMs: Math.round(performance.now() - startedAt),
+						});
 						return;
 					}
 				}
@@ -263,6 +297,12 @@ export function useAudioPeaks(videoUrl?: string): AudioPeaksState {
 				const peaks = Float32Array.from(payload.peaks);
 				memoryCacheRef.current.set(videoUrl, peaks);
 				setState({ peaks, loading: false, error: null });
+				console.info("[editor-open] waveform peaks prepared", {
+					videoUrl,
+					durationSec: Math.round(payload.durationSec),
+					blocks: peaks.length / 2,
+					durationMs: Math.round(performance.now() - startedAt),
+				});
 
 				const localPathForWrite = fileUrlToPath(videoUrl);
 				if (localPathForWrite && window.electronAPI?.writeWaveformPeaksCache) {
@@ -274,10 +314,13 @@ export function useAudioPeaks(videoUrl?: string): AudioPeaksState {
 				console.warn("useAudioPeaks: could not prepare waveform:", err);
 				if (!cancelled) setState({ peaks: null, loading: false, error: message });
 			}
-		})();
+		});
 
 		return () => {
 			cancelled = true;
+			if (idleTask !== null) {
+				cancelIdleTask(idleTask);
+			}
 			controller.abort();
 		};
 	}, [videoUrl]);

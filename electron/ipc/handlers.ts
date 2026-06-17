@@ -33,6 +33,7 @@ import {
 	type StoreRecordedSessionInput,
 } from "../../src/lib/recordingSession";
 import type {
+	CursorProviderKind,
 	CursorRecordingData,
 	CursorRecordingSample,
 	NativeCursorAsset,
@@ -797,6 +798,14 @@ const CURSOR_TELEMETRY_VERSION = 2;
 const CURSOR_SAMPLE_INTERVAL_MS = 33;
 const CURSOR_TELEMETRY_FLUSH_INTERVAL_MS = 500;
 const MAX_CURSOR_SAMPLES = 60 * 60 * 30; // 1 hour @ 30Hz
+const cursorRecordingDataCache = new Map<
+	string,
+	{
+		mtimeMs: number;
+		size: number;
+		data: CursorRecordingData;
+	}
+>();
 
 let cursorRecordingSession: CursorRecordingSession | null = null;
 let pendingCursorRecordingData: CursorRecordingData | null = null;
@@ -898,7 +907,22 @@ function normalizeCursorAsset(asset: unknown): NativeCursorAsset | null {
 async function readCursorRecordingFile(targetVideoPath: string): Promise<CursorRecordingData> {
 	const telemetryPath = getCursorTelemetryPathForVideo(targetVideoPath);
 	try {
+		const startedAt = Date.now();
+		const stat = await fs.stat(telemetryPath);
+		const cached = cursorRecordingDataCache.get(telemetryPath);
+		if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+			console.info("[editor-open] cursor recording cache hit", {
+				telemetryPath,
+				samples: cached.data.samples.length,
+				assets: cached.data.assets.length,
+				size: stat.size,
+			});
+			return cached.data;
+		}
+
 		const content = await fs.readFile(telemetryPath, "utf-8");
+		const readDurationMs = Date.now() - startedAt;
+		const parseStartedAt = Date.now();
 		const parsed = JSON.parse(content);
 		const rawSamples = Array.isArray(parsed)
 			? parsed
@@ -918,13 +942,30 @@ async function readCursorRecordingFile(targetVideoPath: string): Promise<CursorR
 			.map((asset: unknown) => normalizeCursorAsset(asset))
 			.filter((asset: NativeCursorAsset | null): asset is NativeCursorAsset => Boolean(asset));
 
-		return {
+		const provider: CursorProviderKind = parsed?.provider === "native" ? "native" : "none";
+		const data: CursorRecordingData = {
 			version:
 				typeof parsed?.version === "number" && Number.isFinite(parsed.version) ? parsed.version : 1,
-			provider: parsed?.provider === "native" ? "native" : "none",
+			provider,
 			samples,
 			assets,
 		};
+		cursorRecordingDataCache.set(telemetryPath, {
+			mtimeMs: stat.mtimeMs,
+			size: stat.size,
+			data,
+		});
+		console.info("[editor-open] cursor recording parsed", {
+			telemetryPath,
+			samples: samples.length,
+			assets: assets.length,
+			size: stat.size,
+			readDurationMs,
+			parseDurationMs: Date.now() - parseStartedAt,
+			totalDurationMs: Date.now() - startedAt,
+		});
+
+		return data;
 	} catch (error) {
 		const nodeError = error as NodeJS.ErrnoException;
 		if (nodeError.code === "ENOENT") {

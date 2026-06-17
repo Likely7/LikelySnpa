@@ -1,5 +1,6 @@
 import type {
 	CursorCapabilities,
+	CursorPreviewData,
 	CursorRecordingData,
 	CursorTelemetryPoint,
 } from "../../../src/native/contracts";
@@ -36,6 +37,19 @@ export class CursorService {
 
 	async getRecordingData(videoPath?: string | null): Promise<CursorRecordingData> {
 		const data = await this.options.adapter.getRecordingData(videoPath);
+		const resolvedVideoPath = videoPath ?? this.options.store.getState().project.currentVideoPath;
+		if (resolvedVideoPath) {
+			this.options.store.markCursorTelemetryLoaded(resolvedVideoPath, data.samples.length);
+		}
+
+		return data;
+	}
+
+	async getPreviewData(
+		videoPath?: string | null,
+		sampleIntervalMs?: number,
+	): Promise<CursorPreviewData> {
+		const data = await this.options.adapter.getPreviewData(videoPath, sampleIntervalMs);
 		const resolvedVideoPath = videoPath ?? this.options.store.getState().project.currentVideoPath;
 		if (resolvedVideoPath) {
 			this.options.store.markCursorTelemetryLoaded(resolvedVideoPath, data.samples.length);

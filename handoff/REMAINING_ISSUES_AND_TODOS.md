@@ -2,6 +2,16 @@
 
 ## P0
 
+1. Validate the first NLE-style editor-open pass on the one-hour Windows `.likelysnap`: editor should become interactive quickly while cursor preview, waveform, and auto zoom preparation continue in the background.
+2. Add package-local `cache/media-info.json` so editor-open can trust persisted media metadata before deeper validation.
+3. Add package-local `cache/cursor-index.json` so preview cursor samples and click/hold spans survive cold app launches without reparsing the full `cursor.json`.
+4. Add video metadata ready timing from `VideoPlayback` and connect it to the `[editor-open]` log story.
+5. Prevent `StreamingVideoDecoder.loadMetadata()` and whole-file `readBinaryFile` paths from running during first-screen editor open.
+6. Add visible editor preparation state for long media: waveform, cursor index, auto zoom suggestions, thumbnails/proxies.
+7. Add preview proxy generation for very long/high-resolution recordings.
+
+## Existing P0 Validation
+
 1. Validate the known 4.4 GB legacy package opens the main screen video without freezing by skipping the oversized `webcam.webm`.
 2. Validate a real macOS recording with microphone, system audio, native `webcam.mp4`, editable cursor, and auto zoom enabled.
 3. Validate a long macOS recording stops cleanly and leaves a ready `.likelysnap` package that opens in the editor.
@@ -20,7 +30,7 @@
 4. Add broader automated tests for custom recording directories and interrupted package recovery.
 5. Add real macOS long-recording validation evidence.
 6. Validate the refined auto zoom and Follow Mouse model on real recordings: ordinary dwells/clicks should produce stable fixed-position zooms, held mouse-button spans should produce Follow Mouse zooms, and per-zoom settings should override either result.
-7. Add cursor telemetry indexing/downsampling for multi-hour recordings.
+7. Persist cursor telemetry indexing/downsampling for multi-hour recordings in package-local cache. The current editor uses preview bridge data, but it is not yet stored in the package cache.
 8. Add sidecar/proxy diagnostics for file size, duration, codec, and skipped webcam state.
 9. Add Windows CI or documented manual verification for `npm run build:native:win`, `npm run build:win:portable`, and `npm run test:wgc-full:win`.
 10. Consider progressive waveform progress reporting if first-time generation on multi-hour recordings needs a visible percentage instead of the current lightweight skeleton.

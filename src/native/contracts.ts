@@ -53,6 +53,14 @@ export interface CursorRecordingData {
 	assets: NativeCursorAsset[];
 }
 
+export interface CursorPreviewData {
+	version: number;
+	provider: CursorProviderKind;
+	samples: CursorRecordingSample[];
+	originalSampleCount: number;
+	sampleIntervalMs: number;
+}
+
 export interface CursorCapabilities {
 	telemetry: boolean;
 	systemAssets: boolean;
@@ -223,6 +231,15 @@ export type NativeBridgeRequest =
 			action: "getRecordingData";
 			payload?: {
 				videoPath?: string;
+			};
+			requestId?: string;
+	  }
+	| {
+			domain: "cursor";
+			action: "getPreviewData";
+			payload?: {
+				videoPath?: string;
+				sampleIntervalMs?: number;
 			};
 			requestId?: string;
 	  };

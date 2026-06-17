@@ -60,7 +60,7 @@ import {
 	saveUserPreferences,
 } from "@/lib/userPreferences";
 import { BackgroundLoadError } from "@/lib/wallpaper";
-import { nativeBridgeClient, useCursorRecordingData, useCursorTelemetry } from "@/native";
+import { nativeBridgeClient, useCursorEditorData } from "@/native";
 import type { NativePlatform } from "@/native/contracts";
 import {
 	getAspectRatioValue,
@@ -292,10 +292,14 @@ export default function VideoEditor() {
 	>(null);
 	const playerContainerRef = useRef<HTMLDivElement | null>(null);
 	const cursorTelemetrySourcePath = videoSourcePath ?? (videoPath ? fromFileUrl(videoPath) : null);
-	const { samples: cursorTelemetry, error: cursorTelemetryError } =
-		useCursorTelemetry(cursorTelemetrySourcePath);
-	const { data: cursorRecordingData, error: cursorRecordingDataError } =
-		useCursorRecordingData(cursorTelemetrySourcePath);
+	const {
+		recordingData: cursorRecordingData,
+		telemetry: cursorTelemetry,
+		error: cursorEditorDataError,
+		originalSampleCount: cursorOriginalSampleCount,
+		sampleIntervalMs: cursorPreviewSampleIntervalMs,
+		loadFullRecordingData,
+	} = useCursorEditorData(cursorTelemetrySourcePath);
 	const cursorClickTimestamps = useMemo<number[]>(() => {
 		const recordingClicks =
 			cursorRecordingData?.samples
@@ -578,24 +582,43 @@ export default function VideoEditor() {
 
 	useEffect(() => {
 		async function loadInitialData() {
+			const startedAt = performance.now();
+			const checkpoints: Array<{ label: string; durationMs: number }> = [];
+			const checkpoint = async <T,>(label: string, work: () => Promise<T>): Promise<T> => {
+				const checkpointStartedAt = performance.now();
+				try {
+					return await work();
+				} finally {
+					checkpoints.push({
+						label,
+						durationMs: Math.round(performance.now() - checkpointStartedAt),
+					});
+				}
+			};
+
 			try {
-				const currentProjectResult = await nativeBridgeClient.project.loadCurrentProjectFile();
+				const currentProjectResult = await checkpoint("load-current-project", () =>
+					nativeBridgeClient.project.loadCurrentProjectFile(),
+				);
 				if (currentProjectResult.success && currentProjectResult.project) {
-					const restored = await applyLoadedProject(
-						currentProjectResult.project,
-						currentProjectResult.path ?? null,
+					const restored = await checkpoint("apply-current-project", () =>
+						applyLoadedProject(currentProjectResult.project, currentProjectResult.path ?? null),
 					);
 					if (restored) {
 						return;
 					}
 				}
 
-				const currentSessionResult = await window.electronAPI.getCurrentRecordingSession();
+				const currentSessionResult = await checkpoint("load-current-session", () =>
+					window.electronAPI.getCurrentRecordingSession(),
+				);
 				if (currentSessionResult.success && currentSessionResult.session) {
 					const session = currentSessionResult.session;
 					const sourcePath = fromFileUrl(session.screenVideoPath);
-					const webcamSourcePath = await resolveUsableWebcamSourcePath(
-						session.webcamVideoPath ? fromFileUrl(session.webcamVideoPath) : null,
+					const webcamSourcePath = await checkpoint("resolve-webcam-sidecar", () =>
+						resolveUsableWebcamSourcePath(
+							session.webcamVideoPath ? fromFileUrl(session.webcamVideoPath) : null,
+						),
 					);
 					setVideoSourcePath(sourcePath);
 					setVideoPath(toFileUrl(sourcePath));
@@ -622,7 +645,9 @@ export default function VideoEditor() {
 					return;
 				}
 
-				const result = await nativeBridgeClient.project.getCurrentVideoPath();
+				const result = await checkpoint("load-current-video-path", () =>
+					nativeBridgeClient.project.getCurrentVideoPath(),
+				);
 				if (result.success && result.path) {
 					setVideoSourcePath(result.path);
 					setVideoPath(toFileUrl(result.path));
@@ -641,6 +666,10 @@ export default function VideoEditor() {
 				setError("Error loading video: " + String(err));
 			} finally {
 				setLoading(false);
+				console.info("[editor-open] initial editor data loaded", {
+					totalDurationMs: Math.round(performance.now() - startedAt),
+					checkpoints,
+				});
 			}
 		}
 
@@ -992,16 +1021,10 @@ export default function VideoEditor() {
 	}, []);
 
 	useEffect(() => {
-		if (cursorTelemetryError) {
-			console.warn("Unable to load cursor telemetry:", cursorTelemetryError);
+		if (cursorEditorDataError) {
+			console.warn("Unable to load cursor editor data:", cursorEditorDataError);
 		}
-	}, [cursorTelemetryError]);
-
-	useEffect(() => {
-		if (cursorRecordingDataError) {
-			console.warn("Unable to load cursor recording data:", cursorRecordingDataError);
-		}
-	}, [cursorRecordingDataError]);
+	}, [cursorEditorDataError]);
 
 	function togglePlayPause() {
 		const playback = videoPlaybackRef.current;
@@ -1138,14 +1161,56 @@ export default function VideoEditor() {
 			autoProcessedSourceRef.current = cursorTelemetrySourcePath;
 			return;
 		}
-		const newRegions = buildAutoZoomRegions([]);
 		autoProcessedSourceRef.current = cursorTelemetrySourcePath;
-		if (newRegions.length === 0) return;
-		pushState((prev) => ({ zoomRegions: [...prev.zoomRegions, ...newRegions] }));
+		const scheduleIdle = (callback: IdleRequestCallback, options?: IdleRequestOptions) => {
+			if (typeof window.requestIdleCallback === "function") {
+				return window.requestIdleCallback(callback, options);
+			}
+			return window.setTimeout(
+				() =>
+					callback({
+						didTimeout: false,
+						timeRemaining: () => 0,
+					} as IdleDeadline),
+				1,
+			);
+		};
+		const cancelIdle = (taskId: number) => {
+			if (typeof window.cancelIdleCallback === "function") {
+				window.cancelIdleCallback(taskId);
+				return;
+			}
+			window.clearTimeout(taskId);
+		};
+		const taskId = scheduleIdle(
+			() => {
+				const startedAt = performance.now();
+				const newRegions = buildAutoZoomRegions([]);
+				console.info("[editor-open] auto zoom suggestions prepared", {
+					sourcePath: cursorTelemetrySourcePath,
+					cursorSamples: cursorTelemetry.length,
+					originalCursorSamples: cursorOriginalSampleCount,
+					cursorPreviewSampleIntervalMs,
+					suggestions: newRegions.length,
+					durationMs: Math.round(performance.now() - startedAt),
+				});
+				if (newRegions.length === 0) return;
+				pushState((prev) => {
+					if (prev.zoomRegions.length > 0) {
+						return {};
+					}
+					return { zoomRegions: [...prev.zoomRegions, ...newRegions] };
+				});
+			},
+			{ timeout: 5_000 },
+		);
+		return () => cancelIdle(taskId);
 	}, [
 		autoZoomEnabled,
 		cursorTelemetrySourcePath,
 		cursorTelemetry,
+		cursorOriginalSampleCount,
+		cursorPreviewSampleIntervalMs,
 		duration,
 		zoomRegions,
 		buildAutoZoomRegions,
@@ -1944,6 +2009,20 @@ export default function VideoEditor() {
 				const containerElement = playbackRef?.containerRef?.current;
 				const previewWidth = containerElement?.clientWidth || DEFAULT_SOURCE_DIMENSIONS.width;
 				const previewHeight = containerElement?.clientHeight || DEFAULT_SOURCE_DIMENSIONS.height;
+				const exportCursorRecordingData = effectiveShowCursor
+					? await loadFullRecordingData()
+					: cursorRecordingData;
+				const exportCursorTelemetry =
+					exportCursorRecordingData?.samples.map((sample) => ({
+						timeMs: sample.timeMs,
+						cx: sample.cx,
+						cy: sample.cy,
+						...(sample.interactionType ? { interactionType: sample.interactionType } : {}),
+					})) ?? cursorTelemetry;
+				const exportCursorClickTimestamps =
+					exportCursorRecordingData?.samples
+						.filter((sample) => isClickInteractionType(sample.interactionType))
+						.map((sample) => sample.timeMs) ?? cursorClickTimestamps;
 
 				if (settings.format === "gif" && settings.gifConfig) {
 					// GIF Export
@@ -1968,7 +2047,7 @@ export default function VideoEditor() {
 						padding,
 						videoPadding: padding,
 						cropRegion,
-						cursorRecordingData,
+						cursorRecordingData: exportCursorRecordingData,
 						cursorScale: effectiveShowCursor ? cursorSize : 0,
 						cursorSmoothing,
 						cursorMotionBlur,
@@ -1984,8 +2063,8 @@ export default function VideoEditor() {
 						webcamPosition,
 						previewWidth,
 						previewHeight,
-						cursorTelemetry,
-						cursorClickTimestamps,
+						cursorTelemetry: exportCursorTelemetry,
+						cursorClickTimestamps: exportCursorClickTimestamps,
 						onProgress: (progress: ExportProgress) => {
 							setExportProgress(progress);
 						},
@@ -2063,7 +2142,7 @@ export default function VideoEditor() {
 						borderRadius,
 						padding,
 						cropRegion,
-						cursorRecordingData,
+						cursorRecordingData: exportCursorRecordingData,
 						cursorScale: effectiveShowCursor ? cursorSize : 0,
 						cursorSmoothing,
 						cursorMotionBlur,
@@ -2079,8 +2158,8 @@ export default function VideoEditor() {
 						webcamPosition,
 						previewWidth,
 						previewHeight,
-						cursorTelemetry,
-						cursorClickTimestamps,
+						cursorTelemetry: exportCursorTelemetry,
+						cursorClickTimestamps: exportCursorClickTimestamps,
 						onProgress: (progress: ExportProgress) => {
 							setExportProgress(progress);
 						},
@@ -2171,6 +2250,7 @@ export default function VideoEditor() {
 			padding,
 			cropRegion,
 			cursorRecordingData,
+			loadFullRecordingData,
 			annotationRegions,
 			isPlaying,
 			aspectRatio,

@@ -211,6 +211,14 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 								requestId,
 								await cursorService.getRecordingData(request.payload?.videoPath),
 							);
+						case "getPreviewData":
+							return createSuccessResponse(
+								requestId,
+								await cursorService.getPreviewData(
+									request.payload?.videoPath,
+									request.payload?.sampleIntervalMs,
+								),
+							);
 						default:
 							return createErrorResponse(
 								requestId,

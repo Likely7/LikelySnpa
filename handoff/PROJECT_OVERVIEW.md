@@ -84,3 +84,14 @@ Current implementation:
 - A source-copy fast path exists for no-op MP4 exports when dimensions and effects allow it, but normal edited projects with webcam, cursor overlay, zoom, annotations, padding, crop, blur, shadow, trim, or speed changes must re-render and re-encode frame by frame.
 - Windows export currently tries WebCodecs `prefer-software` before `prefer-hardware`; macOS/Linux try hardware first. This makes Windows exports likely CPU-bound until an explicit encoder policy is added.
 - MP4 export currently targets 60 FPS from `VideoEditor.tsx`; source-aware/default export FPS is still a P1 optimization.
+
+## NLE-Style Editor Direction
+
+LikelySnap must stop treating editor open as a full media-preparation barrier. The target architecture is documented in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`.
+
+- First screen should read only manifest/session data, file stats, and browser video metadata.
+- Cursor telemetry, waveform peaks, auto zoom suggestions, thumbnails, and proxies should be background jobs.
+- Long recordings need package-local cache/index files so moved `.likelysnap` packages remain self-contained.
+- Preview should eventually use proxy media for long recordings; export should continue to use originals.
+- A one-hour package should become interactive within seconds, not minutes.
+- First implementation step is in place: editor cursor loading uses preview-level native bridge data, full cursor data is deferred to export, waveform and auto zoom start in idle time, and editor-open timing logs are emitted.
