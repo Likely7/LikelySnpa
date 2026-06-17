@@ -1,5 +1,5 @@
 import type { Span } from "dnd-timeline";
-import { FolderOpen, Languages, Save, Video } from "lucide-react";
+import { FolderOpen, Languages, Save, Settings, Video } from "lucide-react";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Panel, PanelGroup, PanelResizeHandle } from "react-resizable-panels";
 import { toast } from "sonner";
@@ -2563,6 +2563,15 @@ export default function VideoEditor() {
 							))}
 						</select>
 					</div>
+					<button
+						type="button"
+						onClick={() => void window.electronAPI.openAppSettings()}
+						className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-white/50 hover:text-white/90 hover:bg-white/[0.08] transition-all duration-150 text-[11px] font-medium"
+						title="设置"
+						aria-label="设置"
+					>
+						<Settings size={14} />
+					</button>
 					<button
 						type="button"
 						onClick={() => setShowNewRecordingDialog(true)}

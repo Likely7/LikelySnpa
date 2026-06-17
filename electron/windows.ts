@@ -277,6 +277,61 @@ export function createSourceSelectorWindow(): BrowserWindow {
 }
 
 /**
+ * Standalone app settings window. It intentionally does not reuse the transparent
+ * HUD overlay so form controls keep normal pointer, wheel, and focus behavior.
+ */
+export function createSettingsWindow(parentWindow?: BrowserWindow | null): BrowserWindow {
+	const { workArea } = screen.getPrimaryDisplay();
+	const windowWidth = Math.min(760, workArea.width);
+	const windowHeight = Math.min(660, workArea.height);
+
+	const win = new BrowserWindow({
+		width: windowWidth,
+		height: windowHeight,
+		minWidth: 640,
+		minHeight: 520,
+		x: Math.round(workArea.x + (workArea.width - windowWidth) / 2),
+		y: Math.round(workArea.y + (workArea.height - windowHeight) / 2),
+		frame: false,
+		resizable: true,
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		transparent: false,
+		backgroundColor: "#08090c",
+		show: false,
+		...(parentWindow && !parentWindow.isDestroyed() ? { parent: parentWindow } : {}),
+		webPreferences: {
+			preload: path.join(__dirname, "preload.mjs"),
+			additionalArguments: [ASSET_BASE_URL_ARG],
+			nodeIntegration: false,
+			contextIsolation: true,
+			backgroundThrottling: false,
+		},
+	});
+
+	if (process.platform === "darwin") {
+		win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
+	}
+
+	win.once("ready-to-show", () => {
+		if (!HEADLESS) {
+			win.show();
+			win.focus();
+		}
+	});
+
+	if (VITE_DEV_SERVER_URL) {
+		win.loadURL(VITE_DEV_SERVER_URL + "?windowType=settings");
+	} else {
+		win.loadFile(path.join(RENDERER_DIST, "index.html"), {
+			query: { windowType: "settings" },
+		});
+	}
+
+	return win;
+}
+
+/**
  * Centered transparent countdown overlay that sits above the HUD during
  * recording pre-roll.
  */

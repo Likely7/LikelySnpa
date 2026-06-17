@@ -23,6 +23,7 @@ import {
 	createCountdownOverlayWindow,
 	createEditorWindow,
 	createHudOverlayWindow,
+	createSettingsWindow,
 	createSourceSelectorWindow,
 } from "./windows";
 
@@ -82,6 +83,7 @@ process.env.VITE_PUBLIC = VITE_DEV_SERVER_URL
 let mainWindow: BrowserWindow | null = null;
 let sourceSelectorWindow: BrowserWindow | null = null;
 let countdownOverlayWindow: BrowserWindow | null = null;
+let settingsWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let selectedSourceName = "";
 const isMac = process.platform === "darwin";
@@ -427,6 +429,20 @@ function createCountdownOverlayWindowWrapper() {
 	return countdownOverlayWindow;
 }
 
+function createSettingsWindowWrapper() {
+	if (settingsWindow && !settingsWindow.isDestroyed()) {
+		settingsWindow.show();
+		settingsWindow.focus();
+		return settingsWindow;
+	}
+
+	settingsWindow = createSettingsWindow(mainWindow);
+	settingsWindow.on("closed", () => {
+		settingsWindow = null;
+	});
+	return settingsWindow;
+}
+
 // Closing every window quits the app (tray goes too). The in-app "Return to Recorder"
 // button covers the editor-to-HUD round-trip, so closing the last window means "I'm done".
 app.on("window-all-closed", () => {
@@ -514,6 +530,10 @@ app.whenReady().then(async () => {
 
 	ipcMain.on("hud-overlay-close", () => {
 		app.quit();
+	});
+	ipcMain.handle("open-app-settings", () => {
+		createSettingsWindowWrapper();
+		return { opened: true };
 	});
 	ipcMain.handle("set-locale", (_, locale: string) => {
 		setMainLocale(locale);

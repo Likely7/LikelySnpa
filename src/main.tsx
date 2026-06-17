@@ -13,6 +13,10 @@ if (
 	document.body.style.background = "transparent";
 	document.documentElement.style.background = "transparent";
 	document.getElementById("root")?.style.setProperty("background", "transparent");
+} else if (windowType === "settings") {
+	document.body.style.background = "#08090c";
+	document.documentElement.style.background = "#08090c";
+	document.getElementById("root")?.style.setProperty("background", "#08090c");
 }
 
 ReactDOM.createRoot(document.getElementById("root")!).render(

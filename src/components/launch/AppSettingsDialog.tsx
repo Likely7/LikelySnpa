@@ -17,6 +17,7 @@ interface AppSettingsDialogProps {
 	open: boolean;
 	onClose: () => void;
 	onRecordingDirectoryChanged?: (path: string) => void;
+	embedded?: boolean;
 }
 
 const qualityDescriptions: Record<RecordingQuality, string> = {
@@ -106,6 +107,7 @@ export function AppSettingsDialog({
 	open,
 	onClose,
 	onRecordingDirectoryChanged,
+	embedded = false,
 }: AppSettingsDialogProps) {
 	const [settings, setSettings] = useState<AppSettings | null>(null);
 	const [cacheSizeBytes, setCacheSizeBytes] = useState<number>(0);
@@ -220,190 +222,206 @@ export function AppSettingsDialog({
 
 	if (!open) return null;
 
+	const panel = (
+		<div
+			className={
+				embedded
+					? "flex h-full min-h-0 w-full flex-col overflow-hidden bg-[#08090c]"
+					: "flex max-h-[calc(100vh-32px)] w-[min(720px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#08090c]/95 shadow-2xl shadow-black/55"
+			}
+		>
+			<div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+				<div className="flex items-center gap-2">
+					<div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#C24B72]/35 bg-[#C24B72]/12 text-[#F2A8C2]">
+						<Settings size={16} />
+					</div>
+					<div>
+						<div className="text-sm font-semibold text-white/88">设置</div>
+						<div className="text-[10px] text-white/42">录制、存储和缓存</div>
+					</div>
+				</div>
+				<button
+					type="button"
+					onClick={() => {
+						onClose();
+					}}
+					className="rounded-md px-2 py-1 text-xs text-white/55 transition hover:bg-white/10 hover:text-white"
+				>
+					关闭
+				</button>
+			</div>
+
+			<div className="min-h-0 flex-1 overflow-y-auto p-4">
+				{loading ? (
+					<div className="flex h-52 items-center justify-center text-white/50">
+						<Loader2 size={18} className="mr-2 animate-spin" />
+						加载设置
+					</div>
+				) : settings ? (
+					<div className="grid gap-4">
+						<section className="grid gap-3">
+							<div className="flex items-center gap-2 text-xs font-semibold text-white/82">
+								<FolderOpen size={14} className="text-[#F2A8C2]" />
+								存储位置
+							</div>
+							<PathRow
+								label="录制视频存放位置"
+								path={settings.recordingDirectory}
+								onPick={() => void pickDirectory("recording")}
+								onReveal={() => void window.electronAPI.revealInFolder(settings.recordingDirectory)}
+							/>
+							<PathRow
+								label="项目文件默认位置"
+								path={settings.projectDirectory}
+								onPick={() => void pickDirectory("project")}
+								onReveal={() => void window.electronAPI.revealInFolder(settings.projectDirectory)}
+							/>
+							<PathRow
+								label="缓存存放位置"
+								path={settings.cacheDirectory}
+								onPick={() => void pickDirectory("cache")}
+								onReveal={() => void window.electronAPI.revealInFolder(settings.cacheDirectory)}
+							/>
+						</section>
+
+						<section className="grid gap-3">
+							<div className="flex items-center gap-2 text-xs font-semibold text-white/82">
+								<Video size={14} className="text-[#F2A8C2]" />
+								录制默认值
+							</div>
+							<div className="grid grid-cols-3 gap-2">
+								{(["standard", "high", "ultra"] as RecordingQuality[]).map((quality) => (
+									<button
+										key={quality}
+										type="button"
+										disabled={disabled}
+										onClick={() => void savePartial({ recordingQuality: quality })}
+										className={`rounded-lg border px-3 py-2 text-left transition ${
+											settings.recordingQuality === quality
+												? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
+												: "border-white/10 bg-white/[0.035] text-white/65 hover:border-[#C24B72]/35 hover:bg-white/[0.06]"
+										}`}
+									>
+										<div className="text-[11px] font-semibold">
+											{RECORDING_QUALITY_LABELS[quality]}
+										</div>
+										<div className="mt-1 text-[9px] leading-snug text-white/42">
+											{qualityDescriptions[quality]}
+										</div>
+									</button>
+								))}
+							</div>
+							<div className="flex gap-2">
+								{([30, 60] as const).map((fps) => (
+									<button
+										key={fps}
+										type="button"
+										disabled={disabled}
+										onClick={() => void savePartial({ defaultFrameRate: fps })}
+										className={`h-8 rounded-md border px-3 text-[11px] font-semibold transition ${
+											settings.defaultFrameRate === fps
+												? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
+												: "border-white/10 bg-white/[0.035] text-white/65 hover:border-[#C24B72]/35"
+										}`}
+									>
+										{fps} FPS
+									</button>
+								))}
+							</div>
+							<ToggleRow
+								label="默认启用 editable cursor"
+								description="新录制默认生成可编辑鼠标轨迹"
+								checked={settings.defaultEditableCursor}
+								onChange={(checked) => void savePartial({ defaultEditableCursor: checked })}
+							/>
+							<ToggleRow
+								label="默认启用麦克风"
+								description="启动后 HUD 默认打开麦克风"
+								checked={settings.defaultMicrophoneEnabled}
+								onChange={(checked) => void savePartial({ defaultMicrophoneEnabled: checked })}
+							/>
+							<ToggleRow
+								label="默认启用系统音"
+								description="启动后 HUD 默认录制系统声音"
+								checked={settings.defaultSystemAudioEnabled}
+								onChange={(checked) => void savePartial({ defaultSystemAudioEnabled: checked })}
+							/>
+							<ToggleRow
+								label="默认启用摄像头"
+								description="启动后 HUD 默认打开摄像头录制"
+								checked={settings.defaultWebcamEnabled}
+								onChange={(checked) => void savePartial({ defaultWebcamEnabled: checked })}
+							/>
+						</section>
+
+						<section className="grid gap-3">
+							<div className="flex items-center justify-between gap-3">
+								<div className="flex items-center gap-2 text-xs font-semibold text-white/82">
+									<RefreshCw size={14} className="text-[#F2A8C2]" />
+									缓存
+								</div>
+								<div className="rounded-full border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] text-white/60">
+									{cacheLabel}
+								</div>
+							</div>
+							<div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2">
+								<div>
+									<div className="text-[11px] font-medium text-white/75">清理缓存</div>
+									<div className="text-[10px] text-white/42">
+										删除波形、预览音频和临时缓存，不影响录制包和项目文件
+									</div>
+								</div>
+								<button
+									type="button"
+									disabled={disabled}
+									onClick={() => void clearCache()}
+									className="flex h-8 items-center gap-1.5 rounded-md border border-red-400/25 bg-red-500/10 px-3 text-[11px] font-semibold text-red-200 transition hover:bg-red-500/18 disabled:opacity-50"
+								>
+									<Trash2 size={13} />
+									清理
+								</button>
+							</div>
+						</section>
+
+						<section className="grid gap-2">
+							<div className="flex items-center gap-2 text-xs font-semibold text-white/82">
+								<Volume2 size={14} className="text-[#F2A8C2]" />
+								编辑器
+							</div>
+							<div className="rounded-md border border-white/10 bg-white/[0.035] px-3 py-2 text-[10px] leading-relaxed text-white/48">
+								音频波形现在默认开启，并使用分段读取与磁盘缓存；长视频首次生成后会复用缓存。
+							</div>
+							<div className="flex items-center gap-2 text-[10px] text-white/35">
+								<Webcam size={12} />
+								更多导出和代理媒体设置会放在这里继续扩展。
+							</div>
+						</section>
+					</div>
+				) : null}
+
+				{error ? (
+					<div className="mt-4 rounded-md border border-red-400/25 bg-red-500/10 px-3 py-2 text-[11px] text-red-100">
+						{error}
+					</div>
+				) : null}
+			</div>
+		</div>
+	);
+
+	if (embedded) {
+		return panel;
+	}
+
 	return (
 		<div
 			className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/55 p-4 backdrop-blur-sm"
 			onPointerDown={(event) => {
-				if (event.target === event.currentTarget) onClose();
+				if (event.target === event.currentTarget) {
+					onClose();
+				}
 			}}
 		>
-			<div className="w-[min(720px,calc(100vw-32px))] overflow-hidden rounded-xl border border-white/10 bg-[#08090c]/95 shadow-2xl shadow-black/55">
-				<div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-					<div className="flex items-center gap-2">
-						<div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#C24B72]/35 bg-[#C24B72]/12 text-[#F2A8C2]">
-							<Settings size={16} />
-						</div>
-						<div>
-							<div className="text-sm font-semibold text-white/88">设置</div>
-							<div className="text-[10px] text-white/42">录制、存储和缓存</div>
-						</div>
-					</div>
-					<button
-						type="button"
-						onClick={onClose}
-						className="rounded-md px-2 py-1 text-xs text-white/55 transition hover:bg-white/10 hover:text-white"
-					>
-						关闭
-					</button>
-				</div>
-
-				<div className="max-h-[72vh] overflow-y-auto p-4">
-					{loading ? (
-						<div className="flex h-52 items-center justify-center text-white/50">
-							<Loader2 size={18} className="mr-2 animate-spin" />
-							加载设置
-						</div>
-					) : settings ? (
-						<div className="grid gap-4">
-							<section className="grid gap-3">
-								<div className="flex items-center gap-2 text-xs font-semibold text-white/82">
-									<FolderOpen size={14} className="text-[#F2A8C2]" />
-									存储位置
-								</div>
-								<PathRow
-									label="录制视频存放位置"
-									path={settings.recordingDirectory}
-									onPick={() => void pickDirectory("recording")}
-									onReveal={() =>
-										void window.electronAPI.revealInFolder(settings.recordingDirectory)
-									}
-								/>
-								<PathRow
-									label="项目文件默认位置"
-									path={settings.projectDirectory}
-									onPick={() => void pickDirectory("project")}
-									onReveal={() => void window.electronAPI.revealInFolder(settings.projectDirectory)}
-								/>
-								<PathRow
-									label="缓存存放位置"
-									path={settings.cacheDirectory}
-									onPick={() => void pickDirectory("cache")}
-									onReveal={() => void window.electronAPI.revealInFolder(settings.cacheDirectory)}
-								/>
-							</section>
-
-							<section className="grid gap-3">
-								<div className="flex items-center gap-2 text-xs font-semibold text-white/82">
-									<Video size={14} className="text-[#F2A8C2]" />
-									录制默认值
-								</div>
-								<div className="grid grid-cols-3 gap-2">
-									{(["standard", "high", "ultra"] as RecordingQuality[]).map((quality) => (
-										<button
-											key={quality}
-											type="button"
-											disabled={disabled}
-											onClick={() => void savePartial({ recordingQuality: quality })}
-											className={`rounded-lg border px-3 py-2 text-left transition ${
-												settings.recordingQuality === quality
-													? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
-													: "border-white/10 bg-white/[0.035] text-white/65 hover:border-[#C24B72]/35 hover:bg-white/[0.06]"
-											}`}
-										>
-											<div className="text-[11px] font-semibold">
-												{RECORDING_QUALITY_LABELS[quality]}
-											</div>
-											<div className="mt-1 text-[9px] leading-snug text-white/42">
-												{qualityDescriptions[quality]}
-											</div>
-										</button>
-									))}
-								</div>
-								<div className="flex gap-2">
-									{([30, 60] as const).map((fps) => (
-										<button
-											key={fps}
-											type="button"
-											disabled={disabled}
-											onClick={() => void savePartial({ defaultFrameRate: fps })}
-											className={`h-8 rounded-md border px-3 text-[11px] font-semibold transition ${
-												settings.defaultFrameRate === fps
-													? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
-													: "border-white/10 bg-white/[0.035] text-white/65 hover:border-[#C24B72]/35"
-											}`}
-										>
-											{fps} FPS
-										</button>
-									))}
-								</div>
-								<ToggleRow
-									label="默认启用 editable cursor"
-									description="新录制默认生成可编辑鼠标轨迹"
-									checked={settings.defaultEditableCursor}
-									onChange={(checked) => void savePartial({ defaultEditableCursor: checked })}
-								/>
-								<ToggleRow
-									label="默认启用麦克风"
-									description="启动后 HUD 默认打开麦克风"
-									checked={settings.defaultMicrophoneEnabled}
-									onChange={(checked) => void savePartial({ defaultMicrophoneEnabled: checked })}
-								/>
-								<ToggleRow
-									label="默认启用系统音"
-									description="启动后 HUD 默认录制系统声音"
-									checked={settings.defaultSystemAudioEnabled}
-									onChange={(checked) => void savePartial({ defaultSystemAudioEnabled: checked })}
-								/>
-								<ToggleRow
-									label="默认启用摄像头"
-									description="启动后 HUD 默认打开摄像头录制"
-									checked={settings.defaultWebcamEnabled}
-									onChange={(checked) => void savePartial({ defaultWebcamEnabled: checked })}
-								/>
-							</section>
-
-							<section className="grid gap-3">
-								<div className="flex items-center justify-between gap-3">
-									<div className="flex items-center gap-2 text-xs font-semibold text-white/82">
-										<RefreshCw size={14} className="text-[#F2A8C2]" />
-										缓存
-									</div>
-									<div className="rounded-full border border-white/10 bg-white/[0.035] px-2 py-1 text-[10px] text-white/60">
-										{cacheLabel}
-									</div>
-								</div>
-								<div className="flex items-center justify-between gap-3 rounded-md border border-white/10 bg-white/[0.035] px-3 py-2">
-									<div>
-										<div className="text-[11px] font-medium text-white/75">清理缓存</div>
-										<div className="text-[10px] text-white/42">
-											删除波形、预览音频和临时缓存，不影响录制包和项目文件
-										</div>
-									</div>
-									<button
-										type="button"
-										disabled={disabled}
-										onClick={() => void clearCache()}
-										className="flex h-8 items-center gap-1.5 rounded-md border border-red-400/25 bg-red-500/10 px-3 text-[11px] font-semibold text-red-200 transition hover:bg-red-500/18 disabled:opacity-50"
-									>
-										<Trash2 size={13} />
-										清理
-									</button>
-								</div>
-							</section>
-
-							<section className="grid gap-2">
-								<div className="flex items-center gap-2 text-xs font-semibold text-white/82">
-									<Volume2 size={14} className="text-[#F2A8C2]" />
-									编辑器
-								</div>
-								<div className="rounded-md border border-white/10 bg-white/[0.035] px-3 py-2 text-[10px] leading-relaxed text-white/48">
-									音频波形现在默认开启，并使用分段读取与磁盘缓存；长视频首次生成后会复用缓存。
-								</div>
-								<div className="flex items-center gap-2 text-[10px] text-white/35">
-									<Webcam size={12} />
-									更多导出和代理媒体设置会放在这里继续扩展。
-								</div>
-							</section>
-						</div>
-					) : null}
-
-					{error ? (
-						<div className="mt-4 rounded-md border border-red-400/25 bg-red-500/10 px-3 py-2 text-[11px] text-red-100">
-							{error}
-						</div>
-					) : null}
-				</div>
-			</div>
+			{panel}
 		</div>
 	);
 }

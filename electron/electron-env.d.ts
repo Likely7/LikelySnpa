@@ -41,6 +41,7 @@ interface Window {
 				error?: string;
 			};
 		}>;
+		openAppSettings: () => Promise<{ opened: boolean }>;
 		selectSource: (source: ProcessedDesktopSource) => Promise<ProcessedDesktopSource | null>;
 		getSelectedSource: () => Promise<ProcessedDesktopSource | null>;
 		requestCameraAccess: () => Promise<{

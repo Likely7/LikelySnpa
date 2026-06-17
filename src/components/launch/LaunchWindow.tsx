@@ -39,7 +39,6 @@ import { requestCameraAccess } from "../../lib/requestCameraAccess";
 import { formatTimePadded } from "../../utils/timeUtils";
 import { AudioLevelMeter } from "../ui/audio-level-meter";
 import { Tooltip } from "../ui/tooltip";
-import { AppSettingsDialog } from "./AppSettingsDialog";
 import styles from "./LaunchWindow.module.css";
 import { openSourceSelectorWithPermissionRetry } from "./openSourceSelectorFlow";
 
@@ -139,7 +138,6 @@ export function LaunchWindow() {
 	const [isWebcamFocused, setIsWebcamFocused] = useState(false);
 	const webcamExpanded = isWebcamHovered || isWebcamFocused;
 	const [isLanguageMenuOpen, setIsLanguageMenuOpen] = useState(false);
-	const [isAppSettingsOpen, setIsAppSettingsOpen] = useState(false);
 	const [trayLayout, setTrayLayout] = useState<"horizontal" | "vertical">(
 		() => loadUserPreferences().trayLayout,
 	);
@@ -230,11 +228,6 @@ export function LaunchWindow() {
 			setRecordingDirectoryWritable(false);
 			alert(error instanceof Error ? error.message : "Failed to set recording directory");
 		}
-	}, []);
-
-	const handleRecordingDirectoryChanged = useCallback((nextPath: string) => {
-		setRecordingDirectoryPath(nextPath);
-		setRecordingDirectoryWritable(true);
 	}, []);
 
 	useEffect(() => {
@@ -358,17 +351,6 @@ export function LaunchWindow() {
 		const barEl = hudBarRef.current;
 		if (!barEl || !window.electronAPI?.setHudOverlaySize) return;
 
-		if (isAppSettingsOpen) {
-			const width = Math.min(780, window.screen.availWidth || 780);
-			const height = Math.min(680, window.screen.availHeight || 680);
-			if (width === lastHudSizeRef.current.width && height === lastHudSizeRef.current.height) {
-				return;
-			}
-			lastHudSizeRef.current = { width, height };
-			window.electronAPI.setHudOverlaySize(width, height);
-			return;
-		}
-
 		// Breathing room so the drop shadow isn't clipped. TOP_MARGIN must also exceed the
 		// slack in the bar's `max-h: calc(100vh - 2.5rem)` cap (40px reserved - 20px bottom
 		// gap = 20px) so the window stays tall enough that the cap never engages and adds a scrollbar.
@@ -421,7 +403,7 @@ export function LaunchWindow() {
 		}
 		lastHudSizeRef.current = { width, height };
 		window.electronAPI.setHudOverlaySize(width, height);
-	}, [trayLayout, isAppSettingsOpen]);
+	}, [trayLayout]);
 
 	// One persistent observer; elements wire themselves up via callback refs as they
 	// mount/unmount so measurement re-runs without recreating it or threading mount state through deps.
@@ -478,8 +460,8 @@ export function LaunchWindow() {
 	}, [setHudMouseEventsEnabled]);
 
 	useEffect(() => {
-		setHudMouseEventsEnabled(isLanguageMenuOpen || isAppSettingsOpen);
-	}, [isLanguageMenuOpen, isAppSettingsOpen, setHudMouseEventsEnabled]);
+		setHudMouseEventsEnabled(isLanguageMenuOpen);
+	}, [isLanguageMenuOpen, setHudMouseEventsEnabled]);
 
 	const [selectedSource, setSelectedSource] = useState("Screen");
 	const [hasSelectedSource, setHasSelectedSource] = useState(false);
@@ -980,8 +962,7 @@ export function LaunchWindow() {
 						<button
 							type="button"
 							aria-label="设置"
-							aria-expanded={isAppSettingsOpen}
-							onClick={() => setIsAppSettingsOpen(true)}
+							onClick={() => void window.electronAPI.openAppSettings()}
 							className={`flex h-8 w-8 items-center justify-center rounded-lg border border-white/10 bg-white/[0.045] text-white/70 shadow-none transition-colors hover:border-[#C24B72]/35 hover:bg-[#C24B72]/10 hover:text-white ${styles.electronNoDrag}`}
 						>
 							<Settings size={14} />
@@ -1033,12 +1014,6 @@ export function LaunchWindow() {
 								document.body,
 							)
 						: null}
-
-					<AppSettingsDialog
-						open={isAppSettingsOpen}
-						onClose={() => setIsAppSettingsOpen(false)}
-						onRecordingDirectoryChanged={handleRecordingDirectoryChanged}
-					/>
 
 					{/* Window controls */}
 					<div

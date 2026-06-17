@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
+import { AppSettingsDialog } from "./components/launch/AppSettingsDialog";
 import { CountdownOverlay } from "./components/launch/CountdownOverlay.tsx";
 import { LaunchWindow } from "./components/launch/LaunchWindow";
 import { SourceSelector } from "./components/launch/SourceSelector";
@@ -31,6 +32,10 @@ export default function App() {
 			document.body.style.background = "transparent";
 			document.documentElement.style.background = "transparent";
 			document.getElementById("root")?.style.setProperty("background", "transparent");
+		} else if (type === "settings") {
+			document.body.style.background = "#08090c";
+			document.documentElement.style.background = "#08090c";
+			document.getElementById("root")?.style.setProperty("background", "#08090c");
 		}
 
 		// HUD is a fixed-size BrowserWindow; pin the document shell and hide overflow
@@ -63,6 +68,12 @@ export default function App() {
 				return <SourceSelector />;
 			case "countdown-overlay":
 				return <CountdownOverlay />;
+			case "settings":
+				return (
+					<div className="h-screen w-screen overflow-hidden bg-[#08090c]">
+						<AppSettingsDialog open embedded onClose={() => window.close()} />
+					</div>
+				);
 			case "editor":
 				return (
 					<ShortcutsProvider>
