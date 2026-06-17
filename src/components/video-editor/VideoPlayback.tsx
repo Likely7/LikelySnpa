@@ -367,6 +367,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const onTimeUpdateRef = useRef(onTimeUpdate);
 		const onPlayStateChangeRef = useRef(onPlayStateChange);
 		const videoReadyRafRef = useRef<number | null>(null);
+		const previewAudioTimerRef = useRef<number | null>(null);
 		const smoothedAutoFocusRef = useRef<ZoomFocus | null>(null);
 		const durationResolutionTimeoutRef = useRef<number | null>(null);
 		const lastResolvedDurationRef = useRef<number | null>(null);
@@ -1089,28 +1090,16 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				isResolvingDurationRef.current = false;
 				setVideoReady(false);
 				setSupplementalAudioPath(null);
+				if (previewAudioTimerRef.current) {
+					clearTimeout(previewAudioTimerRef.current);
+					previewAudioTimerRef.current = null;
+				}
 				return;
 			}
 
-			let cancelled = false;
-			window.electronAPI
-				?.preparePreviewAudioTrack?.(videoPath)
-				.then((result) => {
-					if (!cancelled) {
-						setSupplementalAudioPath(result.success ? (result.path ?? null) : null);
-					}
-				})
-				.catch(() => {
-					if (!cancelled) {
-						setSupplementalAudioPath(null);
-					}
-				});
-
 			const video = videoRef.current;
 			if (!video) {
-				return () => {
-					cancelled = true;
-				};
+				return;
 			}
 			video.pause();
 			video.currentTime = 0;
@@ -1127,12 +1116,55 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 				cancelAnimationFrame(videoReadyRafRef.current);
 				videoReadyRafRef.current = null;
 			}
+			if (previewAudioTimerRef.current) {
+				clearTimeout(previewAudioTimerRef.current);
+				previewAudioTimerRef.current = null;
+			}
+			setSupplementalAudioPath(null);
 			video.load();
+		}, [videoPath]);
+
+		useEffect(() => {
+			if (!videoPath || !videoReady || !window.electronAPI?.preparePreviewAudioTrack) {
+				return;
+			}
+
+			let cancelled = false;
+			const schedulePreviewAudio = () => {
+				previewAudioTimerRef.current = null;
+				const startedAt = performance.now();
+				window.electronAPI
+					.preparePreviewAudioTrack(videoPath)
+					.then((result) => {
+						if (!cancelled) {
+							console.info("[VideoPlayback] preview audio prepared", {
+								success: result.success,
+								hasPath: Boolean(result.path),
+								elapsedMs: Math.round(performance.now() - startedAt),
+							});
+							setSupplementalAudioPath(result.success ? (result.path ?? null) : null);
+						}
+					})
+					.catch(() => {
+						if (!cancelled) {
+							console.warn("[VideoPlayback] preview audio preparation failed", {
+								elapsedMs: Math.round(performance.now() - startedAt),
+							});
+							setSupplementalAudioPath(null);
+						}
+					});
+			};
+
+			previewAudioTimerRef.current = window.setTimeout(schedulePreviewAudio, 1200);
 
 			return () => {
 				cancelled = true;
+				if (previewAudioTimerRef.current) {
+					clearTimeout(previewAudioTimerRef.current);
+					previewAudioTimerRef.current = null;
+				}
 			};
-		}, [videoPath]);
+		}, [videoPath, videoReady]);
 
 		useEffect(() => {
 			const video = videoRef.current;
@@ -2139,7 +2171,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					ref={videoRef}
 					src={videoPath}
 					className="hidden"
-					preload="auto"
+					preload="metadata"
 					playsInline
 					onLoadedMetadata={handleLoadedMetadata}
 					onDurationChange={(e) => {
@@ -2163,7 +2195,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					onError={() => onError("Failed to load video")}
 				/>
 				{supplementalAudioPath && (
-					<audio ref={supplementalAudioRef} src={supplementalAudioPath} preload="auto" />
+					<audio ref={supplementalAudioRef} src={supplementalAudioPath} preload="metadata" />
 				)}
 			</div>
 		);
