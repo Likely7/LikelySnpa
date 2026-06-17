@@ -111,7 +111,7 @@ jobs:
           - \`version\` → \`${VERSION}\`
           - \`npmDepsHash\` → \`${HASH}\` (computed via \`prefetch-npm-deps package-lock.json\`)
 
-          Merge this so Nix users (NixOS, Home Manager, \`nix run github:siddharthvaddem/openscreen\`) pick up the new release.
+          Merge this so Nix users (NixOS, Home Manager, \`nix run github:Likely7/LikelySnpa\`) pick up the new release.
 
           > Note: PRs opened by \`GITHUB_TOKEN\` don't auto-trigger CI. The diff is two lines — review the change here, then merge. If you want CI to run, push an empty commit to this branch or close-and-reopen the PR.
           EOF

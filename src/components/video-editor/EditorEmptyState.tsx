@@ -80,9 +80,7 @@ export function EditorEmptyState({ onVideoImported, onProjectOpened }: EditorEmp
 			const files = Array.from(e.dataTransfer.files);
 			if (files.length === 0) return;
 
-			const projectFile = files.find(
-				(f) => f.name.endsWith(".likelysnap") || f.name.endsWith(".openscreen"),
-			);
+			const projectFile = files.find((f) => f.name.endsWith(".likelysnap"));
 			if (!projectFile) {
 				setDropError("unsupported-format");
 				return;

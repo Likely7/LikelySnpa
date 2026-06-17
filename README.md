@@ -1,165 +1,33 @@
-> [!WARNING]
-> This started as a side project that blew up; not production grade and you'll hit bugs, but hopefully it covers what you need. **This project will soon be archived.**
+# LikelySnap
 
+LikelySnap is a desktop screen recorder and editor for macOS and Windows.
 
-<p align="center">
-  <img src="public/likelysnap.png" alt="LikelySnap Logo" width="64" />
-  <br />
-  <br />
-</p>
+## What it does
 
-# <p align="center">LikelySnap</p>
+- Records a screen or window
+- Captures microphone, system audio, and webcam
+- Supports zooms, cursor effects, annotations, trim, crop, and speed changes
+- Saves recordings as portable `.likelysnap` packages
 
-<p align="center"><strong>LikelySnap is your free, open-source alternative to Screen Studio.</strong></p>
+## Install
 
-If you don't want to pay $29/month for Screen Studio but want a version that does what most people seem to need - quick, polished product demos and walkthroughs you'd post on X, Reddit or Youtube. LikelySnap does not offer every Screen Studio feature, but covers a lot of the core functionality.
+Download a release from the [LikelySnap releases page](https://github.com/Likely7/LikelySnpa/releases).
 
-Screen Studio is an awesome product and this is definitely not a 1:1 clone. If you just want something fully free and open source, this project should cover most of your needs.
-
-**100% free** for both **personal** and **commercial** use. Use it, modify it, distribute it. Please respect the License. 
-
-> [!NOTE]
->Software should be accessible. LikelySnap has no paid tiers, premium features, upsells, or functionality locked behind a paywall.
-
-<p align="center">
-	<img src="public/demo.png" alt="" style="height: 0.2467; margin-right: 12px;" />
-  <img src="public/sample.png" alt="" style="height: 0.2467; margin-right: 12px;" />
-</p>
-
-## Core Features
-- Record a specific window, or your whole screen.
-- Record microphone and system audio.
-- Webcam overlay with picture-in-picture, drag-to-position, mirroring, and shape options.
-- Auto or manual zooms with adjustable depth, duration, easing, pixel-precise position, and optional per-zoom cursor following.
-- Custom cursor size, smoothing, and click effects, with cursor themes and post-recording path smoothing.
-- Automatic captions for voiceovers, generated on-device with no upload (works offline).
-- Wallpapers, solid colors, gradients, or your own background image.
-- Motion blur.
-- Crop, trim, and per-segment speed control on the timeline.
-- Text, arrow, and image annotations, with text animation presets.
-- Timeline snapping guides and an audio waveform to make trimming easier.
-- Persistent app settings for recording location, project location, cache location, cache cleanup, recording quality, frame rate, and default recording inputs.
-- Customizable keyboard shortcuts.
-- Export to MP4 or GIF in multiple aspect ratios and resolutions.
-- Languages supported: Arabic, English, Spanish, French, Italian, Japanese, Korean, Portuguese (Brazil), Russian, Turkish, Vietnamese, Simplified Chinese, and Traditional Chinese.
-
-
-## Installation
-
-Download the latest installer for your platform from the [GitHub Releases](https://github.com/likelysnap/likelysnap/releases) page.
-
-### macOS
-
-The easiest way to install on macOS is via [Homebrew](https://brew.sh):
+## Build
 
 ```bash
-brew install --cask likelysnap/likelysnap/likelysnap
+npm install
+npm run build
 ```
 
-Brew automatically picks the right build for Apple Silicon or Intel, and verifies the download against a notarized signature so Gatekeeper won't block it.
-
-To update later: `brew upgrade --cask likelysnap`
-To uninstall: `brew uninstall --cask likelysnap` (add `--zap` to also remove app data)
-
-#### Manual install (if you prefer)
-
-If you'd rather grab the `.dmg` directly from the [Releases page](https://github.com/likelysnap/likelysnap/releases) and encounter Gatekeeper blocking the app, you can bypass it by running the following command in your terminal after installation:
+## Windows portable build
 
 ```bash
-xattr -rd com.apple.quarantine /Applications/LikelySnap.app
+npm run build:win:portable
 ```
 
-Note: Give your terminal Full Disk Access in **System Settings > Privacy & Security** to grant you access and then run the above command.
+## Notes
 
-After running this command, proceed to **System Preferences > Security & Privacy** to grant the necessary permissions for "screen recording" and "accessibility". Once permissions are granted, you can launch the app.
-
-> [!NOTE]
-> **Upgrading from an older version and hitting permission issues?** If you already had LikelySnap installed and the new version won't record (Screen Recording or Accessibility keep failing even after you grant them), uninstall the old version, remove LikelySnap's existing entries under **System Settings > Privacy & Security** (both Screen Recording and Accessibility), then do a fresh install and grant the permissions again when prompted.
-
-### Windows
-
-Install via [winget](https://learn.microsoft.com/en-us/windows/package-manager/winget/):
-
-```bash
-winget install LikelySnap.LikelySnap
-```
-
-To update later: `winget upgrade LikelySnap.LikelySnap`
-To uninstall: `winget uninstall LikelySnap.LikelySnap`
-
-If you'd rather grab the `.exe` installer directly, download it from the [Releases page](https://github.com/likelysnap/likelysnap/releases).
-
-### Linux
-
-Three packages are published to the [Releases page](https://github.com/likelysnap/likelysnap/releases) for each version. Pick the one that matches your distro:
-
-**Debian / Ubuntu / Pop!_OS (`.deb`)**
-```bash
-sudo apt install ./LikelySnap-Linux-latest.deb
-```
-
-**Arch / Manjaro (`.pacman`)**
-```bash
-sudo pacman -U LikelySnap-Linux-latest.pacman
-```
-
-**Any distro (`.AppImage`)**
-```bash
-chmod +x LikelySnap-Linux-*.AppImage
-./LikelySnap-Linux-*.AppImage
-```
-
-**NixOS / Nix (flake)**
-
-Try without installing:
-```bash
-nix run github:likelysnap/likelysnap
-```
-
-Install into your user profile:
-```bash
-nix profile install github:likelysnap/likelysnap
-```
-
-For a NixOS system config (flake):
-```nix
-{
-  inputs.likelysnap.url = "github:likelysnap/likelysnap";
-
-  outputs = { nixpkgs, likelysnap, ... }: {
-    nixosConfigurations.<host> = nixpkgs.lib.nixosSystem {
-      modules = [
-        likelysnap.nixosModules.default
-        { programs.likelysnap.enable = true; }
-      ];
-    };
-  };
-}
-```
-
-For Home Manager, use `likelysnap.homeManagerModules.default` with the same `programs.likelysnap.enable = true;`.
-
-You may need to grant screen recording permissions depending on your desktop environment.
-
-**Sandbox error:** If the AppImage fails to launch with a "sandbox" error, run it with `--no-sandbox`:
-```bash
-./LikelySnap-Linux-*.AppImage --no-sandbox
-```
-
-### Platform differences
-
-Everything in the editor and export is the same on macOS, Windows, and Linux: zooms, backgrounds, motion blur, crop/trim/speed, blur regions, annotations, auto-captions, projects, export, and all languages. The differences are in **capture**, where macOS and Windows use a native pipeline that Linux doesn't have:
-
-- **Native recording**: macOS (ScreenCaptureKit) and Windows (Windows Graphics Capture) record through a native pipeline for higher quality and clean window-level capture. Linux records through the browser pipeline instead.
-- **Custom cursors**: on macOS and Windows the real cursor is captured (shape, type, and clicks), which powers the cursor themes, click effects, and editable cursor overlay. On Linux only the cursor position is captured (used for auto-zoom), so those cursor options aren't available.
-- **Webcam**: captured natively on macOS and Windows; on Linux it's recorded through the browser, but still works as a picture-in-picture overlay.
-- **System audio** support varies by OS:
-  - **macOS**: requires macOS 13+. On macOS 14.2+ you'll be prompted to grant audio capture permission. macOS 12 and below can't capture system audio (mic still works).
-  - **Windows**: works out of the box.
-  - **Linux**: needs PipeWire (default on Ubuntu 22.04+, Fedora 34+). Older PulseAudio-only setups may not capture system audio (mic should still work).
-
----
-
-## License
-
-This project is licensed under the [MIT License](./LICENSE). By using this software, you agree that the authors are not liable for any issues, damages, or claims arising from its use.
+- Project settings, cache location, and recording defaults are persistent.
+- Native recording is used on macOS and Windows when available.
+- Large webcam sidecars are handled separately from the main screen video.

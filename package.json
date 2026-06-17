@@ -9,8 +9,7 @@
 		"npm": "10.9.4"
 	},
 	"author": {
-		"name": "Sid",
-		"email": "svaddem@asu.edu"
+		"name": "Likely7"
 	},
 	"scripts": {
 		"dev": "vite",

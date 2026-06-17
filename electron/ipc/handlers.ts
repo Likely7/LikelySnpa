@@ -65,7 +65,6 @@ import {
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 
 const PROJECT_FILE_EXTENSION = "likelysnap";
-const LEGACY_PROJECT_FILE_EXTENSION = "openscreen";
 export const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
 const RECORDING_SESSION_SUFFIX = ".session.json";
 const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
@@ -3627,8 +3626,8 @@ export function registerIpcHandlers(
 					defaultPath: path.join(projectDir, defaultName),
 					filters: [
 						{
-							name: mainT("dialogs", "fileDialogs.openscreenProject"),
-							extensions: [PROJECT_FILE_EXTENSION, LEGACY_PROJECT_FILE_EXTENSION],
+							name: mainT("dialogs", "fileDialogs.likelysnapProject"),
+							extensions: [PROJECT_FILE_EXTENSION],
 						},
 						{ name: "JSON", extensions: ["json"] },
 					],
@@ -3706,8 +3705,8 @@ export function registerIpcHandlers(
 					defaultPath: defaultDir,
 					filters: [
 						{
-							name: mainT("dialogs", "fileDialogs.openscreenProject"),
-							extensions: [PROJECT_FILE_EXTENSION, LEGACY_PROJECT_FILE_EXTENSION],
+							name: mainT("dialogs", "fileDialogs.likelysnapProject"),
+							extensions: [PROJECT_FILE_EXTENSION],
 						},
 						{ name: "JSON", extensions: ["json"] },
 						{ name: mainT("dialogs", "fileDialogs.allFiles"), extensions: ["*"] },
@@ -3781,10 +3780,7 @@ export function registerIpcHandlers(
 			}
 			// Validate extension and readability
 			const extension = path.extname(resolvedPath).toLowerCase();
-			if (
-				extension !== `.${PROJECT_FILE_EXTENSION}` &&
-				extension !== `.${LEGACY_PROJECT_FILE_EXTENSION}`
-			) {
+			if (extension !== `.${PROJECT_FILE_EXTENSION}`) {
 				return { success: false, message: "Not an LikelySnap project file" };
 			}
 			const stats = await fs.stat(resolvedPath).catch(() => null);

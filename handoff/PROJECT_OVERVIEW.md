@@ -1,6 +1,6 @@
 # Project Overview
 
-LikelySnap is an Electron + Vite + React/TypeScript desktop screen recorder and editor forked from OpenScreen. The current product direction is a commercial-ready macOS-first recorder with durable disk writes, recoverable recording packages, and polished editor/export behavior.
+LikelySnap is an Electron + Vite + React/TypeScript desktop screen recorder and editor. The current product direction is a commercial-ready macOS-first recorder with durable disk writes, recoverable recording packages, and polished editor/export behavior.
 
 ## Main App Layers
 

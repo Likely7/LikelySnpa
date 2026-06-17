@@ -3,7 +3,7 @@
 ## Repository
 
 - Local path: `/Users/macbook/Desktop/LikelySnap/openscreen`
-- Upstream remote: `https://github.com/siddharthvaddem/openscreen.git`
+- GitHub remote: `https://github.com/Likely7/LikelySnpa.git`
 - Checked commit before local handoff docs: `71622a2`
 - Upstream package version: `1.5.0`
 - License: MIT
@@ -50,7 +50,7 @@
 - macOS native window recordings now use ScreenCaptureKit-reported window capture bounds for editable cursor normalization, avoiding display-bounds offset in Follow Mouse zoom.
 - User retest after this fix reported the Follow Mouse behavior is close enough to continue; treat Follow Mouse zoom as implemented unless a new concrete offset sample appears.
 - Editor settings footer no longer exposes report bug, save diagnostics, or GitHub star buttons. It shows one centered contact line: `抖音小红书：Likely7  反馈问题`.
-- New project files use `.likelysnap`; legacy `.openscreen` project files remain loadable.
+- Project files use `.likelysnap` only.
 - New native recordings now write into `recording-<id>.likelysnap/` package directories with `screen.mp4`, optional `webcam.mp4`, `cursor.json`, and `manifest.json`. Browser fallback and legacy packages may still use `webcam.webm`.
 - A real ~32 minute macOS test produced healthy `screen.mp4` but a ~4 GB `webcam.webm`; stop-time WebM duration patch failed with `ERR_FS_FILE_TOO_LARGE`, and the editor could freeze when mounting that sidecar.
 - Long-recording direction is now implemented and documented in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: native `webcam.mp4` sidecars on macOS/Windows, bounded WebM fallback, sidecar degradation in editor, and NLE-style large media handling.

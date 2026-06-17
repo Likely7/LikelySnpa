@@ -10,7 +10,7 @@ Thank you for considering contributing to this project! By contributing, you hel
 2. **Clone Your Fork**
    - Clone your forked repository to your local machine:
      ```bash
-     git clone https://github.com/your-username/openscreen.git
+     git clone https://github.com/Likely7/LikelySnpa.git
      ```
 
 3. **Create a New Branch**
@@ -43,7 +43,7 @@ Thank you for considering contributing to this project! By contributing, you hel
 
 ## Reporting Issues
 
-If you encounter a bug or have a feature request, please open an issue in the [Issues](https://github.com/siddharthvaddem/openscreen/issues) section of this repository. Provide as much detail as possible to help us address the issue effectively.
+If you encounter a bug or have a feature request, please open an issue in the [Issues](https://github.com/Likely7/LikelySnpa/issues) section of this repository. Provide as much detail as possible to help us address the issue effectively.
 
 ## Style Guide
 

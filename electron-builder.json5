@@ -15,12 +15,6 @@
       "description": "LikelySnap recording package or project",
       "role": "Editor",
       "isPackage": true
-    },
-    {
-      "ext": "openscreen",
-      "name": "OpenScreen Project",
-      "description": "Legacy OpenScreen project",
-      "role": "Editor"
     }
   ],
   // Fetch the auto-caption model + ORT wasm into caption-assets/ before packaging (idempotent).
