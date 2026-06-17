@@ -21,4 +21,5 @@ The central direction is final-product repair, not temporary workaround:
 - media must be recoverable after crashes;
 - macOS audio/video sync must be measurable and fixed;
 - cursor telemetry must remain aligned so auto zoom and Follow Mouse do not regress;
+- settings must be persistent, wired to real behavior, and available from both the launch HUD and editor without relying on transparent-overlay modals;
 - app branding and icon assets must come from reproducible project files, not one-off generated output.

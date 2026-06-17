@@ -38,6 +38,7 @@ Screen Studio is an awesome product and this is definitely not a 1:1 clone. If y
 - Crop, trim, and per-segment speed control on the timeline.
 - Text, arrow, and image annotations, with text animation presets.
 - Timeline snapping guides and an audio waveform to make trimming easier.
+- Persistent app settings for recording location, project location, cache location, cache cleanup, recording quality, frame rate, and default recording inputs.
 - Customizable keyboard shortcuts.
 - Export to MP4 or GIF in multiple aspect ratios and resolutions.
 - Languages supported: Arabic, English, Spanish, French, Italian, Japanese, Korean, Portuguese (Brazil), Russian, Turkish, Vietnamese, Simplified Chinese, and Traditional Chinese.

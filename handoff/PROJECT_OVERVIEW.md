@@ -5,11 +5,12 @@ LikelySnap is an Electron + Vite + React/TypeScript desktop screen recorder and 
 ## Main App Layers
 
 - `electron/main.ts`: app lifecycle, tray, menu, permissions, and top-level IPC registration.
-- `electron/windows.ts`: HUD, editor, source selector, and countdown BrowserWindow creation.
+- `electron/windows.ts`: HUD, editor, source selector, countdown, and standalone app settings BrowserWindow creation.
 - `electron/preload.ts`: exposes the renderer-facing `window.electronAPI`.
 - `electron/ipc/handlers.ts`: most recording, project, file, native capture, cursor telemetry, and export filesystem IPC.
 - `src/App.tsx`: selects the renderer experience by `windowType`.
 - `src/components/launch/LaunchWindow.tsx`: floating recording HUD.
+- `src/components/launch/AppSettingsDialog.tsx`: app settings UI for recording/project/cache directories, quality/FPS, recording defaults, cache size, and cache clearing.
 - `src/hooks/useScreenRecorder.ts`: recording orchestration in the renderer.
 - `src/components/video-editor/VideoEditor.tsx`: editor state, project load/save, export actions, captions, timeline integration.
 - `src/lib/exporter/*`: decode, render, audio processing, muxing, MP4/GIF export.
@@ -65,3 +66,12 @@ Current implementation:
 - The app icon source of truth is `icons/source/logo.png`.
 - Run `npm run generate:icons` to regenerate `public/likelysnap.png`, `public/openscreen.png`, Linux PNG icons, macOS `.icns`, and Windows `.ico`.
 - The editor settings footer no longer exposes GitHub/report/diagnostic buttons. It now shows one centered contact line: `抖音小红书：Likely7  反馈问题`.
+
+## App Settings
+
+- App settings are persisted in Electron `userData/app-settings.json`.
+- The recording directory is mirrored to legacy `recording-settings.json` for compatibility.
+- The launch HUD gear and editor top-bar gear open the same standalone app settings window.
+- Settings currently cover recording directory, project directory, cache directory, cache size/clear, recording quality, frame rate, editable cursor default, microphone default, system audio default, and webcam default.
+- Recording quality/FPS settings are consumed by macOS native capture, Windows native capture, and browser fallback.
+- Project open/save dialogs prefer the configured project directory, and waveform/preview cache paths use the configured cache directory.

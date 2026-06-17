@@ -10,7 +10,7 @@
 6. Validate killing the app mid-recording leaves recoverable package artifacts.
 7. Validate native Windows webcam sidecar recording as bounded `webcam.mp4` on Windows hardware.
 8. Validate the known ~17 minute package `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap` opens interactively with waveform on by default and confirm generated peaks are cached for subsequent opens.
-9. Validate the HUD settings center end to end: recording/project/cache directory pickers, cache size/clear, quality/FPS settings, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
+9. Validate the standalone settings window end to end from both entry points: launch HUD gear and editor top-bar gear. Confirm recording/project/cache directory pickers, cache size/clear, quality/FPS settings, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
 
 ## P1
 
@@ -29,9 +29,8 @@
 ## P2
 
 1. Add "Show Recording Folder" action after recording.
-2. Add recording directory management to editor settings.
-3. Add project relink flow if a media file moves.
-4. Add UI affordance to reveal package contents for diagnostics.
+2. Add project relink flow if a media file moves.
+3. Add UI affordance to reveal package contents for diagnostics.
 
 ## Validation Checklist
 
@@ -47,4 +46,5 @@
 10. Kill the app mid-recording and verify the package is recoverable.
 11. Open an old package with `webcam.webm`; if the sidecar is oversized, confirm the app warns and still opens the main video.
 12. Open a long recording with the trim waveform visible by default, confirm the editor remains responsive during generation, then close/reopen and confirm the waveform loads from cache.
-13. Change recording quality/FPS in the HUD settings center and confirm the next native macOS recording request uses the configured profile.
+13. Change recording quality/FPS in the standalone settings window and confirm the next native macOS recording request uses the configured profile.
+14. Open settings from the editor top-bar gear and confirm the same persisted values are shown as the launch HUD settings entry.
