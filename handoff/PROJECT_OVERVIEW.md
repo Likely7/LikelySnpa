@@ -1,6 +1,6 @@
 # Project Overview
 
-OpenScreen is an Electron + Vite + React/TypeScript desktop screen recorder and editor. It aims to be a free open-source alternative to Screen Studio.
+LikelySnap is an Electron + Vite + React/TypeScript desktop screen recorder and editor forked from OpenScreen. The current product direction is a commercial-ready macOS-first recorder with durable disk writes, recoverable recording packages, and polished editor/export behavior.
 
 ## Main App Layers
 
@@ -41,3 +41,20 @@ The key contract is:
 - cursor sample `timeMs` is relative to the final video timeline;
 - pause ranges are removed from cursor time;
 - any recording start warmup is subtracted from cursor time.
+
+## Recording Storage Model
+
+Current implementation:
+
+- New macOS recordings still write loose files in the selected recording directory.
+- `screen.mp4` is continuously written by the ScreenCaptureKit helper.
+- `recording-<id>-webcam.webm` is continuously written through a main-process stream when webcam is enabled.
+- `recording-<id>.mp4.cursor.json` is created at recording start and updated in throttled live snapshots.
+- `recording-<id>.session.json` is created at recording start and updated at stop/attach.
+
+Next implementation target:
+
+- New recordings should be grouped into one `recording-<id>.likelysnap/` package directory.
+- Package files should be `manifest.json`, `screen.mp4`, `webcam.webm`, and `cursor.json`.
+- The manifest should use relative paths so the package can be moved.
+- Legacy loose recordings must remain loadable.

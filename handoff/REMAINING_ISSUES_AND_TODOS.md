@@ -2,37 +2,37 @@
 
 ## P0
 
-1. Run real macOS recording tests with webcam and microphone enabled.
-2. Validate raw macOS MP4 sync with the new `.session.json` diagnostics.
-3. Validate the persisted `webcamStartOffsetMs` in editor preview and exported MP4.
-4. If diagnostics show constant offset or drift, fix ScreenCaptureKit/AVAssetWriter timestamp handling against measured data.
-5. Introduce a main-process recording session manifest written before capture starts.
-6. Preserve files as recoverable when stop/finalize fails.
-7. Stream macOS native webcam sidecar to the selected directory instead of using a renderer in-memory sidecar blob.
+1. Implement `recording-<id>.likelysnap/` package directory creation for new recordings.
+2. Move new recording outputs into package-relative files: `screen.mp4`, `webcam.webm`, `cursor.json`, `manifest.json`.
+3. Make package `manifest.json` use relative paths and support move-safe loading.
+4. Add editor/open dialog support for `.likelysnap` packages as the primary recording open path.
+5. Keep legacy loose `recording-<id>.mp4` plus sidecar loading.
+6. Add package recovery scanning and manifest rebuilding for interrupted recordings.
+7. Register `.likelysnap` as a macOS document/package type in build metadata.
+8. Validate package recording with webcam and microphone enabled.
 
 ## P1
 
-1. Stream cursor telemetry incrementally instead of writing only at stop.
-2. Attach cursor telemetry to the same recording session manifest.
-3. Add recovery scanning for incomplete sessions on app startup.
-4. Add MP4 export sync diagnostics.
-5. Make MP4 export write to a temp file instead of an in-memory `BufferTarget`.
-6. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
-7. Add automated tests for custom recording directories and manifest paths.
+1. Add MP4 export sync diagnostics.
+2. Make MP4 export write to a temp file instead of an in-memory `BufferTarget`.
+3. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
+4. Add automated tests for package path helpers, recovery scanning, custom recording directories, and manifest paths.
+5. Add real macOS long-recording validation evidence after package model lands.
 
 ## P2
 
 1. Add "Show Recording Folder" action after recording.
 2. Add recording directory management to editor settings.
 3. Add project relink flow if a media file moves.
-4. Add focused automated tests for project persistence with custom recording directories.
+4. Add UI affordance to reveal package contents for diagnostics.
 
 ## Validation Checklist
 
 1. Record 20 minutes on macOS and stop successfully.
-2. Confirm raw source file plays in Finder/QuickTime with audio in sync.
-3. Confirm editor auto zoom suggestions still appear from cursor telemetry.
-4. Confirm manual zoom with Auto-Focus follows cursor.
-5. Confirm export MP4 remains in sync.
-6. Confirm selected recording directory contains video, cursor JSON, session manifest, and macOS diagnostics.
-7. Kill the app mid-recording and verify recoverable artifacts remain in the chosen folder.
+2. Confirm selected recording directory shows one `recording-<id>.likelysnap` package.
+3. Confirm package contains `screen.mp4`, optional `webcam.webm`, `cursor.json`, and `manifest.json`.
+4. Confirm raw source file plays in Finder/QuickTime with audio in sync.
+5. Confirm editor auto zoom suggestions still appear from cursor telemetry.
+6. Confirm manual zoom with Auto-Focus follows cursor.
+7. Confirm export MP4 remains in sync.
+8. Kill the app mid-recording and verify the package is recoverable.

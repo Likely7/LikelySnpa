@@ -7,8 +7,9 @@
 - `handoff/CURRENT_GOAL.md`
 - `handoff/PROJECT_STATUS.md`
 - `handoff/PROJECT_OVERVIEW.md`
+- `handoff/RECORDING_PACKAGE_PLAN.md`
 - `handoff/AUDIO_VIDEO_SYNC_INVESTIGATION.md`
 - `handoff/REMAINING_ISSUES_AND_TODOS.md`
 - `handoff/PROJECT_PROGRESS.md`
 
-当前用户平台是 macOS。优先处理 macOS ScreenCaptureKit 录制、音画同步、持续写盘、可指定录制目录、崩溃恢复、以及导出音画同步。
+当前用户平台是 macOS。优先处理 macOS ScreenCaptureKit 录制、音画同步、持续写盘、`.likelysnap` 录制包、可指定录制目录、崩溃恢复、以及导出音画同步。
