@@ -9,7 +9,8 @@
 5. Validate deleting `manifest.json` and reopening the package rebuilds a recoverable manifest.
 6. Validate killing the app mid-recording leaves recoverable package artifacts.
 7. Validate native Windows webcam sidecar recording as bounded `webcam.mp4` on Windows hardware.
-8. Validate the known ~17 minute package `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap` opens interactively with waveform off by default, then enable waveform and confirm generated peaks are cached for subsequent opens.
+8. Validate the known ~17 minute package `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap` opens interactively with waveform on by default and confirm generated peaks are cached for subsequent opens.
+9. Validate the HUD settings center end to end: recording/project/cache directory pickers, cache size/clear, quality/FPS settings, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
 
 ## P1
 
@@ -23,6 +24,7 @@
 8. Add sidecar/proxy diagnostics for file size, duration, codec, and skipped webcam state.
 9. Add Windows CI or documented manual verification for `npm run build:native:win` and `npm run test:wgc-full:win`.
 10. Consider progressive waveform progress reporting if first-time generation on multi-hour recordings needs a visible percentage instead of the current lightweight skeleton.
+11. Add automated IPC coverage for `app-settings.json` migration, cache directory changes, and project-directory save/open defaults.
 
 ## P2
 
@@ -44,4 +46,5 @@
 9. Confirm export MP4 remains in sync.
 10. Kill the app mid-recording and verify the package is recoverable.
 11. Open an old package with `webcam.webm`; if the sidecar is oversized, confirm the app warns and still opens the main video.
-12. Enable the trim waveform on a long recording, confirm the editor remains responsive during generation, then close/reopen and confirm the waveform loads from cache.
+12. Open a long recording with the trim waveform visible by default, confirm the editor remains responsive during generation, then close/reopen and confirm the waveform loads from cache.
+13. Change recording quality/FPS in the HUD settings center and confirm the next native macOS recording request uses the configured profile.

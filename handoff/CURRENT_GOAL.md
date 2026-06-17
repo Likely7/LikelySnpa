@@ -16,6 +16,7 @@ Build a durable macOS/Windows LikelySnap recorder/editor that can record long vi
 10. Legacy loose recordings must remain loadable.
 11. Webcam sidecars must be long-recording safe: native MP4 sidecars where supported, bounded fallback WebM where necessary, and editor-side degradation if a sidecar is too large or unhealthy.
 12. The editor must reference large media like an NLE: no whole-file media reads on open, non-blocking sidecars, lazy/cached waveform generation, and incremental export paths for long videos.
+13. User-facing settings must be real, persistent, and wired to the recorder/editor behavior: recording directory, project directory, cache directory, cache clearing, recording quality, frame rate, and default recording toggles.
 
 ## Current Priority
 
@@ -31,4 +32,6 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Validate the implemented long-recording native webcam plan in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: macOS native `webcam.mp4`, Windows native `webcam.mp4`, legacy `webcam.webm` compatibility, and editor-side degradation for huge sidecars.
 - Confirm the existing 4.4 GB `webcam.webm` package opens the main video without freezing by skipping the unsafe webcam sidecar.
 - Confirm the known ~17 minute package opens interactively with waveform off by default, then confirm enabling waveform generates peaks in the background and reuses the disk cache on subsequent loads.
+- Confirm the known ~17 minute package stays interactive with waveform on by default and uses the ranged/cached waveform path.
+- Confirm the HUD settings center persists and applies recording/project/cache directories, cache cleanup, quality, FPS, editable cursor, microphone, system audio, and webcam defaults.
 - Keep export durability on the next P1 track: MP4 export still needs streaming/temp-file output before claiming multi-hour export support.

@@ -3,6 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useScopedT } from "@/contexts/I18nContext";
 import {
+	type AppSettings,
+	cursorCaptureModeFromSetting,
+	type RecordingQuality,
+} from "@/lib/appSettings";
+import {
 	type NativeMacRecordingRequest,
 	parseMacDisplayIdFromSourceId,
 	parseMacWindowIdFromSourceId,
@@ -48,6 +53,14 @@ const AUDIO_BITRATE_SYSTEM = 192_000;
 const MIC_GAIN_BOOST = 1.4;
 const WEBCAM_TARGET_FRAME_RATE = 30;
 
+type RecordingVideoProfile = {
+	quality: RecordingQuality;
+	fps: 30 | 60;
+	width: number;
+	height: number;
+	bitrateMultiplier: number;
+};
+
 type UseScreenRecorderReturn = {
 	recording: boolean;
 	paused: boolean;
@@ -92,6 +105,29 @@ function recordingPackageFileName(recordingId: number, childName: string) {
 	return `${RECORDING_FILE_PREFIX}${recordingId}${RECORDING_PACKAGE_EXTENSION}/${childName}`;
 }
 
+function createRecordingVideoProfile(settings?: AppSettings | null): RecordingVideoProfile {
+	const quality = settings?.recordingQuality ?? "high";
+	const requestedFps = settings?.defaultFrameRate ?? TARGET_FRAME_RATE;
+
+	if (quality === "standard") {
+		return {
+			quality,
+			fps: 30,
+			width: DEFAULT_WIDTH,
+			height: DEFAULT_HEIGHT,
+			bitrateMultiplier: 0.75,
+		};
+	}
+
+	return {
+		quality,
+		fps: requestedFps,
+		width: TARGET_WIDTH,
+		height: TARGET_HEIGHT,
+		bitrateMultiplier: quality === "ultra" ? 1.35 : 1,
+	};
+}
+
 export function useScreenRecorder(): UseScreenRecorderReturn {
 	const t = useScopedT("editor");
 	const [recording, setRecording] = useState(false);
@@ -111,6 +147,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const webcamRecorder = useRef<RecorderHandle | null>(null);
 	const nativeWindowsRecording = useRef<NativeWindowsRecordingHandle | null>(null);
 	const nativeMacRecording = useRef<NativeMacRecordingHandle | null>(null);
+	const appSettingsRef = useRef<AppSettings | null>(null);
 	const stream = useRef<MediaStream | null>(null);
 	const screenStream = useRef<MediaStream | null>(null);
 	const microphoneStream = useRef<MediaStream | null>(null);
@@ -161,20 +198,25 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		return preferred.find((type) => MediaRecorder.isTypeSupported(type)) ?? "video/webm";
 	};
 
-	const computeBitrate = (width: number, height: number) => {
+	const computeBitrate = (
+		width: number,
+		height: number,
+		frameRate = TARGET_FRAME_RATE,
+		qualityMultiplier = 1,
+	) => {
 		const pixels = width * height;
-		const highFrameRateBoost =
-			TARGET_FRAME_RATE >= HIGH_FRAME_RATE_THRESHOLD ? HIGH_FRAME_RATE_BOOST : 1;
+		const highFrameRateBoost = frameRate >= HIGH_FRAME_RATE_THRESHOLD ? HIGH_FRAME_RATE_BOOST : 1;
+		const multiplier = highFrameRateBoost * qualityMultiplier;
 
 		if (pixels >= FOUR_K_PIXELS) {
-			return Math.round(BITRATE_4K * highFrameRateBoost);
+			return Math.round(BITRATE_4K * multiplier);
 		}
 
 		if (pixels >= QHD_PIXELS) {
-			return Math.round(BITRATE_QHD * highFrameRateBoost);
+			return Math.round(BITRATE_QHD * multiplier);
 		}
 
-		return Math.round(BITRATE_BASE * highFrameRateBoost);
+		return Math.round(BITRATE_BASE * multiplier);
 	};
 
 	const teardownMedia = useCallback(() => {
@@ -235,6 +277,36 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		},
 		[t],
 	);
+
+	useEffect(() => {
+		let cancelled = false;
+
+		const loadSettings = async () => {
+			try {
+				const result = await window.electronAPI?.getAppSettings?.();
+				if (cancelled || !result?.success || !result.settings) {
+					return;
+				}
+				appSettingsRef.current = result.settings;
+				setMicrophoneEnabled(result.settings.defaultMicrophoneEnabled);
+				setSystemAudioEnabled(result.settings.defaultSystemAudioEnabled);
+				setCursorCaptureMode(cursorCaptureModeFromSetting(result.settings.defaultEditableCursor));
+				if (result.settings.defaultWebcamEnabled) {
+					await setWebcamEnabled(result.settings.defaultWebcamEnabled);
+				} else {
+					setWebcamEnabledState(false);
+				}
+			} catch (error) {
+				console.warn("Failed to load app recording defaults:", error);
+			}
+		};
+
+		void loadSettings();
+
+		return () => {
+			cancelled = true;
+		};
+	}, [setCursorCaptureMode, setWebcamEnabled]);
 
 	useEffect(() => {
 		if (!webcamEnabled) return;
@@ -713,6 +785,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			}
 
 			const effectiveCursorCaptureMode = cursorCaptureModeRef.current;
+			const videoProfile = createRecordingVideoProfile(appSettingsRef.current);
 			const activeRecordingId = Date.now();
 			const displayId = Number(selectedSource.display_id);
 			const sourceType = selectedSource.id.startsWith("window:") ? "window" : "display";
@@ -743,9 +816,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					...(windowHandle ? { windowHandle } : {}),
 				},
 				video: {
-					fps: TARGET_FRAME_RATE,
-					width: TARGET_WIDTH,
-					height: TARGET_HEIGHT,
+					fps: videoProfile.fps,
+					width: videoProfile.width,
+					height: videoProfile.height,
 				},
 				audio: {
 					system: {
@@ -823,6 +896,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			}
 
 			const effectiveCursorCaptureMode = cursorCaptureModeRef.current;
+			const videoProfile = createRecordingVideoProfile(appSettingsRef.current);
 			const activeRecordingId = Date.now();
 			const sourceType = selectedSource.id.startsWith("window:") ? "window" : "display";
 			const displayId =
@@ -858,10 +932,15 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					...(windowId ? { windowId } : {}),
 				},
 				video: {
-					fps: TARGET_FRAME_RATE,
-					width: TARGET_WIDTH,
-					height: TARGET_HEIGHT,
-					bitrate: computeBitrate(TARGET_WIDTH, TARGET_HEIGHT),
+					fps: videoProfile.fps,
+					width: videoProfile.width,
+					height: videoProfile.height,
+					bitrate: computeBitrate(
+						videoProfile.width,
+						videoProfile.height,
+						videoProfile.fps,
+						videoProfile.bitrateMultiplier,
+					),
 					hideSystemCursor: effectiveCursorCaptureMode === "editable-overlay",
 				},
 				audio: {
@@ -1042,6 +1121,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 			let screenMediaStream: MediaStream;
 			const platform = await window.electronAPI.getPlatform();
+			const videoProfile = createRecordingVideoProfile(appSettingsRef.current);
 
 			if (platform === "win32") {
 				// getDisplayMedia + setDisplayMediaRequestHandler (main.ts) supplies the
@@ -1051,9 +1131,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 				screenMediaStream = await navigator.mediaDevices.getDisplayMedia({
 					video: {
 						cursor: effectiveCursorCaptureMode === "editable-overlay" ? "never" : "always",
-						width: { max: TARGET_WIDTH },
-						height: { max: TARGET_HEIGHT },
-						frameRate: { ideal: TARGET_FRAME_RATE },
+						width: { max: videoProfile.width },
+						height: { max: videoProfile.height },
+						frameRate: { ideal: videoProfile.fps },
 					} as MediaTrackConstraints,
 					audio: systemAudioEnabled,
 				} as DisplayMediaStreamOptions);
@@ -1062,9 +1142,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					mandatory: {
 						chromeMediaSource: CHROME_MEDIA_SOURCE,
 						chromeMediaSourceId: selectedSource.id,
-						maxWidth: TARGET_WIDTH,
-						maxHeight: TARGET_HEIGHT,
-						maxFrameRate: TARGET_FRAME_RATE,
+						maxWidth: videoProfile.width,
+						maxHeight: videoProfile.height,
+						maxFrameRate: videoProfile.fps,
 						minFrameRate: MIN_FRAME_RATE,
 					},
 				};
@@ -1186,13 +1266,13 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 			try {
 				await videoTrack.applyConstraints({
-					frameRate: { ideal: TARGET_FRAME_RATE, max: TARGET_FRAME_RATE },
-					width: { ideal: TARGET_WIDTH, max: TARGET_WIDTH },
-					height: { ideal: TARGET_HEIGHT, max: TARGET_HEIGHT },
+					frameRate: { ideal: videoProfile.fps, max: videoProfile.fps },
+					width: { ideal: videoProfile.width, max: videoProfile.width },
+					height: { ideal: videoProfile.height, max: videoProfile.height },
 				});
 			} catch (constraintError) {
 				console.warn(
-					"Unable to lock 4K/60fps constraints, using best available track settings.",
+					"Unable to lock requested recording constraints, using best available track settings.",
 					constraintError,
 				);
 			}
@@ -1205,17 +1285,22 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			let {
 				width = DEFAULT_WIDTH,
 				height = DEFAULT_HEIGHT,
-				frameRate = TARGET_FRAME_RATE,
+				frameRate = videoProfile.fps,
 			} = videoTrack.getSettings();
 
 			width = Math.floor(width / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;
 			height = Math.floor(height / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;
 
-			const videoBitsPerSecond = computeBitrate(width, height);
+			const videoBitsPerSecond = computeBitrate(
+				width,
+				height,
+				Math.round(frameRate) || videoProfile.fps,
+				videoProfile.bitrateMultiplier,
+			);
 			const mimeType = selectMimeType();
 
 			console.log(
-				`Recording at ${width}x${height} @ ${frameRate ?? TARGET_FRAME_RATE}fps using ${mimeType} / ${Math.round(
+				`Recording at ${width}x${height} @ ${frameRate ?? videoProfile.fps}fps (${videoProfile.quality}) using ${mimeType} / ${Math.round(
 					videoBitsPerSecond / BITS_PER_MEGABIT,
 				)} Mbps`,
 			);

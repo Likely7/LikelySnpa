@@ -83,6 +83,21 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	pickRecordingDirectory: () => {
 		return ipcRenderer.invoke("pick-recording-directory");
 	},
+	getAppSettings: () => {
+		return ipcRenderer.invoke("get-app-settings");
+	},
+	saveAppSettings: (partial: unknown) => {
+		return ipcRenderer.invoke("save-app-settings", partial);
+	},
+	pickAppSettingsDirectory: (kind: "recording" | "project" | "cache") => {
+		return ipcRenderer.invoke("pick-app-settings-directory", kind);
+	},
+	getCacheInfo: () => {
+		return ipcRenderer.invoke("get-cache-info");
+	},
+	clearCache: () => {
+		return ipcRenderer.invoke("clear-cache");
+	},
 
 	getRecordedVideoPath: () => {
 		return ipcRenderer.invoke("get-recorded-video-path");

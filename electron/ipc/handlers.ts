@@ -75,13 +75,26 @@ const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
 	".flv",
 	".ts",
 ]);
-const PREVIEW_AUDIO_DIR = path.join(app.getPath("userData"), "preview-audio");
-const WAVEFORM_CACHE_DIR = path.join(app.getPath("userData"), "waveform-cache");
+const APP_SETTINGS_FILE = path.join(app.getPath("userData"), "app-settings.json");
 const RECORDING_SETTINGS_FILE = path.join(app.getPath("userData"), "recording-settings.json");
 const RECORDING_DIRECTORY_WRITE_TEST_FILE = ".likelysnap-write-test";
 const WAVEFORM_PEAKS_PER_SECOND = 200;
 const nativeMacCaptureEvents = new EventEmitter();
 let activeRecordingsDir = getDefaultRecordingsDir();
+
+type RecordingQuality = "standard" | "high" | "ultra";
+
+type AppSettings = {
+	recordingDirectory: string;
+	projectDirectory: string;
+	cacheDirectory: string;
+	recordingQuality: RecordingQuality;
+	defaultFrameRate: 30 | 60;
+	defaultEditableCursor: boolean;
+	defaultMicrophoneEnabled: boolean;
+	defaultSystemAudioEnabled: boolean;
+	defaultWebcamEnabled: boolean;
+};
 
 // Paths the user approved via file picker or project load (i.e. outside the default dirs).
 const approvedPaths = new Set<string>();
@@ -97,6 +110,114 @@ function getAllowedReadDirs(): string[] {
 function getDefaultRecordingsDir() {
 	const baseDir = process.platform === "darwin" ? "Movies" : "Videos";
 	return path.join(os.homedir(), baseDir, "LikelySnap");
+}
+
+function getDefaultProjectDir() {
+	return path.join(os.homedir(), "Documents", "LikelySnap");
+}
+
+function getDefaultCacheDir() {
+	return path.join(app.getPath("userData"), "cache");
+}
+
+function normalizeQuality(value: unknown): RecordingQuality {
+	return value === "standard" || value === "high" || value === "ultra" ? value : "high";
+}
+
+function normalizeFrameRate(value: unknown): 30 | 60 {
+	return value === 30 ? 30 : 60;
+}
+
+function normalizeBoolean(value: unknown, fallback: boolean): boolean {
+	return typeof value === "boolean" ? value : fallback;
+}
+
+async function loadAppSettings(): Promise<AppSettings> {
+	let raw: Record<string, unknown> = {};
+	try {
+		raw = JSON.parse(await fs.readFile(APP_SETTINGS_FILE, "utf-8")) as Record<string, unknown>;
+	} catch (error) {
+		const nodeError = error as NodeJS.ErrnoException;
+		if (nodeError.code !== "ENOENT") {
+			console.warn("Failed to load app settings:", error);
+		}
+	}
+
+	const configuredRecordingDir = await loadRecordingDirectorySetting();
+	const recordingDirectory =
+		normalizeRecordingDirectoryPath(raw.recordingDirectory) ??
+		configuredRecordingDir ??
+		getDefaultRecordingsDir();
+
+	return {
+		recordingDirectory,
+		projectDirectory:
+			normalizeRecordingDirectoryPath(raw.projectDirectory) ?? getDefaultProjectDir(),
+		cacheDirectory: normalizeRecordingDirectoryPath(raw.cacheDirectory) ?? getDefaultCacheDir(),
+		recordingQuality: normalizeQuality(raw.recordingQuality),
+		defaultFrameRate: normalizeFrameRate(raw.defaultFrameRate),
+		defaultEditableCursor: normalizeBoolean(raw.defaultEditableCursor, true),
+		defaultMicrophoneEnabled: normalizeBoolean(raw.defaultMicrophoneEnabled, false),
+		defaultSystemAudioEnabled: normalizeBoolean(raw.defaultSystemAudioEnabled, false),
+		defaultWebcamEnabled: normalizeBoolean(raw.defaultWebcamEnabled, false),
+	};
+}
+
+async function saveAppSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
+	const current = await loadAppSettings();
+	const next: AppSettings = {
+		...current,
+		...partial,
+		recordingDirectory:
+			normalizeRecordingDirectoryPath(partial.recordingDirectory) ?? current.recordingDirectory,
+		projectDirectory:
+			normalizeRecordingDirectoryPath(partial.projectDirectory) ?? current.projectDirectory,
+		cacheDirectory:
+			normalizeRecordingDirectoryPath(partial.cacheDirectory) ?? current.cacheDirectory,
+		recordingQuality: normalizeQuality(partial.recordingQuality ?? current.recordingQuality),
+		defaultFrameRate: normalizeFrameRate(partial.defaultFrameRate ?? current.defaultFrameRate),
+		defaultEditableCursor: normalizeBoolean(
+			partial.defaultEditableCursor,
+			current.defaultEditableCursor,
+		),
+		defaultMicrophoneEnabled: normalizeBoolean(
+			partial.defaultMicrophoneEnabled,
+			current.defaultMicrophoneEnabled,
+		),
+		defaultSystemAudioEnabled: normalizeBoolean(
+			partial.defaultSystemAudioEnabled,
+			current.defaultSystemAudioEnabled,
+		),
+		defaultWebcamEnabled: normalizeBoolean(
+			partial.defaultWebcamEnabled,
+			current.defaultWebcamEnabled,
+		),
+	};
+
+	await fs.mkdir(path.dirname(APP_SETTINGS_FILE), { recursive: true });
+	await fs.writeFile(APP_SETTINGS_FILE, JSON.stringify(next, null, 2), "utf-8");
+	await saveRecordingDirectorySetting(next.recordingDirectory);
+	activeRecordingsDir = next.recordingDirectory;
+	approveFilePath(next.recordingDirectory);
+	approveFilePath(next.projectDirectory);
+	approveFilePath(next.cacheDirectory);
+	return next;
+}
+
+async function getCacheRootDir(): Promise<string> {
+	return (await loadAppSettings()).cacheDirectory;
+}
+
+async function getProjectRootDir(): Promise<string> {
+	return (await loadAppSettings()).projectDirectory;
+}
+
+async function getPreviewAudioDir(): Promise<string> {
+	return path.join(await getCacheRootDir(), "preview-audio");
+}
+
+async function getWaveformCacheDir(): Promise<string> {
+	return path.join(await getCacheRootDir(), "waveform-cache");
 }
 
 function normalizeRecordingDirectoryPath(value: unknown): string | null {
@@ -144,8 +265,8 @@ async function ensureWritableDirectory(dirPath: string): Promise<void> {
 }
 
 async function refreshActiveRecordingsDir(): Promise<string> {
-	const configuredDir = await loadRecordingDirectorySetting();
-	activeRecordingsDir = configuredDir ?? getDefaultRecordingsDir();
+	const configuredDir = (await loadAppSettings()).recordingDirectory;
+	activeRecordingsDir = configuredDir;
 	approveFilePath(activeRecordingsDir);
 	return activeRecordingsDir;
 }
@@ -158,8 +279,8 @@ async function getWritableRecordingsDir(): Promise<string> {
 }
 
 async function getRecordingDirectoryInfo() {
-	const configuredDir = await loadRecordingDirectorySetting();
-	const dirPath = configuredDir ?? getDefaultRecordingsDir();
+	const settings = await loadAppSettings();
+	const dirPath = settings.recordingDirectory;
 	let writable = true;
 	let error: string | undefined;
 	try {
@@ -174,7 +295,7 @@ async function getRecordingDirectoryInfo() {
 	return {
 		success: true,
 		path: dirPath,
-		isDefault: !configuredDir,
+		isDefault: path.resolve(dirPath) === path.resolve(getDefaultRecordingsDir()),
 		writable,
 		...(error ? { error } : {}),
 	};
@@ -280,11 +401,12 @@ async function prepareSupplementalPreviewAudioTrack(videoPath: string) {
 		}
 	}
 
-	await fs.mkdir(PREVIEW_AUDIO_DIR, { recursive: true });
+	const previewAudioDir = await getPreviewAudioDir();
+	await fs.mkdir(previewAudioDir, { recursive: true });
 	const sourceStat = await fs.stat(normalizedPath);
 	const parsedPath = path.parse(normalizedPath);
 	const outputPath = path.join(
-		PREVIEW_AUDIO_DIR,
+		previewAudioDir,
 		`${parsedPath.name}.track-${supplementalTrackIndex}.${Math.round(sourceStat.mtimeMs)}.m4a`,
 	);
 
@@ -331,13 +453,16 @@ function sanitizeCacheName(value: string): string {
 	return value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "media";
 }
 
-function getWaveformCachePath(sourcePath: string, sourceStat: { size: number; mtimeMs: number }) {
+async function getWaveformCachePath(
+	sourcePath: string,
+	sourceStat: { size: number; mtimeMs: number },
+) {
 	const parsedPath = path.parse(sourcePath);
 	const fingerprint = Buffer.from(
 		`${path.resolve(sourcePath)}:${sourceStat.size}:${Math.round(sourceStat.mtimeMs)}`,
 	).toString("base64url");
 	return path.join(
-		WAVEFORM_CACHE_DIR,
+		await getWaveformCacheDir(),
 		`${sanitizeCacheName(parsedPath.name)}.${fingerprint}.peaks.json`,
 	);
 }
@@ -375,7 +500,7 @@ async function readWaveformPeaksCache(videoPath: string) {
 	}
 
 	const sourceStat = await fs.stat(normalizedPath);
-	const cachePath = getWaveformCachePath(normalizedPath, sourceStat);
+	const cachePath = await getWaveformCachePath(normalizedPath, sourceStat);
 
 	try {
 		const cached = JSON.parse(await fs.readFile(cachePath, "utf-8"));
@@ -423,7 +548,7 @@ async function writeWaveformPeaksCache(
 	}
 
 	const sourceStat = await fs.stat(normalizedPath);
-	const cachePath = getWaveformCachePath(normalizedPath, sourceStat);
+	const cachePath = await getWaveformCachePath(normalizedPath, sourceStat);
 	const payload: WaveformPeakCache = {
 		version: 1,
 		sourcePath: normalizedPath,
@@ -434,7 +559,7 @@ async function writeWaveformPeaksCache(
 		peaks: cacheInput.peaks,
 	};
 
-	await fs.mkdir(WAVEFORM_CACHE_DIR, { recursive: true });
+	await fs.mkdir(path.dirname(cachePath), { recursive: true });
 	await fs.writeFile(cachePath, JSON.stringify(payload), "utf-8");
 
 	return {
@@ -444,6 +569,54 @@ async function writeWaveformPeaksCache(
 		peaksPerSecond: WAVEFORM_PEAKS_PER_SECOND,
 		cached: false,
 	};
+}
+
+async function directorySizeBytes(dirPath: string): Promise<number> {
+	let total = 0;
+	const entries = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
+	for (const entry of entries) {
+		const childPath = path.join(dirPath, entry.name);
+		if (entry.isDirectory()) {
+			total += await directorySizeBytes(childPath);
+		} else if (entry.isFile()) {
+			const stat = await fs.stat(childPath).catch(() => null);
+			total += stat?.size ?? 0;
+		}
+	}
+	return total;
+}
+
+async function clearDirectoryContents(dirPath: string): Promise<void> {
+	const entries = await fs.readdir(dirPath, { withFileTypes: true }).catch(() => []);
+	await Promise.all(
+		entries.map((entry) => fs.rm(path.join(dirPath, entry.name), { recursive: true, force: true })),
+	);
+}
+
+async function pickDirectory(
+	defaultPath: string,
+	title: string,
+	parentWindow: BrowserWindow | null,
+) {
+	const result = await dialog.showOpenDialog(
+		buildDialogOptions(
+			{
+				title,
+				defaultPath,
+				properties: ["openDirectory", "createDirectory"],
+			},
+			parentWindow,
+		),
+	);
+
+	if (result.canceled || result.filePaths.length === 0) {
+		return { canceled: true, path: defaultPath };
+	}
+
+	const selectedPath = path.resolve(result.filePaths[0]);
+	await ensureWritableDirectory(selectedPath);
+	approveFilePath(selectedPath);
+	return { canceled: false, path: selectedPath };
 }
 
 async function approveReadableVideoPath(
@@ -2928,33 +3101,99 @@ export function registerIpcHandlers(
 	ipcMain.handle("pick-recording-directory", async () => {
 		try {
 			const current = await getRecordingDirectoryInfo();
-			const result = await dialog.showOpenDialog(
-				buildDialogOptions(
-					{
-						title: mainT("dialogs", "fileDialogs.selectFolder") || "Choose Recording Folder",
-						defaultPath: current.path,
-						properties: ["openDirectory", "createDirectory"],
-					},
-					getMainWindow(),
-				),
+			const result = await pickDirectory(
+				current.path,
+				mainT("dialogs", "fileDialogs.selectFolder") || "Choose Recording Folder",
+				getMainWindow(),
 			);
 
-			if (result.canceled || result.filePaths.length === 0) {
+			if (result.canceled) {
 				return { success: false, canceled: true, path: current.path };
 			}
 
-			const selectedPath = path.resolve(result.filePaths[0]);
-			await ensureWritableDirectory(selectedPath);
-			await saveRecordingDirectorySetting(selectedPath);
-			activeRecordingsDir = selectedPath;
-			approveFilePath(selectedPath);
-			return { success: true, path: selectedPath, isDefault: false, writable: true };
+			const settings = await saveAppSettings({ recordingDirectory: result.path });
+			return { success: true, path: settings.recordingDirectory, isDefault: false, writable: true };
 		} catch (error) {
 			return {
 				success: false,
 				writable: false,
 				error: error instanceof Error ? error.message : String(error),
 			};
+		}
+	});
+
+	ipcMain.handle("get-app-settings", async () => {
+		try {
+			const settings = await loadAppSettings();
+			approveFilePath(settings.recordingDirectory);
+			approveFilePath(settings.projectDirectory);
+			approveFilePath(settings.cacheDirectory);
+			return { success: true, settings };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	});
+
+	ipcMain.handle("save-app-settings", async (_, partial: Partial<AppSettings>) => {
+		try {
+			const settings = await saveAppSettings(partial);
+			return { success: true, settings };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	});
+
+	ipcMain.handle("pick-app-settings-directory", async (_, kind: string) => {
+		try {
+			const settings = await loadAppSettings();
+			const current =
+				kind === "project"
+					? settings.projectDirectory
+					: kind === "cache"
+						? settings.cacheDirectory
+						: settings.recordingDirectory;
+			const title =
+				kind === "project"
+					? "Choose Project Folder"
+					: kind === "cache"
+						? "Choose Cache Folder"
+						: "Choose Recording Folder";
+			const result = await pickDirectory(current, title, getMainWindow());
+			if (result.canceled) {
+				return { success: false, canceled: true, path: current };
+			}
+			const partial: Partial<AppSettings> =
+				kind === "project"
+					? { projectDirectory: result.path }
+					: kind === "cache"
+						? { cacheDirectory: result.path }
+						: { recordingDirectory: result.path };
+			const nextSettings = await saveAppSettings(partial);
+			return { success: true, path: result.path, settings: nextSettings };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	});
+
+	ipcMain.handle("get-cache-info", async () => {
+		try {
+			const cacheDirectory = await getCacheRootDir();
+			await fs.mkdir(cacheDirectory, { recursive: true });
+			const sizeBytes = await directorySizeBytes(cacheDirectory);
+			return { success: true, path: cacheDirectory, sizeBytes };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
+		}
+	});
+
+	ipcMain.handle("clear-cache", async () => {
+		try {
+			const cacheDirectory = await getCacheRootDir();
+			await fs.mkdir(cacheDirectory, { recursive: true });
+			await clearDirectoryContents(cacheDirectory);
+			return { success: true, path: cacheDirectory, sizeBytes: 0 };
+		} catch (error) {
+			return { success: false, error: error instanceof Error ? error.message : String(error) };
 		}
 	});
 
@@ -3371,12 +3610,21 @@ export function registerIpcHandlers(
 			const defaultName = safeName.endsWith(`.${PROJECT_FILE_EXTENSION}`)
 				? safeName
 				: `${safeName}.${PROJECT_FILE_EXTENSION}`;
-			const recordingDir = await refreshActiveRecordingsDir();
+			let projectDir = await getProjectRootDir();
+			try {
+				await ensureWritableDirectory(projectDir);
+			} catch (error) {
+				console.warn(
+					`Could not access configured project folder "${projectDir}", falling back to recording directory:`,
+					error,
+				);
+				projectDir = await refreshActiveRecordingsDir();
+			}
 
 			const dialogOptions = buildDialogOptions(
 				{
 					title: mainT("dialogs", "fileDialogs.saveProject"),
-					defaultPath: path.join(recordingDir, defaultName),
+					defaultPath: path.join(projectDir, defaultName),
 					filters: [
 						{
 							name: mainT("dialogs", "fileDialogs.openscreenProject"),
@@ -3422,9 +3670,21 @@ export function registerIpcHandlers(
 
 	async function loadProjectFile(projectFolder?: string): Promise<ProjectFileResult> {
 		try {
-			// Prefer the user's last opened-project folder if it still exists, else
-			// the active recording directory. Validate here because the renderer can't stat the filesystem.
-			let defaultDir = await refreshActiveRecordingsDir();
+			// Prefer the configured project folder, then the user's last opened-project
+			// folder if it still exists, else the active recording directory.
+			let defaultDir = await getProjectRootDir();
+			try {
+				const stats = await fs.stat(defaultDir);
+				if (!stats.isDirectory()) {
+					defaultDir = await refreshActiveRecordingsDir();
+				}
+			} catch (err) {
+				console.warn(
+					`Could not access configured project folder "${defaultDir}", falling back to recording directory:`,
+					err,
+				);
+				defaultDir = await refreshActiveRecordingsDir();
+			}
 			if (projectFolder) {
 				try {
 					const stats = await fs.stat(projectFolder);

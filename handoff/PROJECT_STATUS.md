@@ -11,6 +11,7 @@
 - Current npm package name: `likelysnap`
 - Current Electron appId: `com.likelysnap.app`
 - Latest local checkpoint before this update: `ba701c2 fix: simplify settings footer contact copy`
+- Archive before app settings center work: `archive/before-app-settings-20260617`
 - Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
 - Archive before native webcam sidecar work: `archive/before-native-webcam-sidecar-20260617-131845`
 - App icon source of truth: `icons/source/logo.png`, generated through `npm run generate:icons` into the public favicon, Linux PNG set, macOS `.icns`, and Windows `.ico`.
@@ -30,7 +31,11 @@
 - Cursor telemetry now creates a package-local `cursor.json` file at recording start and refreshes it in throttled snapshots, with final corrected telemetry written at stop. Legacy loose recordings still use `.cursor.json`.
 - Session manifests are now created at recording start and updated after stop/attach. New packages use `manifest.json`; legacy loose recordings still use `.session.json`.
 - Browser fallback uses `MediaRecorder` and has a streaming-to-disk wrapper, with in-memory allowed only when no file-backed stream is requested.
-- Recording directory is now user-selectable and persisted in `recording-settings.json` under Electron `userData`.
+- App settings are now persisted in `app-settings.json` under Electron `userData`, with compatibility mirroring of the recording directory to legacy `recording-settings.json`.
+- Recording directory is now user-selectable from both the HUD folder button and the HUD settings center.
+- Project file default directory and cache directory are now user-selectable from the HUD settings center.
+- Recording quality defaults are now real settings, not placeholder UI: Standard maps to 1080p/30 with lower bitrate, High maps to 4K with the selected FPS, and Ultra maps to 4K with the selected FPS plus higher bitrate. macOS native, Windows native, and browser fallback paths all consume the configured profile.
+- Recording default toggles are now real settings: editable cursor, microphone, system audio, and webcam defaults are loaded when the HUD starts.
 - macOS default recording directory is now `~/Movies/LikelySnap`; non-macOS default is `~/Videos/LikelySnap`.
 - Legacy `RECORDINGS_DIR = path.join(app.getPath("userData"), "recordings")` remains trusted for reading old recordings.
 - Project persistence already stores real media paths via `screenVideoPath` and optional `webcamVideoPath`.
@@ -49,7 +54,8 @@
 - Stop/finalize paths no longer whole-file patch WebM sidecars over the 2 GB safe threshold.
 - Windows native stop/finalize no longer reads the main `screen.mp4` into JS memory to repackage a webcam sidecar.
 - Editor open paths now stat webcam sidecars and skip unsafe files over the 2 GB threshold, allowing the main screen video to open without the webcam.
-- Trim waveform generation is now lazy and scalable. The editor does not generate waveforms on open by default; when the user enables the waveform switch, local media is read through bounded 1 MB ranged IPC reads, decoded incrementally with `mediabunny`, and cached as peak JSON under Electron `userData/waveform-cache` keyed by source path/size/mtime.
+- Trim waveform generation is now lazy and scalable. The waveform is user-visible by default again, but local media is read through bounded 1 MB ranged IPC reads, decoded incrementally with `mediabunny`, and cached as peak JSON under the configured cache directory keyed by source path/size/mtime.
+- The HUD now has a gear-shaped settings button beside the language switch. It opens a real settings center for recording location, project location, recording quality, frame rate, default recording toggles, cache location, cache size, and cache clearing.
 - Package manifests use relative paths and can be reopened after moving the package.
 - Opening a `.likelysnap` package through the video picker/project picker resolves the package session, including webcam path and webcam offset.
 - If `manifest.json` is missing, package open/recovery can rebuild a recoverable manifest from package files.
@@ -66,7 +72,7 @@
 - Cursor telemetry is live-written, and package open can recover missing manifests; interrupted-session UX still needs real-world validation.
 - Follow Mouse zoom has targeted automated coverage and is now being refined for product feel: upstream behavior was confirmed to mix tight zoom-in tracking with smoother full-zoom tracking, so LikelySnap uses stable fixed-position auto zoom by default plus explicit per-zoom Follow Mouse.
 - Current highest remaining long-recording risk is export and multi-hour editor scale, not recording package write-out. Main screen MP4 can remain large but referenced on disk; webcam sidecars are now native MP4 for native capture and unsafe legacy WebM files are skipped at editor open.
-- The previous editor-load stall from waveform generation has been addressed architecturally, but the known ~17 minute package still needs an in-app retest to verify first-enable waveform generation and cache reuse behavior on the user's machine.
+- The previous editor-load stall from waveform generation has been addressed architecturally with ranged reads and cache reuse; because waveform display is now default-on again, the known ~17 minute package still needs an in-app retest to verify the UI remains responsive while peaks are generated or loaded from cache.
 - Windows native webcam code is implemented but not truth-tested on Windows hardware from this macOS machine.
 
 ## Latest Verification
@@ -77,3 +83,6 @@
 - `./node_modules/.bin/tsc --noEmit` passes.
 - `npm run build-vite` passes after the ranged/cached waveform refactor.
 - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts` passes after the ranged/cached waveform refactor.
+- `npx tsc --noEmit` passes after the app settings center work.
+- `npm test -- src/lib/userPreferences.test.ts src/components/video-editor/editorDefaults.test.ts` passes after the app settings center work.
+- `npm run build-vite` passes after the app settings center work.

@@ -102,6 +102,35 @@ interface Window {
 			canceled?: boolean;
 			error?: string;
 		}>;
+		getAppSettings: () => Promise<{
+			success: boolean;
+			settings?: import("../src/lib/appSettings").AppSettings;
+			error?: string;
+		}>;
+		saveAppSettings: (partial: Partial<import("../src/lib/appSettings").AppSettings>) => Promise<{
+			success: boolean;
+			settings?: import("../src/lib/appSettings").AppSettings;
+			error?: string;
+		}>;
+		pickAppSettingsDirectory: (kind: "recording" | "project" | "cache") => Promise<{
+			success: boolean;
+			path?: string;
+			settings?: import("../src/lib/appSettings").AppSettings;
+			canceled?: boolean;
+			error?: string;
+		}>;
+		getCacheInfo: () => Promise<{
+			success: boolean;
+			path?: string;
+			sizeBytes?: number;
+			error?: string;
+		}>;
+		clearCache: () => Promise<{
+			success: boolean;
+			path?: string;
+			sizeBytes?: number;
+			error?: string;
+		}>;
 		getRecordedVideoPath: () => Promise<{
 			success: boolean;
 			path?: string;

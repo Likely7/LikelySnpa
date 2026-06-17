@@ -51,7 +51,12 @@
 47. Simplified the editor settings footer by removing report bug, save diagnostics, and GitHub star buttons, replacing them with the centered contact line `抖音小红书：Likely7  反馈问题`.
 48. Updated README and handoff docs to reflect the current package/webcam/auto-zoom/branding state instead of the earlier pre-package plan.
 49. Investigated a real ~17 minute package that opened but stayed unresponsive for roughly 10 seconds. The package was not pathological by itself (`screen.mp4` ~429 MB, `webcam.mp4` ~243 MB, `cursor.json` ~5.9 MB); the recurring editor cost was the trim waveform path reading and decoding the whole source video in the renderer.
-50. Reworked trim waveform generation into a lazy, long-video-safe path: default waveform display is off, users can still enable it, local files are read through bounded 1 MB ranged IPC reads, `mediabunny` decodes audio incrementally in the renderer, and generated peak arrays are cached on disk under Electron `userData/waveform-cache` keyed by source path/size/mtime.
+50. Reworked trim waveform generation into a lazy, long-video-safe path: local files are read through bounded 1 MB ranged IPC reads, `mediabunny` decodes audio incrementally in the renderer, and generated peak arrays are cached on disk keyed by source path/size/mtime.
+51. Re-enabled waveform display by default per user request while keeping the ranged/cached generation path.
+52. Added a HUD settings center opened by a gear button beside the language switch.
+53. Persisted app settings in Electron `userData/app-settings.json`, including recording directory, project directory, cache directory, recording quality, frame rate, and default recording toggles.
+54. Wired recording quality and frame-rate settings into macOS native recording, Windows native recording, and browser fallback recording.
+55. Wired project file save/open dialogs to prefer the configured project directory and cache operations to the configured cache directory.
 
 ## Implemented This Pass
 
@@ -103,6 +108,9 @@
 - `src/hooks/useAudioPeaks.ts`
 - `src/components/video-editor/timeline/BackgroundWaveform.tsx`
 - `src/components/video-editor/timeline/TimelineEditor.tsx`
+- `src/components/launch/AppSettingsDialog.tsx`
+- `src/lib/appSettings.ts`
+- `src/components/video-editor/editorDefaults.ts`
 
 ## Verification
 
@@ -125,9 +133,13 @@
 - `npm run lint` and `./node_modules/.bin/tsc --noEmit` pass after the settings footer simplification.
 - `npm run build-vite` passes after the ranged/cached waveform refactor.
 - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts` passes after the ranged/cached waveform refactor.
+- `npx tsc --noEmit` passes after the app settings center work.
+- `npm test -- src/lib/userPreferences.test.ts src/components/video-editor/editorDefaults.test.ts` passes after the app settings center work.
+- `npm run build-vite` passes after the app settings center work.
 - `npm run build:native:mac` is blocked by the local machine using Command Line Tools instead of full Xcode.
 - `npm run i18n:check` still fails on pre-existing translation drift; the new `tooltips.chooseRecordingDirectory` key is no longer listed as missing.
 - Latest verified checkpoint before this handoff update: `ba701c2 fix: simplify settings footer contact copy`.
+- Archive before app settings center work: `archive/before-app-settings-20260617`.
 
 ## Next Engineering Step
 
@@ -141,4 +153,5 @@ Run real macOS durability validation against the native `webcam.mp4` path:
 6. Confirm normal auto-generated zooms are stable by default, long same-area explanations become one longer zoom, held-click/drag suggestions default to Follow Mouse, and selected zooms can still be manually switched between Follow Mouse off/on in the settings panel.
 7. Open the known package `/Users/macbook/Movies/LikelySnap/recording-1781670268254.likelysnap`; the editor should open `screen.mp4` and skip the 4 GB legacy `webcam.webm` with a warning instead of freezing.
 8. Validate the native Windows webcam sidecar on a Windows machine with `npm run build:native:win` and `npm run test:wgc-full:win`.
-9. Open `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap`, confirm the editor becomes interactive without waiting on waveform generation, then enable "Show Audio Waveform on Trim Track" once and confirm the waveform appears after background generation and opens from cache on the next load.
+9. Open `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap`, confirm the editor remains interactive with waveform visible by default, and confirm the waveform uses cached peaks on the next load.
+10. Open the HUD settings gear and verify recording/project/cache directories, cache size/clear, quality, FPS, and default recording toggles persist across app restarts and affect the next recording.
