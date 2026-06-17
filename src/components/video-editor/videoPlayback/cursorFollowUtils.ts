@@ -55,6 +55,8 @@ export interface FollowParams {
 	maxFactor: number;
 	rampDistance: number;
 	referenceMs: number;
+	deadZone?: number;
+	maxSpeedPerSecond?: number;
 }
 
 /**
@@ -69,6 +71,14 @@ export function advanceFollowFocus(
 	params: FollowParams,
 ): ZoomFocus {
 	if (!(dtMs > 0)) return prev;
+	const dx = raw.cx - prev.cx;
+	const dy = raw.cy - prev.cy;
+	const distance = Math.sqrt(dx * dx + dy * dy);
+
+	if (params.deadZone !== undefined && distance <= params.deadZone) {
+		return prev;
+	}
+
 	const base = adaptiveSmoothFactor(
 		raw,
 		prev,
@@ -77,7 +87,26 @@ export function advanceFollowFocus(
 		params.rampDistance,
 	);
 	const factor = timeCorrectedFollowFactor(base, dtMs, params.referenceMs);
-	return smoothCursorFocus(raw, prev, factor);
+	const next = smoothCursorFocus(raw, prev, factor);
+
+	if (!(params.maxSpeedPerSecond && params.maxSpeedPerSecond > 0)) {
+		return next;
+	}
+
+	const maxStep = params.maxSpeedPerSecond * (dtMs / 1000);
+	const nextDx = next.cx - prev.cx;
+	const nextDy = next.cy - prev.cy;
+	const nextDistance = Math.sqrt(nextDx * nextDx + nextDy * nextDy);
+
+	if (nextDistance <= maxStep || nextDistance === 0) {
+		return next;
+	}
+
+	const ratio = maxStep / nextDistance;
+	return {
+		cx: prev.cx + nextDx * ratio,
+		cy: prev.cy + nextDy * ratio,
+	};
 }
 
 /**

@@ -10,7 +10,7 @@
 - Current product name: `LikelySnap`
 - Current npm package name: `likelysnap`
 - Current Electron appId: `com.likelysnap.app`
-- Latest local checkpoint: `2ecbca8 fix: restore cursor-follow zoom focus`
+- Latest local checkpoint before native webcam long-recording work: `f77d0b1 docs: align handoff with cursor follow status`
 
 ## Environment Notes
 
@@ -32,11 +32,13 @@
 - Project persistence already stores real media paths via `screenVideoPath` and optional `webcamVideoPath`.
 - Project persistence now also stores optional `webcamStartOffsetMs` when a webcam sidecar exists.
 - Cursor telemetry is separate from video bytes and is required for auto zoom and cursor-follow zoom.
-- Auto-generated zoom regions now keep `focusMode: auto`, so suggested zooms follow cursor telemetry instead of locking to the initial focus point.
+- Auto zoom suggestions now separate span selection from follow behavior: ordinary dwell/click suggestions use stable manual focus, held mouse-button spans default to `focusMode: auto`, and the selected zoom's settings panel can override focus mode per region.
 - macOS native window recordings now use ScreenCaptureKit-reported window capture bounds for editable cursor normalization, avoiding display-bounds offset in cursor-follow zoom.
 - User retest after this fix reported the cursor-follow behavior is close enough to continue; treat cursor-follow zoom as implemented unless a new concrete offset sample appears.
 - New project files use `.likelysnap`; legacy `.openscreen` project files remain loadable.
 - New recordings now write into `recording-<id>.likelysnap/` package directories with `screen.mp4`, optional `webcam.webm`, `cursor.json`, and `manifest.json`.
+- A real ~32 minute macOS test produced healthy `screen.mp4` but a ~4 GB `webcam.webm`; stop-time WebM duration patch failed with `ERR_FS_FILE_TOO_LARGE`, and the editor could freeze when mounting that sidecar.
+- Long-recording direction is now documented in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: native `webcam.mp4` sidecars on macOS/Windows, bounded WebM fallback, sidecar degradation in editor, and NLE-style large media handling.
 - Package manifests use relative paths and can be reopened after moving the package.
 - Opening a `.likelysnap` package through the video picker/project picker resolves the package session, including webcam path and webcam offset.
 - If `manifest.json` is missing, package open/recovery can rebuild a recoverable manifest from package files.
@@ -51,4 +53,5 @@
 - New package recording has passed type, lint, targeted unit tests, and build verification; it still needs real macOS recording validation on the user's machine.
 - Export audio/video sync diagnostics have not yet been instrumented or proven.
 - Cursor telemetry is live-written, and package open can recover missing manifests; interrupted-session UX still needs real-world validation.
-- Cursor-follow zoom has targeted automated coverage, build verification, and initial user acceptance; future work should focus on long-recording/package recovery and export durability unless new cursor evidence appears.
+- Cursor-follow zoom has targeted automated coverage and is now being refined for product feel: upstream behavior was confirmed to mix tight zoom-in tracking with smoother full-zoom tracking, so LikelySnap is moving toward stable manual auto-zoom by default plus explicit per-zoom cursor-follow.
+- Current highest long-recording risk is webcam sidecar handling, not the `.likelysnap` package itself. Main screen MP4 can remain modest while webcam WebM can grow into multi-GB files and block editor startup.

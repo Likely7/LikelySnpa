@@ -1,6 +1,6 @@
 # Current Goal
 
-Build a durable macOS-first LikelySnap recorder/editor that can record long videos safely, write directly to a user-selected directory, preserve audio/video sync, package each recording as one user-facing `.likelysnap` document, and keep cursor-driven zoom/edit/export features intact.
+Build a durable macOS/Windows LikelySnap recorder/editor that can record long videos safely, write directly to a user-selected directory, preserve audio/video sync, package each recording as one user-facing `.likelysnap` document, keep cursor-driven zoom/edit/export features intact, and open long recordings without loading multi-GB sidecars into memory.
 
 ## Hard Requirements
 
@@ -10,14 +10,16 @@ Build a durable macOS-first LikelySnap recorder/editor that can record long vide
 4. macOS recordings must preserve audio/video sync in the source file.
 5. MP4 exports must preserve audio/video sync from the edited timeline.
 6. Cursor telemetry must remain aligned with video time so auto zoom and auto-focus zoom continue to work.
-7. Auto-generated zoom regions must follow cursor telemetry by default, and macOS window capture must normalize cursor positions against the captured window bounds.
+7. Cursor-driven zoom must remain stable and controllable: auto zoom suggestions choose candidate time spans, per-zoom focus mode decides whether that span follows cursor telemetry, and macOS window capture must normalize cursor positions against the captured window bounds.
 8. Crash recovery must leave inspectable and recoverable media files.
 9. New recordings must appear to users as one `.likelysnap` package, while internally preserving live-write files.
 10. Legacy loose recordings must remain loadable.
+11. Webcam sidecars must be long-recording safe: native MP4 sidecars where supported, bounded fallback WebM where necessary, and editor-side degradation if a sidecar is too large or unhealthy.
+12. The editor must reference large media like an NLE: no whole-file media reads on open, non-blocking sidecars, and incremental export paths for long videos.
 
 ## Current Priority
 
-Validate the implemented `.likelysnap` recording package model on macOS and push the app toward release-grade durability:
+Push the package model from "recording works" to "long recordings remain editable":
 
 - Record with microphone, webcam, and editable cursor enabled.
 - Confirm package contents live-update while recording.
@@ -25,4 +27,5 @@ Validate the implemented `.likelysnap` recording package model on macOS and push
 - Confirm moved packages reopen from relative `manifest.json` paths.
 - Confirm missing-manifest recovery rebuilds a usable package session.
 - Confirm editor preview and exported MP4 stay in sync.
-- Keep cursor-follow zoom in the validation pass, but consider it fixed after checkpoint `2ecbca8` unless a new reproducible offset is found.
+- Validate the updated auto zoom focus model: normal auto zoom suggestions should default to stable manual focus, suggestions created from held mouse-button spans should default to cursor-follow, and every selected zoom must remain individually switchable between Manual and Auto in the settings panel.
+- Implement the long-recording native webcam plan in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`, starting with editor safety guards and then native macOS/Windows webcam sidecars.

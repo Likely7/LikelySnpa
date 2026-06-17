@@ -162,7 +162,6 @@ export class FrameRenderer {
 	private smoothedAutoFocus: { cx: number; cy: number } | null = null;
 	private prevAnimationTimeMs: number | null = null;
 	private zoomSpringState = createZoomSpringState();
-	private prevTargetProgress = 0;
 	private isLinux = false;
 
 	constructor(config: FrameRenderConfig) {
@@ -793,33 +792,18 @@ export class FrameRenderer {
 			targetFocus = regionFocus;
 			targetProgress = strength;
 
-			// Adaptive smoothing for auto-follow mode
+			// Stable camera follow for auto-focus mode. This mirrors preview so exports do
+			// not switch between tightly locked zoom-in motion and smoother full-zoom motion.
 			if (region.focusMode === "auto" && !transition) {
 				const raw = targetFocus;
 				const dtMs = this.prevAnimationTimeMs != null ? timeMs - this.prevAnimationTimeMs : 0;
-				const isZoomingIn = targetProgress < 0.999 && targetProgress >= this.prevTargetProgress;
-				if (targetProgress >= 0.999) {
-					// Full zoom: move faster when far, decelerate when close
-					const prev = this.smoothedAutoFocus ?? raw;
-					const smoothed = advanceFollowFocus(prev, raw, dtMs, AUTO_FOLLOW_PARAMS);
-					this.smoothedAutoFocus = smoothed;
-					targetFocus = smoothed;
-				} else if (isZoomingIn) {
-					// Track cursor directly while zooming in; keep ref in sync to avoid a snap
-					// when full-zoom begins
-					this.smoothedAutoFocus = raw;
-				} else {
-					// Zoom-out: keep smoothing to avoid a snap at the start
-					const prev = this.smoothedAutoFocus ?? raw;
-					const smoothed = advanceFollowFocus(prev, raw, dtMs, AUTO_FOLLOW_PARAMS);
-					this.smoothedAutoFocus = smoothed;
-					targetFocus = smoothed;
-				}
+				const prev = this.smoothedAutoFocus ?? raw;
+				const smoothed = advanceFollowFocus(prev, raw, dtMs, AUTO_FOLLOW_PARAMS);
+				this.smoothedAutoFocus = smoothed;
+				targetFocus = smoothed;
 			} else if (region.focusMode !== "auto") {
 				this.smoothedAutoFocus = null;
 			}
-			this.prevTargetProgress = targetProgress;
-
 			if (transition) {
 				const startTransform = computeZoomTransform({
 					stageSize: this.layoutCache.stageSize,

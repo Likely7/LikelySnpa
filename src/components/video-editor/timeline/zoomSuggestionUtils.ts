@@ -3,6 +3,8 @@ import type { CursorTelemetryPoint, ZoomFocus } from "../types";
 export const MIN_DWELL_DURATION_MS = 450;
 export const MAX_DWELL_DURATION_MS = 2600;
 export const DWELL_MOVE_THRESHOLD = 0.02;
+export const CLICK_SUGGESTION_STRENGTH_MS = MAX_DWELL_DURATION_MS + 1;
+export const MIN_DRAG_FOLLOW_DURATION_MS = 250;
 /** Minimum spacing between two accepted suggestion centres. */
 export const SUGGESTION_SPACING_MS = 1800;
 
@@ -10,6 +12,15 @@ export interface ZoomDwellCandidate {
 	centerTimeMs: number;
 	focus: ZoomFocus;
 	strength: number;
+}
+
+function isClickInteractionType(interactionType: CursorTelemetryPoint["interactionType"]) {
+	return (
+		interactionType === "click" ||
+		interactionType === "double-click" ||
+		interactionType === "right-click" ||
+		interactionType === "middle-click"
+	);
 }
 
 function normalizeTelemetrySample(
@@ -20,6 +31,7 @@ function normalizeTelemetrySample(
 		timeMs: Math.max(0, Math.min(sample.timeMs, totalMs)),
 		cx: Math.max(0, Math.min(sample.cx, 1)),
 		cy: Math.max(0, Math.min(sample.cy, 1)),
+		...(sample.interactionType ? { interactionType: sample.interactionType } : {}),
 	};
 }
 
@@ -52,7 +64,7 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 		const start = samples[startIndex];
 		const end = samples[endIndexExclusive - 1];
 		const runDuration = end.timeMs - start.timeMs;
-		if (runDuration < MIN_DWELL_DURATION_MS || runDuration > MAX_DWELL_DURATION_MS) {
+		if (runDuration < MIN_DWELL_DURATION_MS) {
 			return;
 		}
 
@@ -63,7 +75,7 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 		dwellCandidates.push({
 			centerTimeMs: Math.round((start.timeMs + end.timeMs) / 2),
 			focus: { cx: avgCx, cy: avgCy },
-			strength: runDuration,
+			strength: Math.min(runDuration, MAX_DWELL_DURATION_MS),
 		});
 	};
 
@@ -79,12 +91,25 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 	}
 	pushRunIfDwell(runStart, samples.length);
 
+	for (const sample of samples) {
+		if (!isClickInteractionType(sample.interactionType)) {
+			continue;
+		}
+
+		dwellCandidates.push({
+			centerTimeMs: Math.round(sample.timeMs),
+			focus: { cx: sample.cx, cy: sample.cy },
+			strength: CLICK_SUGGESTION_STRENGTH_MS,
+		});
+	}
+
 	return dwellCandidates;
 }
 
 export interface AutoZoomSuggestion {
 	span: { start: number; end: number };
 	focus: ZoomFocus;
+	focusMode?: "auto" | "manual";
 }
 
 /**
@@ -146,11 +171,55 @@ export function buildAutoZoomSuggestions(options: {
 
 		reservedSpans.push({ start: candidateStart, end: candidateEnd });
 		acceptedCenters.push(candidate.centerTimeMs);
+		const span = { start: candidateStart, end: candidateEnd };
 		suggestions.push({
-			span: { start: candidateStart, end: candidateEnd },
+			span,
 			focus: candidate.focus,
+			focusMode: hasPressedCursorDuringSpan(normalizedSamples, span) ? "auto" : "manual",
 		});
 	}
 
 	return suggestions;
+}
+
+export function hasPressedCursorDuringSpan(
+	samples: CursorTelemetryPoint[],
+	span: { start: number; end: number },
+	minDurationMs = MIN_DRAG_FOLLOW_DURATION_MS,
+): boolean {
+	let pressStart: number | null = null;
+
+	for (const sample of samples) {
+		if (sample.timeMs > span.end && pressStart === null) {
+			break;
+		}
+
+		if (sample.timeMs < span.start) {
+			if (isClickInteractionType(sample.interactionType)) {
+				pressStart = sample.timeMs;
+			} else if (sample.interactionType === "mouseup") {
+				pressStart = null;
+			}
+			continue;
+		}
+
+		if (isClickInteractionType(sample.interactionType)) {
+			pressStart = sample.timeMs;
+			continue;
+		}
+
+		if (sample.interactionType !== "mouseup" || pressStart === null) {
+			continue;
+		}
+
+		const overlapStart = Math.max(pressStart, span.start);
+		const overlapEnd = Math.min(sample.timeMs, span.end);
+		if (overlapEnd - overlapStart >= minDurationMs) {
+			return true;
+		}
+
+		pressStart = null;
+	}
+
+	return false;
 }

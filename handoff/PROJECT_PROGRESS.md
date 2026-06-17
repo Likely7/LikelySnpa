@@ -33,6 +33,11 @@
 29. Restarted the local dev app after refreshing the macOS helper binary so the cursor-follow fix is active for user testing.
 30. Captured the cursor-follow fix in Git checkpoint `2ecbca8 fix: restore cursor-follow zoom focus`.
 31. User reported the result is approximately acceptable, so the current project state is ready to move past cursor-follow repair.
+32. Compared upstream OpenScreen auto zoom/cursor-follow implementation against LikelySnap. Upstream only detects cursor dwells, drops dwells longer than 2600ms, ignores click intent for suggestions, and smooths cursor-follow only after zoom-in has completed.
+33. Clarified the product model: auto zoom suggestions choose spans, while each zoom region's focus mode independently controls whether the camera follows cursor telemetry. The global Auto-Focus toggle is a batch/default control, not a permanent lock.
+34. Added auto zoom focus inference from mouse-button hold spans: click-to-mouseup intervals inside a suggested zoom default that zoom to cursor-follow; ordinary dwells/clicks default to stable manual focus.
+35. Investigated a real ~32 minute macOS recording that opened poorly in the editor. Main `screen.mp4` was healthy (~310 MB), but `webcam.webm` was ~4 GB and stop-time WebM duration patch failed above Node's 2 GB read limit.
+36. Documented the long-recording native webcam plan in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`, covering macOS `AVCaptureSession + AVAssetWriter`, Windows Media Foundation sidecars, WebM fallback, editor degradation, and NLE-style large media handling.
 
 ## Implemented This Pass
 
@@ -67,6 +72,11 @@
 - `src/i18n/locales/*/launch.json`
 - `src/hooks/useScreenRecorder.ts`
 - `src/components/video-editor/EditorEmptyState.tsx`
+- `src/components/video-editor/timeline/zoomSuggestionUtils.ts`
+- `src/components/video-editor/timeline/zoomSuggestionUtils.test.ts`
+- `src/components/video-editor/videoPlayback/cursorFollowUtils.ts`
+- `src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts`
+- `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`
 
 ## Verification
 
@@ -80,6 +90,7 @@
 - `swiftc -parse-as-library -typecheck ... main.swift` passes with deprecation warnings only.
 - `swiftc -parse-as-library ... main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local dev helper binary.
 - `npm test -- src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/projectPersistence.test.ts electron/ipc/recordingPackage.test.ts src/hooks/recorderHandle.test.ts electron/ipc/recordingStream.test.ts` passes.
+- `npm test -- src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/lib/exporter/videoExporter.test.ts src/lib/exporter/videoExporter.browser.test.ts` passes after the auto-follow smoothing and per-suggestion focus-mode updates.
 - `npm run build:native:mac` is blocked by the local machine using Command Line Tools instead of full Xcode.
 - `npm run i18n:check` still fails on pre-existing translation drift; the new `tooltips.chooseRecordingDirectory` key is no longer listed as missing.
 - Latest verified checkpoint: `2ecbca8 fix: restore cursor-follow zoom focus`.
@@ -93,4 +104,4 @@ Run real macOS durability validation:
 3. Confirm package contents grow/update during capture and end as `screen.mp4`, `webcam.webm`, `cursor.json`, `manifest.json`.
 4. Confirm opening/moving the package keeps webcam, cursor telemetry, and `webcamStartOffsetMs`.
 5. Confirm editor preview and exported MP4 remain in sync.
-6. Confirm auto-generated zooms still follow the mouse during the same validation run; only reopen cursor work if there is a reproducible offset sample.
+6. Confirm normal auto-generated zooms are stable by default, held-click/drag suggestions default to cursor-follow, and selected zooms can still be manually switched between Manual and Auto in the settings panel.

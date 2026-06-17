@@ -250,7 +250,7 @@ interface SettingsPanelProps {
 	onZoomPreviewEnd?: () => void;
 	selectedZoomFocusMode?: ZoomFocusMode | null;
 	onZoomFocusModeChange?: (mode: ZoomFocusMode) => void;
-	/** When the global Auto-Focus toggle is on, the per-zoom selector is locked. */
+	/** Optional guard for contexts that intentionally disallow per-zoom focus changes. */
 	focusModeLocked?: boolean;
 	selectedZoomFocus?: ZoomFocus | null;
 	onZoomFocusCoordinateChange?: (focus: ZoomFocus) => void;

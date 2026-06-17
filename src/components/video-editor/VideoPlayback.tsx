@@ -368,7 +368,6 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const onPlayStateChangeRef = useRef(onPlayStateChange);
 		const videoReadyRafRef = useRef<number | null>(null);
 		const smoothedAutoFocusRef = useRef<ZoomFocus | null>(null);
-		const prevTargetProgressRef = useRef(0);
 		const durationResolutionTimeoutRef = useRef<number | null>(null);
 		const lastResolvedDurationRef = useRef<number | null>(null);
 		const isResolvingDurationRef = useRef(false);
@@ -1385,11 +1384,11 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					targetFocus = regionFocus;
 					targetProgress = strength;
 
-					// Adaptive smoothing for auto-follow mode.
+					// Stable camera follow for auto-focus mode. Keep the same smoothing during
+					// zoom-in, full zoom, and zoom-out so generated regions do not alternate
+					// between floaty and tightly locked motion.
 					if (region.focusMode === "auto" && !transition) {
 						const raw = targetFocus;
-						const isZoomingIn =
-							targetProgress < 0.999 && targetProgress >= prevTargetProgressRef.current;
 						// Follow the cursor in content time (frame-rate independent) so the camera pans
 						// at the same speed in preview and export. Snap to target when not actively
 						// playing (paused/seek/scrub), matching the zoom spring's snap.
@@ -1399,31 +1398,15 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 							prevZoomTimeMsRef.current === null
 								? 0
 								: currentTimeRef.current - prevZoomTimeMsRef.current;
-						if (targetProgress >= 0.999) {
-							// Full zoom: adaptive smoothing, faster when far, decelerating when close.
-							const prev = smoothedAutoFocusRef.current ?? raw;
-							const smoothed = focusAnimating
-								? advanceFollowFocus(prev, raw, focusDtMs, AUTO_FOLLOW_PARAMS)
-								: raw;
-							smoothedAutoFocusRef.current = smoothed;
-							targetFocus = smoothed;
-						} else if (isZoomingIn) {
-							// Zoom-in: track cursor directly so zoom always aims at the current position;
-							// keep ref in sync to avoid a snap when full-zoom begins.
-							smoothedAutoFocusRef.current = raw;
-						} else {
-							// Zoom-out: keep smoothing for continuity to avoid a snap at zoom-out start.
-							const prev = smoothedAutoFocusRef.current ?? raw;
-							const smoothed = focusAnimating
-								? advanceFollowFocus(prev, raw, focusDtMs, AUTO_FOLLOW_PARAMS)
-								: raw;
-							smoothedAutoFocusRef.current = smoothed;
-							targetFocus = smoothed;
-						}
+						const prev = smoothedAutoFocusRef.current ?? raw;
+						const smoothed = focusAnimating
+							? advanceFollowFocus(prev, raw, focusDtMs, AUTO_FOLLOW_PARAMS)
+							: raw;
+						smoothedAutoFocusRef.current = smoothed;
+						targetFocus = smoothed;
 					} else if (region.focusMode !== "auto") {
 						smoothedAutoFocusRef.current = null;
 					}
-					prevTargetProgressRef.current = targetProgress;
 
 					// Connected zoom transitions: pan between adjacent regions.
 					if (transition) {
