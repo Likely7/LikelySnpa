@@ -2,9 +2,14 @@ import fs from "node:fs/promises";
 import { fixParsedWebmDuration } from "@fix-webm-duration/fix";
 import { WebmFile } from "@fix-webm-duration/parser";
 
+const MAX_WHOLE_FILE_WEBM_PATCH_BYTES = 2 * 1024 * 1024 * 1024 - 1;
+
 export type DurationPatchResult =
 	| { patched: true }
-	| { patched: false; reason: "no-section" | "already-valid" | "io-error" | "internal" };
+	| {
+			patched: false;
+			reason: "no-section" | "already-valid" | "too-large" | "io-error" | "internal";
+	  };
 
 /**
  * Patch the WebM Duration header on a finalized recording file.
@@ -25,6 +30,14 @@ export async function patchWebmDurationOnDisk(
 	durationMs: number,
 ): Promise<DurationPatchResult> {
 	try {
+		const stat = await fs.stat(filePath);
+		if (stat.size > MAX_WHOLE_FILE_WEBM_PATCH_BYTES) {
+			console.warn(
+				`[webm-duration] skipping whole-file duration patch for ${filePath}: ${stat.size} bytes exceeds ${MAX_WHOLE_FILE_WEBM_PATCH_BYTES}`,
+			);
+			return { patched: false, reason: "too-large" };
+		}
+
 		const fileBytes = await fs.readFile(filePath);
 		const webm = new WebmFile(new Uint8Array(fileBytes));
 

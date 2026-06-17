@@ -54,6 +54,8 @@ import {
 	getRecordingPackagePaths,
 	isRecordingPackagePath,
 	normalizeRecordingPackageManifest,
+	RECORDING_PACKAGE_LEGACY_WEBCAM_VIDEO,
+	RECORDING_PACKAGE_WEBCAM_VIDEO,
 	resolveRecordingOutputPathInDirectory,
 } from "./recordingPackage";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
@@ -510,6 +512,7 @@ const NATIVE_WINDOWS_CAPTURE_STOP_TIMEOUT_MS = 15_000;
 let nativeMacCaptureProcess: ChildProcessWithoutNullStreams | null = null;
 let nativeMacCaptureOutput = "";
 let nativeMacCaptureTargetPath: string | null = null;
+let nativeMacCaptureWebcamTargetPath: string | null = null;
 let nativeMacCaptureDiagnostics: Record<string, unknown> | null = null;
 let nativeMacCaptureRecordingId: number | null = null;
 let nativeMacCaptureBounds: Rectangle | null = null;
@@ -1553,18 +1556,22 @@ async function loadRecordingPackageSession(packageDir: string): Promise<Recordin
 			return null;
 		}
 
-		const webcamVideoPath = path.join(resolvedPackageDir, "webcam.webm");
-		let hasWebcam = false;
-		try {
-			const webcamStats = await fs.stat(webcamVideoPath);
-			hasWebcam = webcamStats.isFile();
-		} catch {
-			hasWebcam = false;
+		let webcamVideoPath: string | undefined;
+		for (const childName of [
+			RECORDING_PACKAGE_WEBCAM_VIDEO,
+			RECORDING_PACKAGE_LEGACY_WEBCAM_VIDEO,
+		]) {
+			const candidatePath = path.join(resolvedPackageDir, childName);
+			const webcamStats = await fs.stat(candidatePath).catch(() => null);
+			if (webcamStats?.isFile()) {
+				webcamVideoPath = candidatePath;
+				break;
+			}
 		}
 
 		session = {
 			screenVideoPath,
-			...(hasWebcam ? { webcamVideoPath } : {}),
+			...(webcamVideoPath ? { webcamVideoPath } : {}),
 			createdAt: Date.now(),
 		};
 		const recoveredManifest = buildRecordingPackageManifest(session, "recoverable");
@@ -2019,6 +2026,7 @@ export function registerIpcHandlers(
 				await writeRecordingSessionManifest(
 					{
 						screenVideoPath: outputPath,
+						...(request.webcam.enabled ? { webcamVideoPath: webcamOutputPath } : {}),
 						createdAt: recordingId,
 						cursorCaptureMode,
 					},
@@ -2171,13 +2179,13 @@ export function registerIpcHandlers(
 				},
 				webcam: {
 					...request.webcam,
-					enabled: false,
 				},
 				cursor: {
 					mode: cursorCaptureMode,
 				},
 				outputs: {
 					screenPath: outputPath,
+					...(request.webcam.enabled ? { webcamPath: packagePaths.webcamVideoPath } : {}),
 					manifestPath: packagePaths.manifestPath,
 				},
 			};
@@ -2202,6 +2210,9 @@ export function registerIpcHandlers(
 			);
 			nativeMacCaptureOutput = "";
 			nativeMacCaptureTargetPath = outputPath;
+			nativeMacCaptureWebcamTargetPath = request.webcam.enabled
+				? packagePaths.webcamVideoPath
+				: null;
 			nativeMacCaptureDiagnostics = null;
 			nativeMacCaptureRecordingId = recordingId;
 			nativeMacCaptureBounds = null;
@@ -2255,6 +2266,7 @@ export function registerIpcHandlers(
 			nativeMacCaptureProcess?.kill();
 			nativeMacCaptureProcess = null;
 			nativeMacCaptureTargetPath = null;
+			nativeMacCaptureWebcamTargetPath = null;
 			nativeMacCaptureDiagnostics = null;
 			nativeMacCaptureRecordingId = null;
 			nativeMacCaptureBounds = null;
@@ -2409,16 +2421,17 @@ export function registerIpcHandlers(
 			}
 			let webcamVideoPath: string | undefined;
 			if (preferredWebcamPath) {
-				try {
-					await fs.access(preferredWebcamPath, fsConstants.R_OK);
+				const webcamStats = await fs.stat(preferredWebcamPath).catch(() => null);
+				if (webcamStats?.isFile() && webcamStats.size > 0) {
 					webcamVideoPath = preferredWebcamPath;
-				} catch {
-					webcamVideoPath = undefined;
 				}
 			}
-			const session: RecordingSession = webcamVideoPath
-				? { screenVideoPath, webcamVideoPath, createdAt: recordingId, cursorCaptureMode }
-				: { screenVideoPath, createdAt: recordingId, cursorCaptureMode };
+			const session: RecordingSession = {
+				screenVideoPath,
+				...(webcamVideoPath ? { webcamVideoPath } : {}),
+				createdAt: recordingId,
+				cursorCaptureMode,
+			};
 			setCurrentRecordingSessionState(session);
 			currentProjectPath = null;
 
@@ -2459,6 +2472,7 @@ export function registerIpcHandlers(
 
 		const proc = nativeMacCaptureProcess;
 		const preferredPath = nativeMacCaptureTargetPath;
+		const preferredWebcamPath = nativeMacCaptureWebcamTargetPath;
 		const recordingId = nativeMacCaptureRecordingId ?? Date.now();
 		const cursorCaptureMode = nativeMacCursorCaptureMode;
 
@@ -2484,7 +2498,7 @@ export function registerIpcHandlers(
 			if (discard) {
 				pendingCursorRecordingData = null;
 				await endLiveCursorTelemetry(null);
-				await removeRecordingArtifacts(screenVideoPath);
+				await removeRecordingArtifacts(screenVideoPath, preferredWebcamPath);
 				return { success: true, discarded: true };
 			}
 
@@ -2494,8 +2508,17 @@ export function registerIpcHandlers(
 				await writePendingCursorTelemetry(screenVideoPath);
 			}
 
+			let webcamVideoPath: string | undefined;
+			if (preferredWebcamPath) {
+				const webcamStats = await fs.stat(preferredWebcamPath).catch(() => null);
+				if (webcamStats?.isFile() && webcamStats.size > 0) {
+					webcamVideoPath = preferredWebcamPath;
+				}
+			}
+
 			const session: RecordingSession = {
 				screenVideoPath,
+				...(webcamVideoPath ? { webcamVideoPath } : {}),
 				createdAt: recordingId,
 				cursorCaptureMode,
 			};
@@ -2519,6 +2542,7 @@ export function registerIpcHandlers(
 		} finally {
 			nativeMacCaptureProcess = null;
 			nativeMacCaptureTargetPath = null;
+			nativeMacCaptureWebcamTargetPath = null;
 			nativeMacCaptureRecordingId = null;
 			nativeMacCaptureBounds = null;
 			nativeMacCursorOffsetMs = 0;
@@ -3060,6 +3084,32 @@ export function registerIpcHandlers(
 			return {
 				success: false,
 				message: "Failed to read binary file",
+				error: String(error),
+			};
+		}
+	});
+
+	ipcMain.handle("stat-file", async (_, filePath: string) => {
+		try {
+			const normalizedPath = await approveReadableVideoPath(filePath);
+			if (!normalizedPath) {
+				return {
+					success: false,
+					error: "File path is not approved or is not a supported video file",
+				};
+			}
+
+			const stats = await fs.stat(normalizedPath);
+			return {
+				success: true,
+				path: normalizedPath,
+				size: stats.size,
+				isFile: stats.isFile(),
+			};
+		} catch (error) {
+			console.error("Failed to stat file:", error);
+			return {
+				success: false,
 				error: String(error),
 			};
 		}

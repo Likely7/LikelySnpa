@@ -117,6 +117,7 @@ import VideoPlayback, { VideoPlaybackRef } from "./VideoPlayback";
 
 /** Single Sonner slot so auto-caption phases update in place instead of stacking. */
 const AUTO_CAPTION_PROGRESS_TOAST_ID = "auto-caption-progress";
+const MAX_EDITOR_WEBCAM_SIDECAR_BYTES = 2 * 1024 * 1024 * 1024 - 1;
 
 function isClickInteractionType(interactionType: string | null | undefined) {
 	return (
@@ -125,6 +126,34 @@ function isClickInteractionType(interactionType: string | null | undefined) {
 		interactionType === "right-click" ||
 		interactionType === "middle-click"
 	);
+}
+
+async function resolveUsableWebcamSourcePath(
+	webcamSourcePath: string | null,
+): Promise<string | null> {
+	if (!webcamSourcePath) {
+		return null;
+	}
+
+	if (!window.electronAPI?.statFile) {
+		return webcamSourcePath;
+	}
+
+	const stat = await window.electronAPI.statFile(webcamSourcePath);
+	if (
+		stat.success &&
+		stat.isFile &&
+		typeof stat.size === "number" &&
+		stat.size > MAX_EDITOR_WEBCAM_SIDECAR_BYTES
+	) {
+		toast.warning("Webcam sidecar skipped", {
+			description:
+				"The webcam recording is too large for safe preview, so the main screen video was opened without it.",
+		});
+		return null;
+	}
+
+	return webcamSourcePath;
 }
 
 interface ExportDiagnostics {
@@ -369,7 +398,9 @@ export default function VideoEditor() {
 				return false;
 			}
 			const sourcePath = projectMedia.screenVideoPath;
-			const webcamSourcePath = projectMedia.webcamVideoPath ?? null;
+			const webcamSourcePath = await resolveUsableWebcamSourcePath(
+				projectMedia.webcamVideoPath ?? null,
+			);
 			const projectWebcamStartOffsetMs = projectMedia.webcamStartOffsetMs ?? 0;
 			const projectCursorCaptureMode = projectMedia.cursorCaptureMode ?? null;
 			const normalizedEditor = normalizeProjectEditor(project.editor);
@@ -563,9 +594,9 @@ export default function VideoEditor() {
 				if (currentSessionResult.success && currentSessionResult.session) {
 					const session = currentSessionResult.session;
 					const sourcePath = fromFileUrl(session.screenVideoPath);
-					const webcamSourcePath = session.webcamVideoPath
-						? fromFileUrl(session.webcamVideoPath)
-						: null;
+					const webcamSourcePath = await resolveUsableWebcamSourcePath(
+						session.webcamVideoPath ? fromFileUrl(session.webcamVideoPath) : null,
+					);
 					setVideoSourcePath(sourcePath);
 					setVideoPath(toFileUrl(sourcePath));
 					setWebcamVideoSourcePath(webcamSourcePath);
@@ -815,9 +846,9 @@ export default function VideoEditor() {
 			if (sessionResult.success && sessionResult.session) {
 				const session = sessionResult.session;
 				const sourcePath = fromFileUrl(session.screenVideoPath);
-				const webcamSourcePath = session.webcamVideoPath
-					? fromFileUrl(session.webcamVideoPath)
-					: null;
+				const webcamSourcePath = await resolveUsableWebcamSourcePath(
+					session.webcamVideoPath ? fromFileUrl(session.webcamVideoPath) : null,
+				);
 				setVideoSourcePath(sourcePath);
 				setVideoPath(toFileUrl(sourcePath));
 				setWebcamVideoSourcePath(webcamSourcePath);
@@ -2577,14 +2608,18 @@ export default function VideoEditor() {
 				<div className="flex-1 min-h-0 relative">
 					<EditorEmptyState
 						onVideoImported={(path, session) => {
-							const sourcePath = session?.screenVideoPath ?? path;
-							const webcamSourcePath = session?.webcamVideoPath ?? null;
-							setVideoPath(toFileUrl(sourcePath));
-							setVideoSourcePath(sourcePath);
-							setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
-							setWebcamVideoSourcePath(webcamSourcePath);
-							setWebcamStartOffsetMs(session?.webcamStartOffsetMs ?? 0);
-							setRecordingCursorCaptureMode(session?.cursorCaptureMode ?? null);
+							void (async () => {
+								const sourcePath = session?.screenVideoPath ?? path;
+								const webcamSourcePath = await resolveUsableWebcamSourcePath(
+									session?.webcamVideoPath ?? null,
+								);
+								setVideoPath(toFileUrl(sourcePath));
+								setVideoSourcePath(sourcePath);
+								setWebcamVideoPath(webcamSourcePath ? toFileUrl(webcamSourcePath) : null);
+								setWebcamVideoSourcePath(webcamSourcePath);
+								setWebcamStartOffsetMs(session?.webcamStartOffsetMs ?? 0);
+								setRecordingCursorCaptureMode(session?.cursorCaptureMode ?? null);
+							})();
 						}}
 						onProjectOpened={async (project, path) => {
 							const restored = await applyLoadedProject(project, path);

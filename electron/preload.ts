@@ -172,6 +172,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	readBinaryFile: (filePath: string) => {
 		return ipcRenderer.invoke("read-binary-file", filePath);
 	},
+	statFile: (filePath: string) => {
+		return ipcRenderer.invoke("stat-file", filePath);
+	},
 	preparePreviewAudioTrack: (filePath: string) => {
 		return ipcRenderer.invoke("prepare-preview-audio-track", filePath);
 	},

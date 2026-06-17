@@ -19,7 +19,7 @@ describe("recording package paths", () => {
 			path.join("/recordings", "recording-123.likelysnap", "screen.mp4"),
 		);
 		expect(paths.webcamVideoPath).toBe(
-			path.join("/recordings", "recording-123.likelysnap", "webcam.webm"),
+			path.join("/recordings", "recording-123.likelysnap", "webcam.mp4"),
 		);
 		expect(paths.cursorTelemetryPath).toBe(
 			path.join("/recordings", "recording-123.likelysnap", "cursor.json"),
@@ -30,6 +30,12 @@ describe("recording package paths", () => {
 		expect(resolveRecordingOutputPathInDirectory("recording-123.likelysnap/screen.mp4", "/r")).toBe(
 			path.join("/r", "recording-123.likelysnap", "screen.mp4"),
 		);
+		expect(resolveRecordingOutputPathInDirectory("recording-123.likelysnap/webcam.mp4", "/r")).toBe(
+			path.join("/r", "recording-123.likelysnap", "webcam.mp4"),
+		);
+		expect(
+			resolveRecordingOutputPathInDirectory("recording-123.likelysnap/webcam.webm", "/r"),
+		).toBe(path.join("/r", "recording-123.likelysnap", "webcam.webm"));
 		expect(resolveRecordingOutputPathInDirectory("recording-123.webm", "/r")).toBe(
 			path.join("/r", "recording-123.webm"),
 		);
@@ -70,7 +76,7 @@ describe("recording package paths", () => {
 	it("round-trips package manifest relative media paths to absolute session paths", () => {
 		const packageDir = path.join("/r", "recording-123.likelysnap");
 		const screenVideoPath = path.join(packageDir, "screen.mp4");
-		const webcamVideoPath = path.join(packageDir, "webcam.webm");
+		const webcamVideoPath = path.join(packageDir, "webcam.mp4");
 		const manifest = buildRecordingPackageManifest(
 			{
 				screenVideoPath,
@@ -87,7 +93,7 @@ describe("recording package paths", () => {
 			createdAt: 123,
 			media: {
 				screenVideoPath: "screen.mp4",
-				webcamVideoPath: "webcam.webm",
+				webcamVideoPath: "webcam.mp4",
 				webcamStartOffsetMs: 250,
 				cursorTelemetryPath: "cursor.json",
 				cursorCaptureMode: "editable-overlay",
@@ -104,6 +110,29 @@ describe("recording package paths", () => {
 			webcamVideoPath,
 			webcamStartOffsetMs: 250,
 			cursorCaptureMode: "editable-overlay",
+			createdAt: 123,
+		});
+	});
+
+	it("keeps legacy package manifests with webcam.webm loadable", () => {
+		const packageDir = path.join("/r", "recording-123.likelysnap");
+		const manifest = {
+			schemaVersion: 1,
+			createdAt: 123,
+			brand: "LikelySnap",
+			media: {
+				screenVideoPath: "screen.mp4",
+				webcamVideoPath: "webcam.webm",
+				cursorTelemetryPath: "cursor.json",
+			},
+			recording: {
+				status: "ready",
+			},
+		};
+
+		expect(normalizeRecordingPackageManifest(manifest, packageDir)).toEqual({
+			screenVideoPath: path.join(packageDir, "screen.mp4"),
+			webcamVideoPath: path.join(packageDir, "webcam.webm"),
 			createdAt: 123,
 		});
 	});

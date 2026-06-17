@@ -10,7 +10,8 @@
 - Current product name: `LikelySnap`
 - Current npm package name: `likelysnap`
 - Current Electron appId: `com.likelysnap.app`
-- Latest local checkpoint before native webcam long-recording work: `f77d0b1 docs: align handoff with cursor follow status`
+- Latest local checkpoint before native webcam long-recording work: `7c59ac4 fix: stabilize auto zoom focus model`
+- Archive before native webcam sidecar work: `archive/before-native-webcam-sidecar-20260617-131845`
 
 ## Environment Notes
 
@@ -22,7 +23,8 @@
 ## Confirmed Code Facts
 
 - macOS native recording writes MP4 with `AVAssetWriter`; it is already a disk-writing path, not renderer-memory-first.
-- macOS webcam sidecar now streams through the renderer `MediaRecorder` into main-process file streams instead of returning one full in-memory blob.
+- macOS native webcam sidecar now records in the ScreenCaptureKit helper with `AVCaptureSession + AVAssetWriter` and writes package-local `webcam.mp4`.
+- Windows native webcam sidecar now uses the WGC helper's Media Foundation/DirectShow path and writes package-local `webcam.mp4`; renderer webcam recording is no longer used on the native Windows path.
 - Cursor telemetry now creates a package-local `cursor.json` file at recording start and refreshes it in throttled snapshots, with final corrected telemetry written at stop. Legacy loose recordings still use `.cursor.json`.
 - Session manifests are now created at recording start and updated after stop/attach. New packages use `manifest.json`; legacy loose recordings still use `.session.json`.
 - Browser fallback uses `MediaRecorder` and has a streaming-to-disk wrapper, with in-memory allowed only when no file-backed stream is requested.
@@ -36,9 +38,12 @@
 - macOS native window recordings now use ScreenCaptureKit-reported window capture bounds for editable cursor normalization, avoiding display-bounds offset in cursor-follow zoom.
 - User retest after this fix reported the cursor-follow behavior is close enough to continue; treat cursor-follow zoom as implemented unless a new concrete offset sample appears.
 - New project files use `.likelysnap`; legacy `.openscreen` project files remain loadable.
-- New recordings now write into `recording-<id>.likelysnap/` package directories with `screen.mp4`, optional `webcam.webm`, `cursor.json`, and `manifest.json`.
+- New native recordings now write into `recording-<id>.likelysnap/` package directories with `screen.mp4`, optional `webcam.mp4`, `cursor.json`, and `manifest.json`. Browser fallback and legacy packages may still use `webcam.webm`.
 - A real ~32 minute macOS test produced healthy `screen.mp4` but a ~4 GB `webcam.webm`; stop-time WebM duration patch failed with `ERR_FS_FILE_TOO_LARGE`, and the editor could freeze when mounting that sidecar.
-- Long-recording direction is now documented in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: native `webcam.mp4` sidecars on macOS/Windows, bounded WebM fallback, sidecar degradation in editor, and NLE-style large media handling.
+- Long-recording direction is now implemented and documented in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: native `webcam.mp4` sidecars on macOS/Windows, bounded WebM fallback, sidecar degradation in editor, and NLE-style large media handling.
+- Stop/finalize paths no longer whole-file patch WebM sidecars over the 2 GB safe threshold.
+- Windows native stop/finalize no longer reads the main `screen.mp4` into JS memory to repackage a webcam sidecar.
+- Editor open paths now stat webcam sidecars and skip unsafe files over the 2 GB threshold, allowing the main screen video to open without the webcam.
 - Package manifests use relative paths and can be reopened after moving the package.
 - Opening a `.likelysnap` package through the video picker/project picker resolves the package session, including webcam path and webcam offset.
 - If `manifest.json` is missing, package open/recovery can rebuild a recoverable manifest from package files.
@@ -50,8 +55,9 @@
 - The user can choose a recording directory from the HUD before recording.
 - macOS source audio/video sync is instrumented in the native helper and persisted to the session manifest.
 - macOS native recordings with webcam now persist a webcam start offset and apply it in editor preview plus MP4/GIF export.
-- New package recording has passed type, lint, targeted unit tests, and build verification; it still needs real macOS recording validation on the user's machine.
+- New package recording has passed type, targeted unit tests, and Swift helper typecheck/build verification; it still needs real macOS recording validation on the user's machine.
 - Export audio/video sync diagnostics have not yet been instrumented or proven.
 - Cursor telemetry is live-written, and package open can recover missing manifests; interrupted-session UX still needs real-world validation.
 - Cursor-follow zoom has targeted automated coverage and is now being refined for product feel: upstream behavior was confirmed to mix tight zoom-in tracking with smoother full-zoom tracking, so LikelySnap is moving toward stable manual auto-zoom by default plus explicit per-zoom cursor-follow.
-- Current highest long-recording risk is webcam sidecar handling, not the `.likelysnap` package itself. Main screen MP4 can remain modest while webcam WebM can grow into multi-GB files and block editor startup.
+- Current highest remaining long-recording risk is export and multi-hour editor scale, not recording package write-out. Main screen MP4 can remain large but referenced on disk; webcam sidecars are now native MP4 for native capture and unsafe legacy WebM files are skipped at editor open.
+- Windows native webcam code is implemented but not truth-tested on Windows hardware from this macOS machine.

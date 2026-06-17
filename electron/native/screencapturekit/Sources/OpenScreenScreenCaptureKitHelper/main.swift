@@ -59,6 +59,7 @@ struct RecordingRequest: Decodable {
 
 	struct Outputs: Decodable {
 		let screenPath: String
+		let webcamPath: String?
 		let manifestPath: String?
 	}
 
@@ -158,6 +159,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 	private var microphoneAudioSamplesDroppedBeforeWriterStart = 0
 	private var microphoneAudioSamplesDroppedInputNotReady = 0
 	private var microphoneAudioAppendFailures = 0
+	private var webcamRecorder: NativeWebcamRecorder?
 
 	init(request: RecordingRequest) {
 		self.request = request
@@ -190,6 +192,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			try stream.addStreamOutput(self, type: microphoneOutputType, sampleHandlerQueue: sampleQueue)
 		}
 		try setupWriter()
+		try setupWebcamRecorder()
 
 		self.stream = stream
 		emit(["event": "ready", "schemaVersion": 1])
@@ -219,6 +222,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		}
 
 		await finishWriter()
+		await webcamRecorder?.stop()
 	}
 
 	func pause() {
@@ -309,6 +313,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			writer.startWriting()
 			writer.startSession(atSourceTime: presentationTime)
 			didStartWriting = true
+			webcamRecorder?.start()
 		}
 
 		if videoInput.isReadyForMoreMediaData {
@@ -360,6 +365,24 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 				}
 			default:
 				throw HelperError.permissionDenied("Microphone permission is required for native microphone capture.")
+			}
+		}
+
+		if request.webcam.enabled {
+			switch AVCaptureDevice.authorizationStatus(for: .video) {
+			case .authorized:
+				break
+			case .notDetermined:
+				let semaphore = DispatchSemaphore(value: 0)
+				AVCaptureDevice.requestAccess(for: .video) { _ in
+					semaphore.signal()
+				}
+				let waitResult = semaphore.wait(timeout: .now() + 30)
+				if waitResult == .timedOut || AVCaptureDevice.authorizationStatus(for: .video) != .authorized {
+					throw HelperError.permissionDenied("Camera permission is required for native webcam capture.")
+				}
+			default:
+				throw HelperError.permissionDenied("Camera permission is required for native webcam capture.")
 			}
 		}
 	}
@@ -476,6 +499,33 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		if nativeMicrophoneEnabled {
 			microphoneAudioInput = try addAudioInput(to: writer, bitRate: 128_000)
 		}
+	}
+
+	private func setupWebcamRecorder() throws {
+		guard request.webcam.enabled else {
+			return
+		}
+		guard let webcamPath = request.outputs.webcamPath, !webcamPath.isEmpty else {
+			emit([
+				"event": "warning",
+				"code": "webcam-output-missing",
+				"message": "Native webcam capture requested without outputs.webcamPath.",
+			])
+			return
+		}
+
+		let recorder = try NativeWebcamRecorder(request: request.webcam, outputPath: webcamPath)
+		webcamRecorder = recorder
+		try recorder.prepare()
+		emit([
+			"event": "webcam-format",
+			"schemaVersion": 1,
+			"width": recorder.outputWidth,
+			"height": recorder.outputHeight,
+			"fps": recorder.outputFps,
+			"deviceName": recorder.deviceName,
+			"path": webcamPath,
+		])
 	}
 
 	private func finishWriter() async {
@@ -819,6 +869,195 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		}
 
 		return nil
+	}
+}
+
+@available(macOS 13.0, *)
+final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+	private let request: RecordingRequest.Webcam
+	private let outputPath: String
+	private let session = AVCaptureSession()
+	private let queue = DispatchQueue(label: "app.openscreen.sck-helper.webcam")
+	private var writer: AVAssetWriter?
+	private var videoInput: AVAssetWriterInput?
+	private var didStartWriting = false
+	private var isStopping = false
+	private var firstSampleTime: CMTime?
+	private(set) var outputWidth = 1280
+	private(set) var outputHeight = 720
+	private(set) var outputFps = 30
+	private(set) var deviceName = "Camera"
+
+	init(request: RecordingRequest.Webcam, outputPath: String) {
+		self.request = request
+		self.outputPath = outputPath
+	}
+
+	func prepare() throws {
+		guard let device = resolveDevice() else {
+			throw HelperError.sourceNotFound("No webcam device found for native webcam capture.")
+		}
+		deviceName = device.localizedName
+
+		session.beginConfiguration()
+		session.sessionPreset = .hd1280x720
+		let input = try AVCaptureDeviceInput(device: device)
+		guard session.canAddInput(input) else {
+			session.commitConfiguration()
+			throw HelperError.writerSetupFailed("Unable to add webcam input.")
+		}
+		session.addInput(input)
+
+		let output = AVCaptureVideoDataOutput()
+		output.alwaysDiscardsLateVideoFrames = true
+		output.videoSettings = [
+			kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+		]
+		output.setSampleBufferDelegate(self, queue: queue)
+		guard session.canAddOutput(output) else {
+			session.commitConfiguration()
+			throw HelperError.writerSetupFailed("Unable to add webcam output.")
+		}
+		session.addOutput(output)
+		session.commitConfiguration()
+
+		try configureDevice(device)
+		try setupWriter()
+	}
+
+	func start() {
+		queue.async {
+			if !self.session.isRunning {
+				self.session.startRunning()
+			}
+		}
+	}
+
+	func stop() async {
+		await withCheckedContinuation { continuation in
+			queue.async {
+				if self.isStopping {
+					continuation.resume()
+					return
+				}
+				self.isStopping = true
+				if self.session.isRunning {
+					self.session.stopRunning()
+				}
+				self.videoInput?.markAsFinished()
+				guard let writer = self.writer, self.didStartWriting else {
+					continuation.resume()
+					return
+				}
+				writer.finishWriting {
+					continuation.resume()
+				}
+			}
+		}
+	}
+
+	func captureOutput(
+		_ output: AVCaptureOutput,
+		didOutput sampleBuffer: CMSampleBuffer,
+		from connection: AVCaptureConnection
+	) {
+		guard !isStopping, CMSampleBufferDataIsReady(sampleBuffer), let writer, let videoInput else {
+			return
+		}
+
+		let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
+		if !didStartWriting {
+			firstSampleTime = pts
+			writer.startWriting()
+			writer.startSession(atSourceTime: .zero)
+			didStartWriting = true
+		}
+
+		guard let firstSampleTime,
+			let retimed = retime(sampleBuffer, subtracting: firstSampleTime),
+			videoInput.isReadyForMoreMediaData
+		else {
+			return
+		}
+		_ = videoInput.append(retimed)
+	}
+
+	private func resolveDevice() -> AVCaptureDevice? {
+		let devices = AVCaptureDevice.devices(for: .video)
+		if let deviceId = request.deviceId?.trimmingCharacters(in: .whitespacesAndNewlines),
+			!deviceId.isEmpty,
+			let match = devices.first(where: { $0.uniqueID == deviceId })
+		{
+			return match
+		}
+		if let deviceName = request.deviceName?.trimmingCharacters(in: .whitespacesAndNewlines),
+			!deviceName.isEmpty,
+			let match = devices.first(where: { $0.localizedName == deviceName })
+		{
+			return match
+		}
+		return AVCaptureDevice.default(for: .video) ?? devices.first
+	}
+
+	private func configureDevice(_ device: AVCaptureDevice) throws {
+		let requestedFps = request.fps > 0 ? request.fps : 30
+		outputFps = min(max(1, requestedFps), 30)
+
+		let requestedWidth = request.width > 0 ? request.width : 1280
+		let requestedHeight = request.height > 0 ? request.height : 720
+		outputWidth = max(2, min(1280, requestedWidth))
+		outputHeight = max(2, min(720, requestedHeight))
+		outputWidth -= outputWidth % 2
+		outputHeight -= outputHeight % 2
+
+		try device.lockForConfiguration()
+		device.activeVideoMinFrameDuration = CMTime(value: 1, timescale: CMTimeScale(outputFps))
+		device.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: CMTimeScale(outputFps))
+		device.unlockForConfiguration()
+	}
+
+	private func setupWriter() throws {
+		let outputUrl = URL(fileURLWithPath: outputPath)
+		try? FileManager.default.removeItem(at: outputUrl)
+		try FileManager.default.createDirectory(
+			at: outputUrl.deletingLastPathComponent(),
+			withIntermediateDirectories: true
+		)
+		let writer = try AVAssetWriter(outputURL: outputUrl, fileType: .mp4)
+		let settings: [String: Any] = [
+			AVVideoCodecKey: AVVideoCodecType.h264,
+			AVVideoWidthKey: outputWidth,
+			AVVideoHeightKey: outputHeight,
+			AVVideoCompressionPropertiesKey: [
+				AVVideoAverageBitRateKey: 2_000_000,
+				AVVideoExpectedSourceFrameRateKey: outputFps,
+			],
+		]
+		let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
+		input.expectsMediaDataInRealTime = true
+		guard writer.canAdd(input) else {
+			throw HelperError.writerSetupFailed("Unable to add webcam H.264 input.")
+		}
+		writer.add(input)
+		self.writer = writer
+		self.videoInput = input
+	}
+
+	private func retime(_ sampleBuffer: CMSampleBuffer, subtracting offset: CMTime) -> CMSampleBuffer? {
+		var timing = CMSampleTimingInfo(
+			duration: CMSampleBufferGetDuration(sampleBuffer),
+			presentationTimeStamp: CMTimeSubtract(CMSampleBufferGetPresentationTimeStamp(sampleBuffer), offset),
+			decodeTimeStamp: .invalid
+		)
+		var retimed: CMSampleBuffer?
+		let status = CMSampleBufferCreateCopyWithNewTiming(
+			allocator: kCFAllocatorDefault,
+			sampleBuffer: sampleBuffer,
+			sampleTimingEntryCount: 1,
+			sampleTimingArray: &timing,
+			sampleBufferOut: &retimed
+		)
+		return status == noErr ? retimed : sampleBuffer
 	}
 }
 

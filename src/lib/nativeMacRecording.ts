@@ -44,6 +44,7 @@ export type NativeMacRecordingRequest = {
 	};
 	outputs: {
 		screenPath: string;
+		webcamPath?: string;
 		manifestPath?: string;
 	};
 };
@@ -64,6 +65,7 @@ export type NativeMacHelperRecordingStartedEvent = {
 export type NativeMacHelperRecordingStoppedEvent = {
 	event: "recording-stopped";
 	screenPath: string;
+	webcamPath?: string;
 };
 
 export type NativeMacHelperRecordingDiagnosticsEvent = {

@@ -519,7 +519,7 @@ int main(int argc, char* argv[]) {
     MFEncoder webcamEncoder;
     if (writeSeparateWebcam) {
         const int webcamPixels = std::max(1, webcamCapture.width()) * std::max(1, webcamCapture.height());
-        const int webcamBitrate = webcamPixels >= 1280 * 720 ? 8'000'000 : 4'000'000;
+        const int webcamBitrate = webcamPixels >= 1280 * 720 ? 2'500'000 : 1'500'000;
         if (!webcamEncoder.initialize(
                 utf8ToWide(config.webcamOutputPath),
                 webcamCapture.width(),

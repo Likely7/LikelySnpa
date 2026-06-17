@@ -28,4 +28,6 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Confirm missing-manifest recovery rebuilds a usable package session.
 - Confirm editor preview and exported MP4 stay in sync.
 - Validate the updated auto zoom focus model: normal auto zoom suggestions should default to stable manual focus, suggestions created from held mouse-button spans should default to cursor-follow, and every selected zoom must remain individually switchable between Manual and Auto in the settings panel.
-- Implement the long-recording native webcam plan in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`, starting with editor safety guards and then native macOS/Windows webcam sidecars.
+- Validate the implemented long-recording native webcam plan in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: macOS native `webcam.mp4`, Windows native `webcam.mp4`, legacy `webcam.webm` compatibility, and editor-side degradation for huge sidecars.
+- Confirm the existing 4.4 GB `webcam.webm` package opens the main video without freezing by skipping the unsafe webcam sidecar.
+- Keep export durability on the next P1 track: MP4 export still needs streaming/temp-file output before claiming multi-hour export support.

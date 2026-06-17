@@ -8,7 +8,8 @@ import {
 export const RECORDING_PACKAGE_EXTENSION = ".likelysnap";
 export const RECORDING_PACKAGE_MANIFEST = "manifest.json";
 export const RECORDING_PACKAGE_SCREEN_VIDEO = "screen.mp4";
-export const RECORDING_PACKAGE_WEBCAM_VIDEO = "webcam.webm";
+export const RECORDING_PACKAGE_WEBCAM_VIDEO = "webcam.mp4";
+export const RECORDING_PACKAGE_LEGACY_WEBCAM_VIDEO = "webcam.webm";
 export const RECORDING_PACKAGE_CURSOR_TELEMETRY = "cursor.json";
 export const RECORDING_PACKAGE_SCHEMA_VERSION = 1;
 
@@ -16,6 +17,7 @@ const ALLOWED_PACKAGE_CHILDREN = new Set([
 	RECORDING_PACKAGE_MANIFEST,
 	RECORDING_PACKAGE_SCREEN_VIDEO,
 	RECORDING_PACKAGE_WEBCAM_VIDEO,
+	RECORDING_PACKAGE_LEGACY_WEBCAM_VIDEO,
 	RECORDING_PACKAGE_CURSOR_TELEMETRY,
 ]);
 
@@ -283,7 +285,6 @@ export function buildRecoveredRecordingPackageManifest(
 		brand: "LikelySnap",
 		media: {
 			screenVideoPath: RECORDING_PACKAGE_SCREEN_VIDEO,
-			webcamVideoPath: RECORDING_PACKAGE_WEBCAM_VIDEO,
 			cursorTelemetryPath: RECORDING_PACKAGE_CURSOR_TELEMETRY,
 		},
 		recording: {

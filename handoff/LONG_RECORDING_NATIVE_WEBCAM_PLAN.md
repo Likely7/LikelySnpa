@@ -23,6 +23,25 @@ The main screen recording was healthy. The failure was caused by the webcam side
 
 The `.likelysnap` package directory itself is not the bottleneck. The problem is large media handling and long-recording editor architecture.
 
+## Implementation Status
+
+Implemented on 2026-06-17:
+
+- macOS native recordings now request a package-local `webcam.mp4` path and the ScreenCaptureKit helper records webcam video with `AVCaptureSession + AVAssetWriter`.
+- Windows native recordings now pass package-local `webcam.mp4` to the WGC helper and rely on the existing Media Foundation/DirectShow webcam path instead of a renderer `MediaRecorder` sidecar.
+- Native start paths no longer create renderer webcam recorders on macOS or Windows. The renderer only performs permission/device preflight, then releases the preview stream so the native helper can own the camera.
+- Windows stop/finalize no longer reads the native `screen.mp4` back into an `ArrayBuffer` and no longer repackages the recording after stop.
+- New package helpers use `webcam.mp4` as the canonical webcam sidecar while keeping `webcam.webm` as a legacy/fallback package child.
+- Editor package/session loading stats webcam sidecars before mounting them and skips files above the safe 2 GB threshold so the main screen video remains editable.
+- WebM duration patching now refuses whole-file reads above the 2 GB safe threshold.
+- Windows native webcam sidecar bitrate was lowered to editor-appropriate values.
+
+Still requiring real-device validation:
+
+- macOS 20-30+ minute recording with screen, system audio, microphone, native webcam, editable cursor, and auto zoom.
+- Windows real-machine recording with webcam sidecar, because this macOS machine cannot compile or run the Windows WGC helper.
+- Long export durability, because edited MP4 export still needs a streaming/temp-file path before claiming multi-hour export support.
+
 ## Product Contract
 
 LikelySnap should behave like a lightweight NLE for long recordings:
@@ -62,22 +81,21 @@ The editor must treat `manifest.media.webcamVideoPath` as format-agnostic.
 ### macOS
 
 - Keep screen capture on `ScreenCaptureKit + AVAssetWriter`.
-- Move webcam sidecar from renderer `MediaRecorder` to native `AVCaptureSession + AVAssetWriter`.
-- Write package-local `webcam.mp4`.
+- Webcam sidecar now records natively with `AVCaptureSession + AVAssetWriter`.
+- New native recordings write package-local `webcam.mp4`.
 - Limit webcam capture to editor-appropriate settings:
   - target max resolution: 1280x720;
   - target fps: 30;
   - target bitrate: about 1.5-2.5 Mbps.
-- Preserve `webcamStartOffsetMs` in manifest.
 - Emit webcam path/format diagnostics from the helper.
 
 ### Windows
 
 - Keep screen capture on WGC helper.
 - Use the existing Media Foundation webcam capture path already present in `electron/native/wgc-capture`.
-- Ensure Electron passes package-local `webcam.mp4` as `webcamPath`.
-- Ensure stop result returns/attaches the native webcam sidecar directly.
-- Lower native webcam sidecar bitrate from the current high settings (`8 Mbps` for 720p+) to an editor-appropriate target.
+- Electron passes package-local `webcam.mp4` as `webcamPath`.
+- Stop/finalize attaches the native webcam sidecar directly and does not read the main MP4 into memory.
+- Native webcam sidecar bitrate has been lowered from the previous high settings (`8 Mbps` for 720p+) to an editor-appropriate target.
 - Keep DirectShow fallback for virtual cameras.
 
 ### Fallback
@@ -91,7 +109,7 @@ When native webcam capture is unavailable:
 
 ## Immediate Stabilization
 
-Before/while native sidecar work lands:
+Implemented:
 
 1. Add a safe file-size guard around `patchWebmDurationOnDisk`.
 2. Skip WebM duration patch for files over 2 GB.
@@ -123,12 +141,16 @@ The goal is not "files stay tiny"; the goal is "large files remain referenced, s
 - Allow main screen edit when webcam sidecar is skipped.
 - Document the skipped sidecar in diagnostics.
 
+Status: implemented, pending user-facing app verification with the existing 4.4 GB package.
+
 ### Phase 2: Native Webcam Sidecars
 
 - macOS: implement `AVCaptureSession + AVAssetWriter` sidecar in the ScreenCaptureKit helper.
 - Windows: wire the existing native webcam sidecar into the package/session path and lower bitrate.
 - Change new native sidecar filename to `webcam.mp4`.
 - Keep `webcam.webm` as compatibility/fallback.
+
+Status: implemented in code. macOS helper typecheck/build passes locally. Windows code path is implemented but still requires Windows compile/run validation.
 
 ### Phase 3: Long-Recording Editor Architecture
 
@@ -153,4 +175,3 @@ The goal is not "files stay tiny"; the goal is "large files remain referenced, s
 6. No stop/finalize path reads multi-GB media files into memory.
 7. Preview and export still align webcam with the screen timeline.
 8. The app can record for at least 20 minutes with screen, system audio, mic, webcam, editable cursor, and auto zoom enabled.
-

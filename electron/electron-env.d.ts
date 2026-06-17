@@ -230,6 +230,13 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		statFile: (filePath: string) => Promise<{
+			success: boolean;
+			path?: string;
+			size?: number;
+			isFile?: boolean;
+			error?: string;
+		}>;
 		preparePreviewAudioTrack: (filePath: string) => Promise<{
 			success: boolean;
 			path?: string | null;
