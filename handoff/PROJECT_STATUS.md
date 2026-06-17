@@ -15,6 +15,8 @@
 - Latest durable app/settings checkpoint: `7d1a3c2 fix: open app settings in standalone window`
 - Public GitHub cleanup checkpoint: removed obsolete release/build workflows and public README platform packaging instructions; internal build scripts remain in `package.json`.
 - Archive before NLE-style editor architecture work: `archive/before-nle-editor-architecture-20260618-000347`
+- Archive before FFmpeg export pipeline work: `archive/before-export-architecture-pivot-20260618-011443`
+- Current local checkpoint being created on 2026-06-18: staged editor-open, cursor feature restoration, FFmpeg MP4 export, and synchronized docs.
 - App settings checkpoints: `eb0f2c4 feat: add app settings center`, `7d1a3c2 fix: open app settings in standalone window`
 - Archive before app settings center work: `archive/before-app-settings-20260617`
 - Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
@@ -69,13 +71,17 @@
 - If `manifest.json` is missing, package open/recovery can rebuild a recoverable manifest from package files.
 - macOS build metadata now registers `.likelysnap` as a document package type.
 - macOS ARM64 1.0.0 DMG was built with `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --arm64 --config.npmRebuild=false` and copied to `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`. It is ARM64-only, ad-hoc signed, and not notarized.
-- Edited MP4 export currently decodes source media incrementally and renders frames through the WebCodecs/Pixi/canvas export pipeline, but the final MP4 mux target is still `mediabunny` `BufferTarget` in `src/lib/exporter/muxer.ts`. The final export is accumulated in memory as a Blob before `write-export-to-path`; it is not yet a temp-file/streaming muxer.
-- Windows MP4 export currently prefers WebCodecs `prefer-software` before `prefer-hardware` in `src/lib/exporter/videoExporter.ts`, so Windows exports are likely CPU-encoded unless software encode fails and the hardware fallback is used. Frame compositing may use GPU/WebGL, but the H.264 encode preference is software-first on Windows.
-- MP4 export currently uses a fixed 60 FPS target in `src/components/video-editor/VideoEditor.tsx`, which can double frame work for 30 FPS sources and is a likely contributor to slow Windows export.
+- Edited MP4 export now uses `FfmpegVideoExporter` from `src/components/video-editor/VideoEditor.tsx` as the primary MP4 path. The renderer still composites each frame, but final H.264/AAC encode, muxing, and output writing are handled by the main-process FFmpeg service.
+- The FFmpeg MP4 path streams RGBA frames over IPC into FFmpeg `stdin`, writes a temp `.mp4`, and renames it to the final export path after FFmpeg exits successfully. The primary MP4 path no longer creates a final full-export Blob before saving.
+- `@ffmpeg-installer/ffmpeg` is now a runtime dependency. `LIKELYSNAP_FFMPEG_PATH` or `FFMPEG_PATH` can override the bundled/system FFmpeg resolution.
+- Windows MP4 export now has a hardware-first FFmpeg policy when the active FFmpeg exposes a matching encoder: `h264_nvenc` on Windows, `h264_videotoolbox` on macOS, then `libx264`/`h264` fallback. Real Windows GPU behavior still needs hardware validation because the actual encoder set depends on the FFmpeg binary available in that build.
+- MP4 export currently uses a fixed 60 FPS target in `src/components/video-editor/VideoEditor.tsx`, which can double frame work for 30 FPS sources and is a likely contributor to slow Windows export until the FFmpeg path becomes source-aware.
 - A real Windows one-hour recording on a high-end RTX 5070 PC opened but stayed non-interactive for more than five minutes while CPU/GPU/memory utilization stayed low. This points to low-efficiency serialized editor preparation work, not insufficient user hardware.
 - New editor architecture direction is documented in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`: instant timeline open, background waveform/cursor/auto-zoom/proxy jobs, package-local cache indexes, and no heavy analysis on first screen.
 - First NLE-style editor-open pass is implemented locally: editor cursor loading now uses preview-level native bridge data instead of full cursor recording data, the main process caches parsed cursor files, automatic zoom suggestions run in idle time, waveform generation starts in idle time, and editor-open timing logs are emitted.
 - Export still loads full cursor recording data on demand, so the preview downsampling does not reduce final cursor overlay quality.
+- Cursor preview data intentionally omits the full native cursor asset table for speed; cursor rendering now falls back to built-in themed cursor assets so the mouse overlay and mouse settings panel stay visible in editor preview.
+- User tested the current app after the staged editor-open and cursor fallback fixes and reported that the visible functionality has no obvious issue.
 
 ## Current Risk Summary
 
@@ -87,14 +93,14 @@
 - Export audio/video sync diagnostics have not yet been instrumented or proven.
 - Cursor telemetry is live-written, and package open can recover missing manifests; interrupted-session UX still needs real-world validation.
 - Follow Mouse zoom has targeted automated coverage and is now being refined for product feel: upstream behavior was confirmed to mix tight zoom-in tracking with smoother full-zoom tracking, so LikelySnap uses stable fixed-position auto zoom by default plus explicit per-zoom Follow Mouse.
-- Current highest remaining long-recording risk is export and multi-hour editor scale, not recording package write-out. Main screen MP4 can remain large but referenced on disk; webcam sidecars are now native MP4 for native capture and unsafe legacy WebM files are skipped at editor open.
-- Export is still the main multi-hour risk: edited MP4 export does not yet write to a temp file or streaming file target, so very long/high-resolution exports can still pressure renderer/main memory at final mux/save time even though recording itself no longer depends on whole-file renderer buffers.
-- The previous editor-load stall from waveform generation has been addressed architecturally with ranged reads and cache reuse; waveform display is default-on again, and the known ~17 minute package still needs an in-app retest to verify the UI remains responsive while peaks are generated or loaded from cache.
+- Current highest remaining long-recording risk is multi-hour validation and editor/export scaling edges, not recording package write-out. Main screen MP4 can remain large but referenced on disk; webcam sidecars are now native MP4 for native capture and unsafe legacy WebM files are skipped at editor open.
+- MP4 export has moved to the FFmpeg temp-file/streaming path, so the old final Blob save is no longer the primary risk. Remaining export risks are real multi-hour regression, FFmpeg encoder availability per platform/build, fixed 60 FPS work amplification, and the source decoder still loading local files through WebDemuxer for export metadata/decode.
+- The previous editor-load stall from waveform generation has been addressed architecturally with ranged reads and cache reuse; waveform display is default-on again. The known ~17 minute package and subsequent user testing reported the current editor behavior as acceptable after the staged open pass.
 - App settings are implemented and verified at the type/build level, but still need an end-to-end product retest from both entry points: launch HUD gear and editor top-bar gear.
 - Windows native webcam code is implemented and now has a persisted sidecar timeline offset, but it is still not truth-tested on Windows hardware from this macOS machine.
 - Windows x64 packaging still depends on the native WGC helper binaries being built on Windows. Public GitHub release/build automation was removed until the project has a clean LikelySnap-owned release pipeline.
-- Windows export performance has been reviewed at code level only. The next durable fix is to add an explicit export encoder setting (`auto`, `prefer hardware`, `compatibility CPU`), make Windows hardware-first by default when available, expose the actual encoder mode used, and make MP4 mux/save stream to a temp file.
-- Current P0 is to validate and continue the editor-open architecture. The first code pass removes the largest known first-screen cursor/waveform/auto-zoom blockers, but package-local media info/cursor indexes, preview proxies, and streaming export are still open.
+- Windows export performance is now on the FFmpeg path, but still needs real Windows x64 validation with Task Manager/video encode metrics and app-side diagnostics showing the selected encoder.
+- Current P0 is to validate and continue the editor-open/export architecture. The first code pass removes the largest known first-screen cursor/waveform/auto-zoom blockers and MP4 final-Blob export risk, but package-local media info/cursor indexes, preview proxies, source-aware FPS, and export diagnostics are still open.
 
 ## Latest Verification
 
@@ -123,3 +129,4 @@
 - `npx tsc --noEmit` passes after the first NLE editor-open architecture pass.
 - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/lib/cursor/nativeCursor.test.ts src/lib/cursor/cursorPathSmoothing.test.ts` passes after the first NLE editor-open architecture pass.
 - `npm run build-vite` passes after the first NLE editor-open architecture pass.
+- User manually tested the post-optimization app and reported the main functionality looked OK before this documentation/archive checkpoint.

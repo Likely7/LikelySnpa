@@ -79,11 +79,14 @@ Current implementation:
 ## Export Pipeline
 
 - MP4/GIF export lives in `src/lib/exporter/*` and is separate from raw recording. Recording durability does not automatically mean edited export durability.
-- MP4 export uses `StreamingVideoDecoder` to decode frames, `FrameRenderer` to composite zoom/background/webcam/cursor/annotations, WebCodecs `VideoEncoder` for H.264, `AudioProcessor` for audio, and `VideoMuxer` for MP4 muxing.
-- The current MP4 muxer uses `mediabunny` `BufferTarget`, then returns a Blob that the renderer passes to `write-export-to-path`. Final MP4 export output is still memory-backed and is not yet a temp-file/streaming writer.
+- MP4 export now uses `FfmpegVideoExporter` as the primary path from `VideoEditor.tsx`.
+- Renderer compositing stays in LikelySnap: `StreamingVideoDecoder` decodes source frames, `FrameRenderer` composites zoom/background/webcam/cursor/annotations, and the rendered RGBA frames are streamed to the main process.
+- The main process owns the FFmpeg session: `electron/native-bridge/services/ffmpegService.ts` resolves FFmpeg, selects an encoder, receives frame chunks over IPC, writes them to FFmpeg `stdin`, lets FFmpeg mux audio/video into a temporary MP4, then renames the temp file to the final export path.
+- The old WebCodecs + `mediabunny` `BufferTarget` MP4 exporter remains in the codebase as a compatibility path, but it is no longer the primary MP4 export path.
 - A source-copy fast path exists for no-op MP4 exports when dimensions and effects allow it, but normal edited projects with webcam, cursor overlay, zoom, annotations, padding, crop, blur, shadow, trim, or speed changes must re-render and re-encode frame by frame.
-- Windows export currently tries WebCodecs `prefer-software` before `prefer-hardware`; macOS/Linux try hardware first. This makes Windows exports likely CPU-bound until an explicit encoder policy is added.
-- MP4 export currently targets 60 FPS from `VideoEditor.tsx`; source-aware/default export FPS is still a P1 optimization.
+- Windows export now has an explicit FFmpeg hardware-first selection path when FFmpeg exposes the matching encoder. Current implementation chooses `h264_nvenc` for Windows when available and falls back to `libx264`/`h264`.
+- MP4 export currently targets 60 FPS from `VideoEditor.tsx`; source-aware/default export FPS is still a P1 optimization and should be folded into the FFmpeg path.
+- GIF export still uses the legacy renderer/GIF path and is not considered multi-hour durable yet.
 
 ## NLE-Style Editor Direction
 
@@ -93,5 +96,6 @@ LikelySnap must stop treating editor open as a full media-preparation barrier. T
 - Cursor telemetry, waveform peaks, auto zoom suggestions, thumbnails, and proxies should be background jobs.
 - Long recordings need package-local cache/index files so moved `.likelysnap` packages remain self-contained.
 - Preview should eventually use proxy media for long recordings; export should continue to use originals.
+- The export compositor remains in the app, and the MP4 encoder/mux/output path is now FFmpeg-driven and temp-file based.
 - A one-hour package should become interactive within seconds, not minutes.
 - First implementation step is in place: editor cursor loading uses preview-level native bridge data, full cursor data is deferred to export, waveform and auto zoom start in idle time, and editor-open timing logs are emitted.

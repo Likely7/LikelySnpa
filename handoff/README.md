@@ -23,4 +23,5 @@ The central direction is final-product repair, not temporary workaround:
 - cursor telemetry must remain aligned so auto zoom and Follow Mouse do not regress;
 - settings must be persistent, wired to real behavior, and available from both the launch HUD and editor without relying on transparent-overlay modals;
 - app branding and icon assets must come from reproducible project files, not one-off generated output.
-- edited MP4 export is still a known P1 durability/performance area: current muxing returns an in-memory Blob, and Windows export currently prefers CPU/software encoding before hardware fallback.
+- edited MP4 export now uses the FFmpeg frame-streaming path as the primary MP4 backend; GIF export and the old WebCodecs/BufferTarget exporter remain compatibility/legacy paths.
+- long-recording editor open is now staged: preview cursor data, idle waveform preparation, idle auto zoom, and cursor parse caching should keep the editor interactive while background jobs continue.

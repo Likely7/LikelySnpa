@@ -2,13 +2,14 @@
 
 ## P0
 
-1. Validate the first NLE-style editor-open pass on the one-hour Windows `.likelysnap`: editor should become interactive quickly while cursor preview, waveform, and auto zoom preparation continue in the background.
-2. Add package-local `cache/media-info.json` so editor-open can trust persisted media metadata before deeper validation.
-3. Add package-local `cache/cursor-index.json` so preview cursor samples and click/hold spans survive cold app launches without reparsing the full `cursor.json`.
-4. Add video metadata ready timing from `VideoPlayback` and connect it to the `[editor-open]` log story.
-5. Prevent `StreamingVideoDecoder.loadMetadata()` and whole-file `readBinaryFile` paths from running during first-screen editor open.
-6. Add visible editor preparation state for long media: waveform, cursor index, auto zoom suggestions, thumbnails/proxies.
-7. Add preview proxy generation for very long/high-resolution recordings.
+1. Validate the FFmpeg MP4 export path on long real projects on macOS and Windows x64, including audio sync, webcam offset, cursor overlay, zoom, trims, and speed changes.
+2. Validate Windows x64 FFmpeg encoder selection on real NVIDIA/Intel/AMD machines and expose the actual encoder used in UI/diagnostics.
+3. Add package-local `cache/media-info.json` so editor-open can trust persisted media metadata before deeper validation.
+4. Add package-local `cache/cursor-index.json` so preview cursor samples and click/hold spans survive cold app launches without reparsing the full `cursor.json`.
+5. Add video metadata ready timing from `VideoPlayback` and connect it to the `[editor-open]` log story.
+6. Prevent `StreamingVideoDecoder.loadMetadata()` and whole-file `readBinaryFile` paths from running during first-screen editor open. The editor is staged now, but export still uses whole-source WebDemuxer loading and should not leak back into first-screen open.
+7. Add visible editor preparation state for long media: waveform, cursor index, auto zoom suggestions, thumbnails/proxies.
+8. Add preview proxy generation for very long/high-resolution recordings.
 
 ## Existing P0 Validation
 
@@ -25,7 +26,7 @@
 ## P1
 
 1. Add MP4 export sync diagnostics.
-2. Make MP4 export write to a temp file or streaming file target instead of an in-memory `mediabunny` `BufferTarget`; this is required before claiming reliable multi-hour edited exports.
+2. Move any remaining MP4 fallback/export-save paths away from in-memory final Blobs; the primary MP4 path is FFmpeg streaming now, but compatibility paths should stay clearly gated.
 3. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
 4. Add broader automated tests for custom recording directories and interrupted package recovery.
 5. Add real macOS long-recording validation evidence.
@@ -35,8 +36,9 @@
 9. Add Windows CI or documented manual verification for `npm run build:native:win`, `npm run build:win:portable`, and `npm run test:wgc-full:win`.
 10. Consider progressive waveform progress reporting if first-time generation on multi-hour recordings needs a visible percentage instead of the current lightweight skeleton.
 11. Add automated IPC coverage for `app-settings.json` migration, cache directory changes, and project-directory save/open defaults.
-12. Add a durable Windows export encoder policy: hardware-first by default when supported, software fallback for compatibility, a user-facing encoder setting (`auto`, `prefer hardware`, `compatibility CPU`), and diagnostics showing whether the finished export used GPU or CPU encoding.
+12. Add a user-facing encoder setting (`auto`, `prefer hardware`, `compatibility CPU`) and diagnostics showing whether the finished export used GPU or CPU encoding.
 13. Make MP4 export frame rate source-aware instead of hard-coded to 60 FPS; default to source FPS or a user-selected export FPS so 30 FPS recordings do not pay for double-frame export work.
+14. Move GIF export to a streaming/temp-file path or explicitly label it as short-form only.
 
 ## P2
 
@@ -62,4 +64,4 @@
 14. Open settings from the editor top-bar gear and confirm the same persisted values are shown as the launch HUD settings entry.
 15. On a Windows x64 build machine, run `npm run build:win:portable` and confirm the produced zip contains `resources/electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`.
 16. On Windows x64, record with webcam enabled and inspect `.likelysnap/manifest.json`; confirm `media.webcamStartOffsetMs` is present when `webcam.mp4` exists, then verify preview/export webcam sync.
-17. On Windows x64, export the same project with Task Manager's CPU/GPU video encode graphs visible and confirm the UI/diagnostics report the actual encoder path. Current code-level expectation is CPU-first because Windows uses WebCodecs `prefer-software` before `prefer-hardware`.
+17. On Windows x64, export the same project with Task Manager's CPU/GPU video encode graphs visible and confirm the UI/diagnostics report the actual encoder path. Current code-level expectation is hardware-first only when FFmpeg exposes `h264_nvenc`; otherwise it falls back to CPU.

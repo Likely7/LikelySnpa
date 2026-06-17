@@ -157,6 +157,27 @@ export function downmixPlanarChannelsForExport(
 export class AudioProcessor {
 	private cancelled = false;
 
+	async renderEditedTimelineAudioBlob(
+		videoUrl: string,
+		trimRegions: TrimRegion[] | undefined,
+		speedRegions: SpeedRegion[] | undefined,
+		validatedDurationSec: number,
+	): Promise<Blob> {
+		const sortedTrims = trimRegions ? [...trimRegions].sort((a, b) => a.startMs - b.startMs) : [];
+		const sortedSpeedRegions = speedRegions
+			? [...speedRegions]
+					.filter((region) => region.endMs - region.startMs > MIN_SPEED_REGION_DELTA_MS)
+					.sort((a, b) => a.startMs - b.startMs)
+			: [];
+
+		return this.renderPitchPreservedTimelineAudio(
+			videoUrl,
+			sortedTrims,
+			sortedSpeedRegions,
+			validatedDurationSec,
+		);
+	}
+
 	static async selectSupportedExportCodec(
 		sampleRate: number,
 		numberOfChannels: number,

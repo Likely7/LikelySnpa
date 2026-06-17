@@ -264,11 +264,23 @@ function resolveUntypedPrettyNativeCursorAsset(asset: NativeCursorAsset) {
 export function hasNativeCursorRecordingData(
 	recordingData: CursorRecordingData | null | undefined,
 ): recordingData is CursorRecordingData {
-	return Boolean(
-		recordingData &&
-			recordingData.samples.length > 0 &&
-			(recordingData.assets.length > 0 || recordingData.provider === "none"),
-	);
+	return Boolean(recordingData && recordingData.samples.length > 0);
+}
+
+function resolveCursorAssetForSample(
+	recordingData: CursorRecordingData,
+	sample: CursorRecordingSample,
+): NativeCursorAsset {
+	if (sample.assetId) {
+		const capturedAsset = getNativeCursorAsset(recordingData, sample.assetId);
+		if (capturedAsset) {
+			return capturedAsset;
+		}
+	}
+
+	// Preview cursor data intentionally omits the full asset table so long recordings open
+	// quickly. Keep cursor rendering alive by falling back to the built-in themed asset.
+	return getTelemetryCursorAsset(sample);
 }
 
 export function createNativeCursorMotionBlurState(): NativeCursorMotionBlurState {
@@ -410,12 +422,7 @@ export function resolveActiveNativeCursorFrame(
 			return null;
 		}
 
-		const asset = sample.assetId
-			? getNativeCursorAsset(recordingData, sample.assetId)
-			: getTelemetryCursorAsset(sample);
-		if (!asset) {
-			return null;
-		}
+		const asset = resolveCursorAssetForSample(recordingData, sample);
 
 		return { sample, asset };
 	}
@@ -443,12 +450,7 @@ export function resolveInterpolatedNativeCursorFrame(
 		return null;
 	}
 
-	const asset = activeSample.assetId
-		? getNativeCursorAsset(recordingData, activeSample.assetId)
-		: getTelemetryCursorAsset(activeSample);
-	if (!asset) {
-		return null;
-	}
+	const asset = resolveCursorAssetForSample(recordingData, activeSample);
 
 	const nextSample = samples[activeIndex + 1];
 	if (

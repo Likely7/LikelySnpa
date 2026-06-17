@@ -18,6 +18,9 @@ export interface ExportProgress {
 export interface ExportResult {
 	success: boolean;
 	blob?: Blob;
+	outputPath?: string;
+	encoder?: string;
+	hardwareAcceleration?: string | null;
 	error?: string;
 	warnings?: string[];
 }

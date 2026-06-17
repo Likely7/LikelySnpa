@@ -240,6 +240,19 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		startFfmpegFrameExport: (
+			request: import("../src/lib/exporter/ffmpegExportTypes").FfmpegFrameExportRequest,
+		) => Promise<import("../src/lib/exporter/ffmpegExportTypes").FfmpegFrameExportStartResult>;
+		writeFfmpegFrameExportChunk: (
+			sessionId: string,
+			chunk: ArrayBuffer,
+		) => Promise<import("../src/lib/exporter/ffmpegExportTypes").FfmpegFrameExportWriteResult>;
+		finishFfmpegFrameExport: (
+			sessionId: string,
+		) => Promise<import("../src/lib/exporter/ffmpegExportTypes").FfmpegFrameExportFinishResult>;
+		cancelFfmpegFrameExport: (
+			sessionId: string,
+		) => Promise<import("../src/lib/exporter/ffmpegExportTypes").FfmpegFrameExportCancelResult>;
 		openVideoFilePicker: () => Promise<{ success: boolean; path?: string; canceled?: boolean }>;
 		setCurrentVideoPath: (path: string) => Promise<{ success: boolean }>;
 		setCurrentRecordingSession: (

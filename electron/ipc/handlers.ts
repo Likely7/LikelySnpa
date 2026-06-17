@@ -16,6 +16,7 @@ import {
 	shell,
 	systemPreferences,
 } from "electron";
+import type { FfmpegFrameExportRequest } from "../../src/lib/exporter/ffmpegExportTypes";
 import type { NativeMacRecordingRequest } from "../../src/lib/nativeMacRecording";
 import {
 	type NativeWindowsRecordingRequest,
@@ -48,6 +49,7 @@ import {
 	requestMacCursorAccessibilityAccess,
 } from "../native-bridge/cursor/recording/macNativeCursorRecordingSession";
 import type { CursorRecordingSession } from "../native-bridge/cursor/recording/session";
+import { FfmpegService } from "../native-bridge/services/ffmpegService";
 import { patchWebmDurationOnDisk } from "../recording/webm-duration";
 import { registerNativeBridgeHandlers } from "./nativeBridge";
 import {
@@ -85,6 +87,7 @@ const RECORDING_DIRECTORY_WRITE_TEST_FILE = ".likelysnap-write-test";
 const WAVEFORM_PEAKS_PER_SECOND = 200;
 const nativeMacCaptureEvents = new EventEmitter();
 let activeRecordingsDir = getDefaultRecordingsDir();
+const ffmpegFrameExportService = new FfmpegService();
 
 type RecordingQuality = "standard" | "high" | "ultra";
 
@@ -3377,6 +3380,80 @@ export function registerIpcHandlers(
 				message: "Failed to save exported video",
 				error: String(error),
 			};
+		}
+	});
+
+	ipcMain.handle("ffmpeg-frame-export-start", async (_, request: FfmpegFrameExportRequest) => {
+		try {
+			if (typeof request.outputPath !== "string" || !path.isAbsolute(request.outputPath)) {
+				return { success: false, message: "Invalid export path" };
+			}
+			if (!request.outputPath.toLowerCase().endsWith(".mp4")) {
+				return { success: false, message: "Invalid export file type" };
+			}
+			if (
+				request.inputAudioPath &&
+				(typeof request.inputAudioPath !== "string" || !path.isAbsolute(request.inputAudioPath))
+			) {
+				return { success: false, message: "Invalid audio input path" };
+			}
+
+			const normalizedRequest: FfmpegFrameExportRequest = {
+				...request,
+				outputPath: path.normalize(request.outputPath),
+				inputAudioPath: request.inputAudioPath ? path.normalize(request.inputAudioPath) : undefined,
+			};
+			return await ffmpegFrameExportService.startFrameExport(normalizedRequest);
+		} catch (error) {
+			console.error("Failed to start FFmpeg frame export:", error);
+			return {
+				success: false,
+				message: "Failed to start FFmpeg export",
+				error: String(error),
+			};
+		}
+	});
+
+	ipcMain.handle(
+		"ffmpeg-frame-export-write",
+		async (_, sessionId: string, chunk: ArrayBuffer | Uint8Array) => {
+			try {
+				if (typeof sessionId !== "string" || sessionId.length === 0) {
+					return { success: false, error: "Invalid FFmpeg export session" };
+				}
+				return await ffmpegFrameExportService.writeFrameChunk(sessionId, chunk);
+			} catch (error) {
+				console.error("Failed to write FFmpeg frame chunk:", error);
+				return { success: false, error: String(error) };
+			}
+		},
+	);
+
+	ipcMain.handle("ffmpeg-frame-export-finish", async (_, sessionId: string) => {
+		try {
+			if (typeof sessionId !== "string" || sessionId.length === 0) {
+				return { success: false, error: "Invalid FFmpeg export session" };
+			}
+			return await ffmpegFrameExportService.finishFrameExport(sessionId);
+		} catch (error) {
+			console.error("Failed to finish FFmpeg frame export:", error);
+			return {
+				success: false,
+				message: "Failed to finish FFmpeg export",
+				error: String(error),
+			};
+		}
+	});
+
+	ipcMain.handle("ffmpeg-frame-export-cancel", async (_, sessionId: string) => {
+		try {
+			if (typeof sessionId !== "string" || sessionId.length === 0) {
+				return { success: true };
+			}
+			return await ffmpegFrameExportService.cancelFrameExport(sessionId);
+		} catch (error) {
+			console.error("Failed to cancel FFmpeg frame export:", error);
+			return { success: false, error: String(error) };
 		}
 	});
 

@@ -43,6 +43,7 @@ import {
 	type ExportProgress,
 	type ExportQuality,
 	type ExportSettings,
+	FfmpegVideoExporter,
 	GIF_SIZE_PRESETS,
 	GifExporter,
 	type GifFrameRate,
@@ -2122,8 +2123,10 @@ export default function VideoEditor() {
 						aspectRatioValue,
 					});
 
-					const exporter = new VideoExporter({
+					const exporter = new FfmpegVideoExporter({
 						videoUrl: videoPath,
+						inputAudioPath: videoSourcePath ?? fromFileUrl(videoPath),
+						outputPath: targetPath,
 						webcamVideoUrl: webcamVideoPath || undefined,
 						webcamStartOffsetMs,
 						width: exportWidth,
@@ -2165,32 +2168,18 @@ export default function VideoEditor() {
 						},
 					});
 
-					exporterRef.current = exporter;
+					exporterRef.current = exporter as unknown as VideoExporter;
 					const result = await exporter.export();
 
-					if (result.success && result.blob) {
-						const arrayBuffer = await result.blob.arrayBuffer();
-
+					if (result.success && result.outputPath) {
 						if (result.warnings) {
 							for (const warning of result.warnings) {
 								toast.warning(warning);
 							}
 						}
 
-						const saveResult = await window.electronAPI.writeExportToPath(arrayBuffer, targetPath);
-
-						if (saveResult.success && saveResult.path) {
-							setUnsavedExport(null);
-							handleExportSaved("Video", saveResult.path);
-						} else {
-							setUnsavedExport({ arrayBuffer, fileName: targetFileName, format: "mp4" });
-							const message = buildSaveDiagnosticMessage(
-								"Video",
-								saveResult.message || "Failed to save video",
-							);
-							setExportError(message);
-							toast.error(message);
-						}
+						setUnsavedExport(null);
+						handleExportSaved("Video", result.outputPath);
 					} else {
 						const message = buildExportDiagnosticMessage({
 							formatLabel: "Video",

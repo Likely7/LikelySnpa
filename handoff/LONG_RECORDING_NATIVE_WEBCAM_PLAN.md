@@ -161,7 +161,9 @@ Status: implemented in code. macOS helper typecheck/build passes locally. Window
 
 ### Phase 4: Export Durability
 
-- Replace in-memory MP4 export targets with streaming/temp-file output.
+- Move edited MP4 export to an FFmpeg-based streaming/temp-file output pipeline.
+- Keep renderer compositing, but hand off final encoding/muxing to FFmpeg.
+- Prefer hardware encoders when available, with explicit CPU fallback and actual encoder diagnostics.
 - Preserve audio explicitly or fail loudly.
 - Add export sync diagnostics for long recordings.
 

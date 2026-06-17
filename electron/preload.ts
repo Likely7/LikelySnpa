@@ -172,6 +172,20 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	writeExportToPath: (videoData: ArrayBuffer, filePath: string) => {
 		return ipcRenderer.invoke("write-export-to-path", videoData, filePath);
 	},
+	startFfmpegFrameExport: (
+		request: import("../src/lib/exporter/ffmpegExportTypes").FfmpegFrameExportRequest,
+	) => {
+		return ipcRenderer.invoke("ffmpeg-frame-export-start", request);
+	},
+	writeFfmpegFrameExportChunk: (sessionId: string, chunk: ArrayBuffer) => {
+		return ipcRenderer.invoke("ffmpeg-frame-export-write", sessionId, chunk);
+	},
+	finishFfmpegFrameExport: (sessionId: string) => {
+		return ipcRenderer.invoke("ffmpeg-frame-export-finish", sessionId);
+	},
+	cancelFfmpegFrameExport: (sessionId: string) => {
+		return ipcRenderer.invoke("ffmpeg-frame-export-cancel", sessionId);
+	},
 	openVideoFilePicker: () => {
 		return ipcRenderer.invoke("open-video-file-picker");
 	},

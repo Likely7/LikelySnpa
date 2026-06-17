@@ -68,6 +68,10 @@
 64. Documented the new NLE-style editor architecture plan in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md` after a one-hour Windows recording stayed non-interactive for more than five minutes despite low CPU/GPU/memory utilization.
 65. Implemented the first editor-open architecture pass: added native bridge `CursorPreviewData`, preview cursor loading, main-process cursor parse cache, single-source `useCursorEditorData()`, idle auto zoom suggestion generation, idle waveform generation startup, and editor-open timing logs.
 66. Preserved full-fidelity export behavior by loading full cursor recording data only when export starts, while keeping editor preview and auto zoom on bounded preview samples.
+67. Restored cursor rendering and mouse settings after the staged editor-open pass hid the full native cursor asset table from preview data. Preview cursor rendering now falls back to built-in themed cursor assets, while export can still load full cursor data.
+68. Added the FFmpeg MP4 export pipeline: `FfmpegVideoExporter`, FFmpeg resolver, main-process FFmpeg service, IPC start/write/finish/cancel handlers, preload/native bridge contracts, audio timeline filter generation, temp-file output, and hardware-first encoder selection with CPU fallback.
+69. Switched `VideoEditor` MP4 export to the FFmpeg path. GIF export remains on the existing GIF path, and the old WebCodecs MP4 exporter remains in the codebase as compatibility/fallback.
+70. Added `CHANGELOG.md` and synchronized README plus handoff docs with the current baseline: staged long-recording editor open, restored cursor UI/rendering, FFmpeg streaming MP4 export, and remaining validation work.
 
 ## Implemented This Pass
 
@@ -137,6 +141,12 @@
 - `electron/native-bridge/cursor/adapter.ts`
 - `electron/native-bridge/cursor/telemetryCursorAdapter.ts`
 - `electron/native-bridge/services/cursorService.ts`
+- `electron/ffmpeg/ffmpegResolver.ts`
+- `electron/native-bridge/services/ffmpegService.ts`
+- `src/lib/exporter/ffmpegVideoExporter.ts`
+- `src/lib/exporter/ffmpegExportTypes.ts`
+- `src/lib/exporter/exportTimeline.ts`
+- `CHANGELOG.md`
 - `.github/workflows/build.yml`
 - `.github/workflows/bump-nix-package.yml`
 - `.github/workflows/discord.yaml`
@@ -180,21 +190,18 @@
 - `npx tsc --noEmit` passes after the first NLE editor-open architecture pass.
 - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/lib/cursor/nativeCursor.test.ts src/lib/cursor/cursorPathSmoothing.test.ts` passes after the first NLE editor-open architecture pass.
 - `npm run build-vite` passes after the first NLE editor-open architecture pass.
+- `npx tsc --noEmit` passes after the FFmpeg MP4 export path and cursor preview fallback.
+- `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/lib/cursor/nativeCursor.test.ts src/lib/exporter/audioEncoder.test.ts src/lib/exporter/streamingDecoder.test.ts src/lib/exporter/timestampedVideoFrameQueue.test.ts` passes after the FFmpeg MP4 export path and cursor preview fallback.
+- `npx biome check electron/ffmpeg/ffmpegResolver.ts electron/native-bridge/services/ffmpegService.ts electron/ipc/handlers.ts electron/ipc/nativeBridge.ts electron/preload.ts electron/electron-env.d.ts src/lib/exporter/ffmpegVideoExporter.ts src/lib/exporter/ffmpegExportTypes.ts src/lib/exporter/exportTimeline.ts src/lib/exporter/audioEncoder.ts src/lib/exporter/streamingDecoder.ts src/lib/exporter/types.ts src/lib/exporter/index.ts src/lib/cursor/nativeCursor.ts src/native/client.ts src/native/contracts.ts src/components/video-editor/VideoEditor.tsx` passes after the FFmpeg MP4 export path and cursor preview fallback.
+- User manually tested the current app before this archive checkpoint and reported no obvious functional issue.
 
 ## Next Engineering Step
 
-Run real macOS durability validation against the native `webcam.mp4` path:
+Continue validation and hardening from the current staged editor-open + FFmpeg export baseline:
 
-1. Record with microphone, webcam, and editable cursor enabled.
-2. Confirm the selected folder shows one `recording-<id>.likelysnap` package.
-3. Confirm package contents grow/update during capture and end as `screen.mp4`, `webcam.mp4`, `cursor.json`, `manifest.json`.
-4. Confirm opening/moving the package keeps webcam, cursor telemetry, and `webcamStartOffsetMs`.
-5. Confirm editor preview and exported MP4 remain in sync.
-6. Confirm normal auto-generated zooms are stable by default, long same-area explanations become one longer zoom, held-click/drag suggestions default to Follow Mouse, and selected zooms can still be manually switched between Follow Mouse off/on in the settings panel.
-7. Open the known package `/Users/macbook/Movies/LikelySnap/recording-1781670268254.likelysnap`; the editor should open `screen.mp4` and skip the 4 GB legacy `webcam.webm` with a warning instead of freezing.
-8. Validate the native Windows webcam sidecar on a Windows machine with `npm run build:native:win` and `npm run test:wgc-full:win`.
-9. Open `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap`, confirm the editor remains interactive with waveform visible by default, and confirm the waveform uses cached peaks on the next load.
-10. Open the standalone settings window from both the HUD gear and the editor top-bar gear, then verify recording/project/cache directories, cache size/clear, quality, FPS, and default recording toggles persist across app restarts and affect the next recording.
-11. Validate the Windows one-hour package against the first editor-open architecture pass and inspect `[editor-open]` logs for initial data, cursor preview/cache, waveform cache/generation, and auto zoom timing.
-12. Implement package-local `cache/media-info.json` and `cache/cursor-index.json` so cold app launches do not need to recompute preview metadata/indexes.
-13. Implement the next export durability pass: replace MP4 `BufferTarget` with a temp-file/streaming output path, add source-aware export FPS, and add a Windows encoder policy that defaults to hardware where supported while retaining CPU fallback.
+1. Validate FFmpeg MP4 export on real long macOS and Windows x64 projects, with microphone/system audio/webcam/cursor/zoom/trims/speed changes.
+2. On Windows x64, confirm whether FFmpeg uses `h264_nvenc` on the RTX 5070 machine or falls back to CPU, then expose that result in the UI/diagnostics.
+3. Add package-local `cache/media-info.json` and `cache/cursor-index.json` so cold app launches do not need to recompute preview metadata/indexes.
+4. Add source-aware export FPS so 30 FPS recordings do not export at a fixed 60 FPS unless the user explicitly asks for it.
+5. Add visible background preparation state for long media and preview proxy generation for very long/high-resolution recordings.
+6. Keep validating `.likelysnap` package recovery: moved packages, missing manifest, interrupted recording, native `webcam.mp4`, and legacy oversized `webcam.webm` skip behavior.

@@ -1,3 +1,4 @@
+export { FfmpegVideoExporter } from "./ffmpegVideoExporter";
 export { FrameRenderer } from "./frameRenderer";
 export { calculateOutputDimensions, GifExporter } from "./gifExporter";
 export {

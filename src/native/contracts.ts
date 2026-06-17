@@ -76,6 +76,13 @@ export interface SystemCapabilities {
 	};
 }
 
+export interface FfmpegProbeResult {
+	available: boolean;
+	ffmpegPath?: string;
+	version?: string;
+	hardwareAcceleration?: string | null;
+}
+
 export interface ProjectContext {
 	currentProjectPath: string | null;
 	currentVideoPath: string | null;
@@ -241,6 +248,12 @@ export type NativeBridgeRequest =
 				videoPath?: string;
 				sampleIntervalMs?: number;
 			};
+			requestId?: string;
+	  }
+	| {
+			domain: "ffmpeg";
+			action: "probe";
+			payload?: EmptyPayload;
 			requestId?: string;
 	  };
 

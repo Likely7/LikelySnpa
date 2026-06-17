@@ -67,6 +67,8 @@ Implemented in the first architecture pass:
 7. Deferred automatic zoom suggestion generation with idle scheduling.
 8. Deferred waveform generation with idle scheduling while keeping waveform visible by default.
 9. Added timing logs for initial editor data load, cursor parse/load, waveform cache/generation, and auto zoom suggestion generation.
+10. Restored cursor rendering and cursor settings after preview cursor data intentionally omitted the full native cursor asset table. Preview rendering now falls back to built-in cursor assets, while export still loads full cursor data.
+11. MP4 export has moved to the FFmpeg frame-streaming path: renderer compositing remains in-app, but final encode/mux/output is handled by FFmpeg through a temp file.
 
 Remaining from the first phase:
 
@@ -75,6 +77,7 @@ Remaining from the first phase:
 3. Add package-local `cache/media-info.json`.
 4. Add visible background preparation status in the UI.
 5. Validate the Windows one-hour package against the new staged load path.
+6. Validate multi-hour FFmpeg MP4 export on macOS and Windows x64.
 
 ## Target Package Cache Layout
 
@@ -158,10 +161,11 @@ The first phase is about making long recordings interactive. It does not need to
 
 ## Third Implementation Phase
 
-1. Move edited MP4 export to temp-file/streaming output.
+1. Harden FFmpeg MP4 export with real multi-hour regression tests and visible encoder diagnostics.
 2. Make MP4 export frame rate source-aware.
-3. Add Windows hardware-first encoder policy with CPU fallback.
-4. Add range/chunked export input readers so multi-hour exports do not require whole-file Blobs.
+3. Add a user-facing encoder policy with `auto`, `prefer hardware`, and `compatibility CPU`.
+4. Add range/chunked export input readers so multi-hour exports do not require whole-file source Blobs during decode.
+5. Decide whether GIF export becomes streaming/temp-file based or stays explicitly short-form.
 
 ## Acceptance Criteria
 

@@ -12,6 +12,7 @@ import {
 import type { CursorTelemetryLoadResult } from "../native-bridge/cursor/adapter";
 import { TelemetryCursorAdapter } from "../native-bridge/cursor/telemetryCursorAdapter";
 import { CursorService } from "../native-bridge/services/cursorService";
+import { FfmpegService } from "../native-bridge/services/ffmpegService";
 import { ProjectService } from "../native-bridge/services/projectService";
 import { SystemService } from "../native-bridge/services/systemService";
 import { NativeBridgeStateStore } from "../native-bridge/store";
@@ -120,6 +121,7 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 		getAssetBasePath: context.resolveAssetBasePath,
 		getCursorCapabilities: () => cursorService.getCapabilities(),
 	});
+	const ffmpegService = new FfmpegService();
 
 	ipcMain.handle(NATIVE_BRIDGE_CHANNEL, async (_, request: unknown) => {
 		if (!isBridgeRequest(request)) {
@@ -224,6 +226,20 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 								requestId,
 								"UNSUPPORTED_ACTION",
 								`Unsupported cursor action: ${action}`,
+							);
+					}
+				}
+
+				case "ffmpeg": {
+					const action = request.action as string;
+					switch (request.action) {
+						case "probe":
+							return createSuccessResponse(requestId, await ffmpegService.probe());
+						default:
+							return createErrorResponse(
+								requestId,
+								"UNSUPPORTED_ACTION",
+								`Unsupported ffmpeg action: ${action}`,
 							);
 					}
 				}

@@ -3,6 +3,7 @@ import {
 	type CursorPreviewData,
 	type CursorRecordingData,
 	type CursorTelemetryPoint,
+	type FfmpegProbeResult,
 	NATIVE_BRIDGE_CHANNEL,
 	type NativeBridgeRequest,
 	type NativeBridgeResponse,
@@ -145,6 +146,13 @@ export const nativeBridgeClient = {
 				domain: "cursor",
 				action: "getTelemetry",
 				payload: videoPath ? { videoPath } : {},
+			}),
+	},
+	ffmpeg: {
+		probe: () =>
+			requireNativeBridgeData<FfmpegProbeResult>({
+				domain: "ffmpeg",
+				action: "probe",
 			}),
 	},
 };
