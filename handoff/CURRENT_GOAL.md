@@ -10,9 +10,10 @@ Build a durable macOS-first LikelySnap recorder/editor that can record long vide
 4. macOS recordings must preserve audio/video sync in the source file.
 5. MP4 exports must preserve audio/video sync from the edited timeline.
 6. Cursor telemetry must remain aligned with video time so auto zoom and auto-focus zoom continue to work.
-7. Crash recovery must leave inspectable and recoverable media files.
-8. New recordings must appear to users as one `.likelysnap` package, while internally preserving live-write files.
-9. Legacy loose recordings must remain loadable.
+7. Auto-generated zoom regions must follow cursor telemetry by default, and macOS window capture must normalize cursor positions against the captured window bounds.
+8. Crash recovery must leave inspectable and recoverable media files.
+9. New recordings must appear to users as one `.likelysnap` package, while internally preserving live-write files.
+10. Legacy loose recordings must remain loadable.
 
 ## Current Priority
 
@@ -24,3 +25,4 @@ Validate the implemented `.likelysnap` recording package model on macOS:
 - Confirm moved packages reopen from relative `manifest.json` paths.
 - Confirm missing-manifest recovery rebuilds a usable package session.
 - Confirm editor preview and exported MP4 stay in sync.
+- Confirm generated zoom suggestions track the cursor accurately in real macOS screen and window recordings.

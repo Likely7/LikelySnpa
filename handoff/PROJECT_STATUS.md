@@ -31,6 +31,8 @@
 - Project persistence already stores real media paths via `screenVideoPath` and optional `webcamVideoPath`.
 - Project persistence now also stores optional `webcamStartOffsetMs` when a webcam sidecar exists.
 - Cursor telemetry is separate from video bytes and is required for auto zoom and cursor-follow zoom.
+- Auto-generated zoom regions now keep `focusMode: auto`, so suggested zooms follow cursor telemetry instead of locking to the initial focus point.
+- macOS native window recordings now use ScreenCaptureKit-reported window capture bounds for editable cursor normalization, avoiding display-bounds offset in cursor-follow zoom.
 - New project files use `.likelysnap`; legacy `.openscreen` project files remain loadable.
 - New recordings now write into `recording-<id>.likelysnap/` package directories with `screen.mp4`, optional `webcam.webm`, `cursor.json`, and `manifest.json`.
 - Package manifests use relative paths and can be reopened after moving the package.
@@ -47,3 +49,4 @@
 - New package recording has passed type, lint, targeted unit tests, and build verification; it still needs real macOS recording validation on the user's machine.
 - Export audio/video sync diagnostics have not yet been instrumented or proven.
 - Cursor telemetry is live-written, and package open can recover missing manifests; interrupted-session UX still needs real-world validation.
+- Cursor-follow zoom has targeted automated coverage and build verification; it still needs one real macOS short recording validation with editable cursor enabled.

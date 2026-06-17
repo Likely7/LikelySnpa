@@ -5,7 +5,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
-import type { DesktopCapturerSource } from "electron";
+import type { DesktopCapturerSource, Rectangle } from "electron";
 import {
 	app,
 	BrowserWindow,
@@ -512,6 +512,7 @@ let nativeMacCaptureOutput = "";
 let nativeMacCaptureTargetPath: string | null = null;
 let nativeMacCaptureDiagnostics: Record<string, unknown> | null = null;
 let nativeMacCaptureRecordingId: number | null = null;
+let nativeMacCaptureBounds: Rectangle | null = null;
 let nativeMacCursorOffsetMs = 0;
 let nativeMacCursorCaptureMode: CursorCaptureMode = "editable-overlay";
 let nativeMacCursorRecordingStartMs = 0;
@@ -876,7 +877,11 @@ async function resolveDirectShowWebcamClsid(deviceName?: string) {
 	return best.clsid;
 }
 
-async function startCursorRecording(recordingId?: number, telemetryPath?: string) {
+async function startCursorRecording(
+	recordingId?: number,
+	telemetryPath?: string,
+	getDisplayBounds: () => Rectangle | null = getSelectedSourceBounds,
+) {
 	if (cursorRecordingSession) {
 		pendingCursorRecordingData = await cursorRecordingSession.stop();
 		cursorRecordingSession = null;
@@ -887,7 +892,7 @@ async function startCursorRecording(recordingId?: number, telemetryPath?: string
 		await beginLiveCursorTelemetry(telemetryPath);
 	}
 	cursorRecordingSession = createCursorRecordingSession({
-		getDisplayBounds: getSelectedSourceBounds,
+		getDisplayBounds,
 		maxSamples: MAX_CURSOR_SAMPLES,
 		platform: process.platform,
 		sampleIntervalMs: CURSOR_SAMPLE_INTERVAL_MS,
@@ -1202,6 +1207,34 @@ function tryParseNativeHelperEvent(line: string) {
 	}
 }
 
+function normalizeRectangle(value: unknown): Rectangle | null {
+	if (!value || typeof value !== "object") {
+		return null;
+	}
+
+	const candidate = value as Partial<Rectangle>;
+	const x = typeof candidate.x === "number" && Number.isFinite(candidate.x) ? candidate.x : null;
+	const y = typeof candidate.y === "number" && Number.isFinite(candidate.y) ? candidate.y : null;
+	const width =
+		typeof candidate.width === "number" && Number.isFinite(candidate.width)
+			? candidate.width
+			: null;
+	const height =
+		typeof candidate.height === "number" && Number.isFinite(candidate.height)
+			? candidate.height
+			: null;
+	if (x === null || y === null || width === null || height === null || width <= 0 || height <= 0) {
+		return null;
+	}
+
+	return { x, y, width, height };
+}
+
+type NativeMacCaptureStartInfo = {
+	timestampMs: number;
+	captureBounds: Rectangle | null;
+};
+
 function inspectNativeMacCaptureOutput() {
 	for (const line of nativeMacCaptureOutput.split(/\r?\n/)) {
 		const event = tryParseNativeHelperEvent(line.trim());
@@ -1253,7 +1286,7 @@ function attachNativeMacCaptureOutputDrain(proc: ChildProcessWithoutNullStreams)
 }
 
 function waitForNativeMacCaptureStart(proc: ChildProcessWithoutNullStreams) {
-	return new Promise<number>((resolve, reject) => {
+	return new Promise<NativeMacCaptureStartInfo>((resolve, reject) => {
 		const timer = setTimeout(() => {
 			cleanup();
 			reject(new Error("Timed out waiting for native macOS capture to start"));
@@ -1262,11 +1295,13 @@ function waitForNativeMacCaptureStart(proc: ChildProcessWithoutNullStreams) {
 		const inspect = (event: Record<string, unknown>) => {
 			if (event.event === "recording-started") {
 				cleanup();
-				resolve(
-					typeof event.timestampMs === "number" && Number.isFinite(event.timestampMs)
-						? event.timestampMs
-						: Date.now(),
-				);
+				resolve({
+					timestampMs:
+						typeof event.timestampMs === "number" && Number.isFinite(event.timestampMs)
+							? event.timestampMs
+							: Date.now(),
+					captureBounds: normalizeRectangle(event.captureBounds),
+				});
 				return;
 			}
 			if (event.event === "error") {
@@ -2169,6 +2204,7 @@ export function registerIpcHandlers(
 			nativeMacCaptureTargetPath = outputPath;
 			nativeMacCaptureDiagnostics = null;
 			nativeMacCaptureRecordingId = recordingId;
+			nativeMacCaptureBounds = null;
 			nativeMacCursorOffsetMs = 0;
 			nativeMacCursorCaptureMode = cursorCaptureMode;
 			nativeMacCursorRecordingStartMs = 0;
@@ -2176,13 +2212,7 @@ export function registerIpcHandlers(
 			nativeMacPauseRanges = [];
 			nativeMacIsPaused = false;
 
-			const cursorStartTimeMs = Date.now();
-			if (cursorCaptureMode === "editable-overlay") {
-				nativeMacCursorRecordingStartMs = cursorStartTimeMs;
-				await startCursorRecording(cursorStartTimeMs, getCursorTelemetryPathForVideo(outputPath));
-			} else {
-				pendingCursorRecordingData = null;
-			}
+			pendingCursorRecordingData = null;
 
 			const proc = spawn(helperPath, [JSON.stringify(config)], {
 				cwd: packagePaths.packageDir,
@@ -2191,14 +2221,19 @@ export function registerIpcHandlers(
 			nativeMacCaptureProcess = proc;
 			attachNativeMacCaptureOutputDrain(proc);
 
-			const captureStartedAtMs = await waitForNativeMacCaptureStart(proc);
-			nativeMacCursorOffsetMs =
-				cursorCaptureMode === "editable-overlay"
-					? Math.max(0, captureStartedAtMs - cursorStartTimeMs)
-					: 0;
-			cursorTelemetryLiveOffsetMs = nativeMacCursorOffsetMs;
-			if (pendingCursorRecordingData) {
-				await queueCursorTelemetryWrite(pendingCursorRecordingData, true);
+			const captureStart = await waitForNativeMacCaptureStart(proc);
+			const captureStartedAtMs = captureStart.timestampMs;
+			nativeMacCaptureBounds =
+				request.source.type === "window" ? (captureStart.captureBounds ?? null) : (bounds ?? null);
+			nativeMacCursorOffsetMs = 0;
+			if (cursorCaptureMode === "editable-overlay") {
+				nativeMacCursorRecordingStartMs = captureStartedAtMs;
+				await startCursorRecording(
+					captureStartedAtMs,
+					getCursorTelemetryPathForVideo(outputPath),
+					() => nativeMacCaptureBounds ?? getSelectedSourceBounds(),
+				);
+				cursorTelemetryLiveOffsetMs = 0;
 			}
 
 			const source = selectedSource || { name: "Screen" };
@@ -2212,6 +2247,7 @@ export function registerIpcHandlers(
 				path: outputPath,
 				helperPath,
 				captureStartedAtMs,
+				...(nativeMacCaptureBounds ? { captureBounds: nativeMacCaptureBounds } : {}),
 			};
 		} catch (error) {
 			console.error("Failed to start native macOS recording:", error);
@@ -2221,6 +2257,7 @@ export function registerIpcHandlers(
 			nativeMacCaptureTargetPath = null;
 			nativeMacCaptureDiagnostics = null;
 			nativeMacCaptureRecordingId = null;
+			nativeMacCaptureBounds = null;
 			nativeMacCursorOffsetMs = 0;
 			nativeMacCursorCaptureMode = "editable-overlay";
 			nativeMacCursorRecordingStartMs = 0;
@@ -2483,6 +2520,7 @@ export function registerIpcHandlers(
 			nativeMacCaptureProcess = null;
 			nativeMacCaptureTargetPath = null;
 			nativeMacCaptureRecordingId = null;
+			nativeMacCaptureBounds = null;
 			nativeMacCursorOffsetMs = 0;
 			nativeMacCursorCaptureMode = "editable-overlay";
 			nativeMacCursorRecordingStartMs = 0;

@@ -124,6 +124,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		let filter: SCContentFilter
 		let width: Int
 		let height: Int
+		let bounds: CGRect
 	}
 
 	private let request: RecordingRequest
@@ -143,6 +144,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 	private var nativeMicrophoneEnabled = false
 	private var outputWidth = 1920
 	private var outputHeight = 1080
+	private var targetCaptureBounds = CGRect(x: 0, y: 0, width: 1920, height: 1080)
 	private let microphoneOutputTypeRawValue = 2
 	private let hostClock = CMClockGetHostTimeClock()
 	private var videoSamplesAppended = 0
@@ -171,6 +173,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		let target = try makeCaptureTarget(from: content)
 		outputWidth = target.width
 		outputHeight = target.height
+		targetCaptureBounds = target.bounds
 		let configuration = makeStreamConfiguration()
 		let stream = SCStream(filter: target.filter, configuration: configuration, delegate: self)
 
@@ -318,6 +321,12 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 						"timestampMs": Int(Date().timeIntervalSince1970 * 1000),
 						"width": outputWidth,
 						"height": outputHeight,
+						"captureBounds": [
+							"x": targetCaptureBounds.origin.x,
+							"y": targetCaptureBounds.origin.y,
+							"width": targetCaptureBounds.width,
+							"height": targetCaptureBounds.height,
+						],
 					])
 				}
 			} else {
@@ -369,7 +378,8 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			return CaptureTarget(
 				filter: SCContentFilter(display: display, excludingWindows: []),
 				width: clampCaptureDimension(width, fallback: request.video.width),
-				height: clampCaptureDimension(height, fallback: request.video.height)
+				height: clampCaptureDimension(height, fallback: request.video.height),
+				bounds: display.frame
 			)
 		case "window":
 			guard let windowId = request.source.windowId else {
@@ -387,7 +397,8 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			return CaptureTarget(
 				filter: SCContentFilter(desktopIndependentWindow: window),
 				width: clampCaptureDimension(width, fallback: request.video.width),
-				height: clampCaptureDimension(height, fallback: request.video.height)
+				height: clampCaptureDimension(height, fallback: request.video.height),
+				bounds: window.frame
 			)
 		default:
 			throw HelperError.invalidSourceType(request.source.type)

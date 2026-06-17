@@ -1087,11 +1087,11 @@ export default function VideoEditor() {
 				depth: DEFAULT_ZOOM_DEPTH,
 				customScale: ZOOM_DEPTH_SCALES[DEFAULT_ZOOM_DEPTH],
 				focus: clampFocusToDepth(suggestion.focus, DEFAULT_ZOOM_DEPTH),
-				focusMode: autoFocusAll ? ("auto" as const) : undefined,
+				focusMode: "auto" as const,
 				source: "auto" as const,
 			}));
 		},
-		[cursorTelemetry, duration, autoFocusAll],
+		[cursorTelemetry, duration],
 	);
 
 	// Auto-suggest zooms once per fresh recording (no existing zooms, telemetry

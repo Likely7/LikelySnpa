@@ -4,9 +4,10 @@
 
 1. Validate a real macOS recording with microphone, webcam, and editable cursor enabled.
 2. Validate a long macOS recording stops cleanly and leaves a ready `.likelysnap` package.
-3. Validate moving a package to another folder and reopening it.
-4. Validate deleting `manifest.json` and reopening the package rebuilds a recoverable manifest.
-5. Validate killing the app mid-recording leaves recoverable package artifacts.
+3. Validate auto-generated zooms follow the cursor accurately in a real macOS window recording and a full-screen recording.
+4. Validate moving a package to another folder and reopening it.
+5. Validate deleting `manifest.json` and reopening the package rebuilds a recoverable manifest.
+6. Validate killing the app mid-recording leaves recoverable package artifacts.
 
 ## P1
 
@@ -30,6 +31,6 @@
 3. Confirm package contains `screen.mp4`, optional `webcam.webm`, `cursor.json`, and `manifest.json`.
 4. Confirm raw source file plays in Finder/QuickTime with audio in sync.
 5. Confirm editor auto zoom suggestions still appear from cursor telemetry.
-6. Confirm manual zoom with Auto-Focus follows cursor.
+6. Confirm auto-generated zooms and manual Auto-Focus zooms follow cursor.
 7. Confirm export MP4 remains in sync.
 8. Kill the app mid-recording and verify the package is recoverable.

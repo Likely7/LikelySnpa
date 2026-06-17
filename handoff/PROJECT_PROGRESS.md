@@ -28,6 +28,8 @@
 24. Added package manifest path helpers, safe package-child path validation, relative manifest normalization, and missing-manifest recovery.
 25. Updated editor/video/project open paths so `.likelysnap` package directories load as recordings while `.likelysnap` files still load as projects.
 26. Registered `.likelysnap` as a macOS document/package association in Electron Builder.
+27. Restored cursor-follow zoom for auto-generated zoom regions by always storing auto focus mode on generated zoom suggestions.
+28. Corrected macOS native window cursor normalization by passing ScreenCaptureKit capture bounds from the helper to the Electron cursor recorder.
 
 ## Implemented This Pass
 
@@ -55,6 +57,7 @@
 - `electron-builder.json5`
 - `electron/ipc/recordingPackage.ts`
 - `electron/ipc/recordingPackage.test.ts`
+- `src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts`
 - `README.md`
 - `public/likelysnap.png`
 - `handoff/RECORDING_PACKAGE_PLAN.md`
@@ -72,6 +75,8 @@
 - `npm run build-vite` passes.
 - `npm run lint` passes.
 - `swiftc -parse-as-library -typecheck ... main.swift` passes with deprecation warnings only.
+- `swiftc -parse-as-library ... main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local dev helper binary.
+- `npm test -- src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/projectPersistence.test.ts electron/ipc/recordingPackage.test.ts src/hooks/recorderHandle.test.ts electron/ipc/recordingStream.test.ts` passes.
 - `npm run build:native:mac` is blocked by the local machine using Command Line Tools instead of full Xcode.
 - `npm run i18n:check` still fails on pre-existing translation drift; the new `tooltips.chooseRecordingDirectory` key is no longer listed as missing.
 
@@ -84,3 +89,4 @@ Run real macOS package validation:
 3. Confirm package contents grow/update during capture and end as `screen.mp4`, `webcam.webm`, `cursor.json`, `manifest.json`.
 4. Confirm opening/moving the package keeps webcam, cursor telemetry, and `webcamStartOffsetMs`.
 5. Confirm editor preview and exported MP4 remain in sync.
+6. Confirm auto-generated zooms follow the mouse and focus on the correct cursor position during playback/export.
