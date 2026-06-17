@@ -5,10 +5,10 @@
 		"selectRegion": "选择要调整的缩放区域",
 		"deleteZoom": "删除缩放",
 		"focusMode": {
-			"title": "对焦模式",
-			"manual": "手动",
-			"auto": "自动",
-			"autoDescription": "摄像头跟随录制时的光标位置"
+			"title": "跟随鼠标",
+			"manual": "禁用",
+			"auto": "开启",
+			"autoDescription": "画面会跟随录制时的鼠标位置"
 		},
 		"threeD": {
 			"title": "3D 旋转",

@@ -1086,7 +1086,7 @@ export default function VideoEditor() {
 				depth: DEFAULT_ZOOM_DEPTH,
 				customScale: ZOOM_DEPTH_SCALES[DEFAULT_ZOOM_DEPTH],
 				focus: { cx: 0.5, cy: 0.5 },
-				// Auto-Focus on means new zooms follow the cursor too.
+				// Global Follow Mouse on means new zooms follow the cursor too.
 				focusMode: autoFocusAll ? "auto" : undefined,
 				source: "manual",
 			};

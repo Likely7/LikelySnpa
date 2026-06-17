@@ -6,11 +6,11 @@
 		"selectRegion": "Select a zoom region to adjust",
 		"deleteZoom": "Delete Zoom",
 		"focusMode": {
-			"title": "Focus Mode",
-			"manual": "Manual",
-			"auto": "Auto",
-			"autoDescription": "Camera follows the recorded cursor position",
-			"lockedDisclaimer": "Controlled by the global Auto-Focus toggle in the timeline. Turn it off to set focus mode per zoom."
+			"title": "Follow Mouse",
+			"manual": "Off",
+			"auto": "On",
+			"autoDescription": "The camera follows the recorded mouse position",
+			"lockedDisclaimer": "Controlled by the global Follow Mouse toggle in the timeline. Turn it off to set this per zoom."
 		},
 		"threeD": {
 			"title": "3D Rotation",

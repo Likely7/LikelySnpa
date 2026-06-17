@@ -55,7 +55,7 @@ interface TimelineEditorProps {
 	/** Magic-wand auto-zoom toggle state + handler. */
 	autoZoomEnabled?: boolean;
 	onToggleAutoZoom?: (enabled: boolean) => void;
-	/** Global Auto-Focus toggle state + handler. */
+	/** Global Follow Mouse toggle state + handler. */
 	autoFocusAll?: boolean;
 	onToggleAutoFocusAll?: (on: boolean) => void;
 	onZoomSpanChange: (id: string, span: Span) => void;
