@@ -5,7 +5,8 @@
 - Local path: `/Users/macbook/Desktop/LikelySnap/openscreen`
 - GitHub remote: `https://github.com/Likely7/LikelySnpa.git`
 - Checked commit before local handoff docs: `71622a2`
-- Upstream package version: `1.5.0`
+- Current package version: `1.0.0`
+- Base version: OpenScreen `1.5.0`
 - License: MIT
 - Current product name: `LikelySnap`
 - Current npm package name: `likelysnap`
