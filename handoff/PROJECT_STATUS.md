@@ -13,6 +13,7 @@
 - Current Electron appId: `com.likelysnap.app`
 - Latest pushed checkpoint: `b3ae601 chore: set version to 1.0.0`
 - Latest durable app/settings checkpoint: `7d1a3c2 fix: open app settings in standalone window`
+- Public GitHub cleanup checkpoint: removed obsolete release/build workflows and public README platform packaging instructions; internal build scripts remain in `package.json`.
 - App settings checkpoints: `eb0f2c4 feat: add app settings center`, `7d1a3c2 fix: open app settings in standalone window`
 - Archive before app settings center work: `archive/before-app-settings-20260617`
 - Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
@@ -86,7 +87,7 @@
 - The previous editor-load stall from waveform generation has been addressed architecturally with ranged reads and cache reuse; waveform display is default-on again, and the known ~17 minute package still needs an in-app retest to verify the UI remains responsive while peaks are generated or loaded from cache.
 - App settings are implemented and verified at the type/build level, but still need an end-to-end product retest from both entry points: launch HUD gear and editor top-bar gear.
 - Windows native webcam code is implemented and now has a persisted sidecar timeline offset, but it is still not truth-tested on Windows hardware from this macOS machine.
-- Windows x64 portable packaging must be produced on Windows, or on a machine that already has `electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`. This Apple Silicon Mac cannot build the WGC helper and electron-builder's Windows resource step fails here because the cached x64 Wine binary cannot run (`bad CPU type in executable`).
+- Windows x64 packaging still depends on the native WGC helper binaries being built on Windows. Public GitHub release/build automation was removed until the project has a clean LikelySnap-owned release pipeline.
 - Windows export performance has been reviewed at code level only. The next durable fix is to add an explicit export encoder setting (`auto`, `prefer hardware`, `compatibility CPU`), make Windows hardware-first by default when available, expose the actual encoder mode used, and make MP4 mux/save stream to a temp file.
 
 ## Latest Verification
@@ -113,10 +114,3 @@
 - `lipo -archs release/1.0.0/mac-arm64/LikelySnap.app/Contents/MacOS/LikelySnap` returns `arm64`.
 - `Info.plist` in the built app reports `CFBundleShortVersionString` and `CFBundleVersion` as `1.0.0`.
 - Built app resources include the `darwin-arm64` cursor and ScreenCaptureKit helper binaries.
-
-## Windows x64 Portable Build Notes
-
-- Target command on a Windows x64 build machine: `npm run build:win:portable`.
-- This command builds the WGC helper, runs the renderer/main build, and asks electron-builder for a Windows x64 zip target.
-- Required Windows build prerequisites: Visual Studio 2022 Build Tools with C++, Windows 10 SDK, CMake, Ninja, Node/npm matching the project toolchain.
-- After packaging, run at least `npm run test:wgc-full:win` and a real `.likelysnap` recording with webcam, mic, system audio, and editable cursor before calling Windows ready.

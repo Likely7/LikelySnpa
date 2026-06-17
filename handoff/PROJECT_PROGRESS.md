@@ -63,6 +63,7 @@
 59. Set the LikelySnap package/app version to `1.0.0`, updated package metadata and handoff status, committed `b3ae601 chore: set version to 1.0.0`, and pushed it to `origin/main`.
 60. Built a macOS ARM64-only 1.0.0 DMG and copied it to `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`; the build is ad-hoc signed and not notarized.
 61. Reviewed Windows MP4 export performance at source level. Current edited MP4 export uses WebCodecs plus canvas/Pixi frame compositing, but Windows prefers `prefer-software` before `prefer-hardware`, so exports are likely CPU-encoded unless software fails. The final MP4 mux target is still in-memory `BufferTarget`, not a temp-file/streaming writer.
+62. Pruned public GitHub packaging noise: removed old release/build workflows that still referenced upstream signing/notarization/Nix/Discord automation and removed macOS/Windows packaging command sections from the public README.
 
 ## Implemented This Pass
 
@@ -120,11 +121,13 @@
 - `electron/windows.ts`
 - `src/App.tsx`
 - `src/main.tsx`
-- `.github/workflows/bump-nix-package.yml`
 - `handoff/PROJECT_STATUS.md`
 - `handoff/PROJECT_OVERVIEW.md`
 - `handoff/CURRENT_GOAL.md`
 - `handoff/REMAINING_ISSUES_AND_TODOS.md`
+- `.github/workflows/build.yml`
+- `.github/workflows/bump-nix-package.yml`
+- `.github/workflows/discord.yaml`
 
 ## Verification
 
