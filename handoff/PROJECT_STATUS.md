@@ -29,6 +29,8 @@
 - macOS native recording writes MP4 with `AVAssetWriter`; it is already a disk-writing path, not renderer-memory-first.
 - macOS native webcam sidecar now records in the ScreenCaptureKit helper with `AVCaptureSession + AVAssetWriter` and writes package-local `webcam.mp4`.
 - Windows native webcam sidecar now uses the WGC helper's Media Foundation/DirectShow path and writes package-local `webcam.mp4`; renderer webcam recording is no longer used on the native Windows path.
+- Windows support is currently scoped to x64 only. The WGC helper resolver and build scripts target `electron/native/bin/win32-x64`; Windows ARM64 is not a supported packaging target.
+- Windows native webcam sidecars now persist `webcamStartOffsetMs` from the WGC helper's first written webcam-sidecar frame relative to the screen timeline. Editor preview and MP4/GIF export already consume this manifest field, matching the macOS webcam offset path.
 - Cursor telemetry now creates a package-local `cursor.json` file at recording start and refreshes it in throttled snapshots, with final corrected telemetry written at stop. Legacy loose recordings still use `.cursor.json`.
 - Session manifests are now created at recording start and updated after stop/attach. New packages use `manifest.json`; legacy loose recordings still use `.session.json`.
 - Browser fallback uses `MediaRecorder` and has a streaming-to-disk wrapper, with in-memory allowed only when no file-backed stream is requested.
@@ -76,7 +78,8 @@
 - Current highest remaining long-recording risk is export and multi-hour editor scale, not recording package write-out. Main screen MP4 can remain large but referenced on disk; webcam sidecars are now native MP4 for native capture and unsafe legacy WebM files are skipped at editor open.
 - The previous editor-load stall from waveform generation has been addressed architecturally with ranged reads and cache reuse; waveform display is default-on again, and the known ~17 minute package still needs an in-app retest to verify the UI remains responsive while peaks are generated or loaded from cache.
 - App settings are implemented and verified at the type/build level, but still need an end-to-end product retest from both entry points: launch HUD gear and editor top-bar gear.
-- Windows native webcam code is implemented but not truth-tested on Windows hardware from this macOS machine.
+- Windows native webcam code is implemented and now has a persisted sidecar timeline offset, but it is still not truth-tested on Windows hardware from this macOS machine.
+- Windows x64 portable packaging must be produced on Windows, or on a machine that already has `electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`. This Apple Silicon Mac cannot build the WGC helper and electron-builder's Windows resource step fails here because the cached x64 Wine binary cannot run (`bad CPU type in executable`).
 
 ## Latest Verification
 
@@ -92,3 +95,14 @@
 - `npx tsc --noEmit` passes after moving app settings into a standalone Electron window.
 - `npm test -- src/lib/userPreferences.test.ts src/components/video-editor/editorDefaults.test.ts` passes after moving app settings into a standalone Electron window.
 - `npm run build-vite` passes after moving app settings into a standalone Electron window.
+- `npx tsc --noEmit` passes after the Windows webcam sidecar offset fix.
+- `npm test -- src/lib/nativeWindowsRecording.test.ts electron/ipc/recordingPackage.test.ts src/components/video-editor/projectPersistence.test.ts` passes after the Windows webcam sidecar offset fix.
+- `npx biome check electron/ipc/handlers.ts src/lib/nativeWindowsRecording.ts src/lib/nativeWindowsRecording.test.ts scripts/build-windows-wgc-helper.mjs package.json` passes after the Windows x64 packaging guard.
+- `node scripts/build-windows-wgc-helper.mjs` now correctly fails on non-Windows when `win32-x64` helper binaries are missing, preventing a broken Windows package from being produced.
+
+## Windows x64 Portable Build Notes
+
+- Target command on a Windows x64 build machine: `npm run build:win:portable`.
+- This command builds the WGC helper, runs the renderer/main build, and asks electron-builder for a Windows x64 zip target.
+- Required Windows build prerequisites: Visual Studio 2022 Build Tools with C++, Windows 10 SDK, CMake, Ninja, Node/npm matching the project toolchain.
+- After packaging, run at least `npm run test:wgc-full:win` and a real `.likelysnap` recording with webcam, mic, system audio, and editable cursor before calling Windows ready.

@@ -17,7 +17,11 @@ import {
 	systemPreferences,
 } from "electron";
 import type { NativeMacRecordingRequest } from "../../src/lib/nativeMacRecording";
-import type { NativeWindowsRecordingRequest } from "../../src/lib/nativeWindowsRecording";
+import {
+	type NativeWindowsRecordingRequest,
+	readNativeWindowsRecordingStoppedInfo,
+	readNativeWindowsWebcamFormatFromOutput,
+} from "../../src/lib/nativeWindowsRecording";
 import {
 	type CursorCaptureMode,
 	normalizeCursorCaptureMode,
@@ -1015,7 +1019,6 @@ function resolvePackagedResourcePath(...segments: string[]) {
 
 function getNativeWindowsCaptureHelperCandidates() {
 	const envPath = process.env.OPENSCREEN_WGC_CAPTURE_EXE?.trim();
-	const archTag = process.arch === "arm64" ? "win32-arm64" : "win32-x64";
 	return [
 		envPath,
 		resolveUnpackedAppPath(
@@ -1027,8 +1030,8 @@ function getNativeWindowsCaptureHelperCandidates() {
 			"wgc-capture.exe",
 		),
 		resolveUnpackedAppPath("electron", "native", "wgc-capture", "build", "wgc-capture.exe"),
-		resolveUnpackedAppPath("electron", "native", "bin", archTag, "wgc-capture.exe"),
-		resolvePackagedResourcePath("electron", "native", "bin", archTag, "wgc-capture.exe"),
+		resolveUnpackedAppPath("electron", "native", "bin", "win32-x64", "wgc-capture.exe"),
+		resolvePackagedResourcePath("electron", "native", "bin", "win32-x64", "wgc-capture.exe"),
 	].filter((candidate): candidate is string => Boolean(candidate));
 }
 
@@ -1451,6 +1454,11 @@ function waitForNativeWindowsCaptureStop(proc: ChildProcessWithoutNullStreams) {
 		};
 		const onClose = (code: number | null) => {
 			cleanup();
+			const stoppedInfo = readNativeWindowsRecordingStoppedInfo(nativeWindowsCaptureOutput);
+			if (stoppedInfo?.screenPath) {
+				resolve(stoppedInfo.screenPath);
+				return;
+			}
 			const match = nativeWindowsCaptureOutput.match(/Recording stopped\. Output path: (.+)/);
 			if (match?.[1]) {
 				resolve(match[1].trim());
@@ -1487,22 +1495,7 @@ function waitForNativeWindowsCaptureStop(proc: ChildProcessWithoutNullStreams) {
 }
 
 function readNativeWindowsWebcamFormat(output: string) {
-	const lines = output.split(/\r?\n/).filter((line) => line.includes('"event":"webcam-format"'));
-	const lastLine = lines.at(-1);
-	if (!lastLine) {
-		return null;
-	}
-
-	try {
-		return JSON.parse(lastLine) as {
-			width?: number;
-			height?: number;
-			fps?: number;
-			deviceName?: string;
-		};
-	} catch {
-		return null;
-	}
+	return readNativeWindowsWebcamFormatFromOutput(output);
 }
 
 function tryParseNativeHelperEvent(line: string) {
@@ -2723,16 +2716,23 @@ export function registerIpcHandlers(
 				shiftPendingCursorTelemetry(nativeWindowsCursorOffsetMs);
 				await writePendingCursorTelemetry(screenVideoPath);
 			}
+			const stoppedInfo = readNativeWindowsRecordingStoppedInfo(nativeWindowsCaptureOutput);
+			const stoppedWebcamPath = stoppedInfo?.webcamPath ?? preferredWebcamPath;
 			let webcamVideoPath: string | undefined;
-			if (preferredWebcamPath) {
-				const webcamStats = await fs.stat(preferredWebcamPath).catch(() => null);
+			if (stoppedWebcamPath) {
+				const webcamStats = await fs.stat(stoppedWebcamPath).catch(() => null);
 				if (webcamStats?.isFile() && webcamStats.size > 0) {
-					webcamVideoPath = preferredWebcamPath;
+					webcamVideoPath = stoppedWebcamPath;
 				}
 			}
+			const webcamStartOffsetMs =
+				webcamVideoPath && typeof stoppedInfo?.webcamStartOffsetMs === "number"
+					? stoppedInfo.webcamStartOffsetMs
+					: undefined;
 			const session: RecordingSession = {
 				screenVideoPath,
 				...(webcamVideoPath ? { webcamVideoPath } : {}),
+				...(webcamStartOffsetMs !== undefined ? { webcamStartOffsetMs } : {}),
 				createdAt: recordingId,
 				cursorCaptureMode,
 			};

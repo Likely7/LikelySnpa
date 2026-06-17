@@ -11,6 +11,8 @@ const BUILD_DIR = path.join(SOURCE_DIR, "build");
 const COMPAT_LIB_DIR = path.join(BUILD_DIR, "compat-libs");
 const BIN_DIR = path.join(ROOT, "electron", "native", "bin", "win32-x64");
 const CMAKE = process.env.CMAKE_EXE ?? "cmake";
+const DISTRIBUTABLE_HELPER_PATH = path.join(BIN_DIR, "wgc-capture.exe");
+const DISTRIBUTABLE_CURSOR_SAMPLER_PATH = path.join(BIN_DIR, "cursor-sampler.exe");
 
 function findVcVarsAll() {
 	const explicit = process.env.VCVARSALL;
@@ -105,8 +107,23 @@ async function runInVsEnv(command) {
 }
 
 if (process.platform !== "win32") {
-	console.log("Skipping WGC helper build: Windows-only.");
-	process.exit(0);
+	if (
+		fs.existsSync(DISTRIBUTABLE_HELPER_PATH) &&
+		fs.existsSync(DISTRIBUTABLE_CURSOR_SAMPLER_PATH)
+	) {
+		console.log("Using existing Windows x64 WGC helper binaries.");
+		console.log(`Found ${DISTRIBUTABLE_HELPER_PATH}`);
+		console.log(`Found ${DISTRIBUTABLE_CURSOR_SAMPLER_PATH}`);
+		process.exit(0);
+	}
+	throw new Error(
+		[
+			"Windows x64 WGC helper binaries are required before packaging.",
+			`Missing ${DISTRIBUTABLE_HELPER_PATH}`,
+			`Missing ${DISTRIBUTABLE_CURSOR_SAMPLER_PATH}`,
+			"Build them on Windows with npm run build:native:win, then rerun packaging.",
+		].join("\n"),
+	);
 }
 
 fs.mkdirSync(BUILD_DIR, { recursive: true });
@@ -127,13 +144,11 @@ if (!fs.existsSync(cursorSamplerOutputPath)) {
 }
 
 fs.mkdirSync(BIN_DIR, { recursive: true });
-const distributablePath = path.join(BIN_DIR, "wgc-capture.exe");
-fs.copyFileSync(outputPath, distributablePath);
+fs.copyFileSync(outputPath, DISTRIBUTABLE_HELPER_PATH);
 
-const cursorSamplerDistributablePath = path.join(BIN_DIR, "cursor-sampler.exe");
-fs.copyFileSync(cursorSamplerOutputPath, cursorSamplerDistributablePath);
+fs.copyFileSync(cursorSamplerOutputPath, DISTRIBUTABLE_CURSOR_SAMPLER_PATH);
 
 console.log(`Built ${outputPath}`);
-console.log(`Copied ${distributablePath}`);
+console.log(`Copied ${DISTRIBUTABLE_HELPER_PATH}`);
 console.log(`Built ${cursorSamplerOutputPath}`);
-console.log(`Copied ${cursorSamplerDistributablePath}`);
+console.log(`Copied ${DISTRIBUTABLE_CURSOR_SAMPLER_PATH}`);

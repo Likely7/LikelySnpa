@@ -546,6 +546,7 @@ int main(int argc, char* argv[]) {
     int latestWebcamHeight = 0;
     uint64_t latestWebcamSequence = 0;
     bool hasVisibleWebcamFrame = false;
+    int64_t firstWebcamTimelineTimestampHns = -1;
 
     session.setFrameCallback([&](ID3D11Texture2D* texture, int64_t timestampHns) {
         if (control.stopRequested || control.paused) {
@@ -628,6 +629,9 @@ int main(int argc, char* argv[]) {
                 }
                 if (writeSeparateWebcam && webcamFrame.data &&
                     latestWebcamSequence != lastWrittenWebcamSequence) {
+                    if (firstWebcamTimelineTimestampHns < 0) {
+                        firstWebcamTimelineTimestampHns = frameTimestampHns;
+                    }
                     const int64_t webcamTimestampHns = static_cast<int64_t>(
                         (webcamOutputFrameIndex * 10'000'000ULL) / std::max(1, webcamCapture.fps()));
                     if (!webcamEncoder.writeBgraFrame(webcamFrame, webcamTimestampHns)) {
@@ -848,10 +852,23 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
+    int64_t webcamStartOffsetMs = 0;
+    bool hasWebcamStartOffset = false;
+    {
+        std::scoped_lock lock(mutex);
+        if (writeSeparateWebcam && firstWebcamTimelineTimestampHns >= 0) {
+            webcamStartOffsetMs = firstWebcamTimelineTimestampHns / 10'000;
+            hasWebcamStartOffset = true;
+        }
+    }
+
     std::cout << "{\"event\":\"recording-stopped\",\"schemaVersion\":2,\"screenPath\":\""
               << jsonEscape(config.outputPath) << "\"";
     if (writeSeparateWebcam) {
         std::cout << ",\"webcamPath\":\"" << jsonEscape(config.webcamOutputPath) << "\"";
+        if (hasWebcamStartOffset) {
+            std::cout << ",\"webcamStartOffsetMs\":" << webcamStartOffsetMs;
+        }
     }
     std::cout << "}" << std::endl;
     std::cout << "Recording stopped. Output path: " << config.outputPath << std::endl;
