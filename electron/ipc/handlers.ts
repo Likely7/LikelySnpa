@@ -76,8 +76,10 @@ const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
 	".ts",
 ]);
 const PREVIEW_AUDIO_DIR = path.join(app.getPath("userData"), "preview-audio");
+const WAVEFORM_CACHE_DIR = path.join(app.getPath("userData"), "waveform-cache");
 const RECORDING_SETTINGS_FILE = path.join(app.getPath("userData"), "recording-settings.json");
 const RECORDING_DIRECTORY_WRITE_TEST_FILE = ".likelysnap-write-test";
+const WAVEFORM_PEAKS_PER_SECOND = 200;
 const nativeMacCaptureEvents = new EventEmitter();
 let activeRecordingsDir = getDefaultRecordingsDir();
 
@@ -313,6 +315,135 @@ async function prepareSupplementalPreviewAudioTrack(videoPath: string) {
 	}
 
 	return { success: true, path: pathToFileURL(outputPath).toString() };
+}
+
+type WaveformPeakCache = {
+	version: 1;
+	sourcePath: string;
+	sourceSize: number;
+	sourceMtimeMs: number;
+	durationSec: number;
+	peaksPerSecond: number;
+	peaks: number[];
+};
+
+function sanitizeCacheName(value: string): string {
+	return value.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "media";
+}
+
+function getWaveformCachePath(sourcePath: string, sourceStat: { size: number; mtimeMs: number }) {
+	const parsedPath = path.parse(sourcePath);
+	const fingerprint = Buffer.from(
+		`${path.resolve(sourcePath)}:${sourceStat.size}:${Math.round(sourceStat.mtimeMs)}`,
+	).toString("base64url");
+	return path.join(
+		WAVEFORM_CACHE_DIR,
+		`${sanitizeCacheName(parsedPath.name)}.${fingerprint}.peaks.json`,
+	);
+}
+
+function isValidWaveformPeakCache(
+	value: unknown,
+	sourcePath: string,
+	sourceStat: { size: number; mtimeMs: number },
+): value is WaveformPeakCache {
+	if (!value || typeof value !== "object") {
+		return false;
+	}
+
+	const cache = value as Partial<WaveformPeakCache>;
+	return (
+		cache.version === 1 &&
+		cache.sourcePath === sourcePath &&
+		cache.sourceSize === sourceStat.size &&
+		cache.sourceMtimeMs === sourceStat.mtimeMs &&
+		typeof cache.durationSec === "number" &&
+		Number.isFinite(cache.durationSec) &&
+		cache.durationSec >= 0 &&
+		cache.peaksPerSecond === WAVEFORM_PEAKS_PER_SECOND &&
+		Array.isArray(cache.peaks)
+	);
+}
+
+async function readWaveformPeaksCache(videoPath: string) {
+	const normalizedPath = await approveReadableVideoPath(videoPath);
+	if (!normalizedPath) {
+		return {
+			success: false,
+			message: "File path is not approved or is not a supported video file",
+		};
+	}
+
+	const sourceStat = await fs.stat(normalizedPath);
+	const cachePath = getWaveformCachePath(normalizedPath, sourceStat);
+
+	try {
+		const cached = JSON.parse(await fs.readFile(cachePath, "utf-8"));
+		if (isValidWaveformPeakCache(cached, normalizedPath, sourceStat)) {
+			return {
+				success: true,
+				path: cachePath,
+				durationSec: cached.durationSec,
+				peaksPerSecond: cached.peaksPerSecond,
+				peaks: cached.peaks,
+				cached: true,
+			};
+		}
+	} catch {
+		// Cache miss.
+	}
+
+	return { success: true, cached: false };
+}
+
+async function writeWaveformPeaksCache(
+	videoPath: string,
+	cacheInput: { durationSec: number; peaksPerSecond: number; peaks: number[] },
+) {
+	const normalizedPath = await approveReadableVideoPath(videoPath);
+	if (!normalizedPath) {
+		return {
+			success: false,
+			message: "File path is not approved or is not a supported video file",
+		};
+	}
+
+	if (
+		!cacheInput ||
+		typeof cacheInput.durationSec !== "number" ||
+		!Number.isFinite(cacheInput.durationSec) ||
+		cacheInput.durationSec < 0 ||
+		cacheInput.peaksPerSecond !== WAVEFORM_PEAKS_PER_SECOND ||
+		!Array.isArray(cacheInput.peaks)
+	) {
+		return {
+			success: false,
+			message: "Invalid waveform cache payload",
+		};
+	}
+
+	const sourceStat = await fs.stat(normalizedPath);
+	const cachePath = getWaveformCachePath(normalizedPath, sourceStat);
+	const payload: WaveformPeakCache = {
+		version: 1,
+		sourcePath: normalizedPath,
+		sourceSize: sourceStat.size,
+		sourceMtimeMs: sourceStat.mtimeMs,
+		durationSec: cacheInput.durationSec,
+		peaksPerSecond: WAVEFORM_PEAKS_PER_SECOND,
+		peaks: cacheInput.peaks,
+	};
+
+	await fs.mkdir(WAVEFORM_CACHE_DIR, { recursive: true });
+	await fs.writeFile(cachePath, JSON.stringify(payload), "utf-8");
+
+	return {
+		success: true,
+		path: cachePath,
+		durationSec: cacheInput.durationSec,
+		peaksPerSecond: WAVEFORM_PEAKS_PER_SECOND,
+		cached: false,
+	};
 }
 
 async function approveReadableVideoPath(
@@ -3089,6 +3220,54 @@ export function registerIpcHandlers(
 		}
 	});
 
+	ipcMain.handle("read-file-range", async (_, filePath: string, start: number, end: number) => {
+		try {
+			const normalizedPath = await approveReadableVideoPath(filePath);
+			if (!normalizedPath) {
+				return {
+					success: false,
+					message: "File path is not approved or is not a supported video file",
+				};
+			}
+
+			if (
+				typeof start !== "number" ||
+				typeof end !== "number" ||
+				!Number.isFinite(start) ||
+				!Number.isFinite(end) ||
+				start < 0 ||
+				end < start
+			) {
+				return {
+					success: false,
+					message: "Invalid file range",
+				};
+			}
+
+			const handle = await fs.open(normalizedPath, "r");
+			try {
+				const length = Math.max(0, Math.floor(end - start));
+				const buffer = Buffer.alloc(length);
+				const { bytesRead } = await handle.read(buffer, 0, length, Math.floor(start));
+				const data = buffer.subarray(0, bytesRead);
+				return {
+					success: true,
+					data: data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength),
+					path: normalizedPath,
+				};
+			} finally {
+				await handle.close();
+			}
+		} catch (error) {
+			console.error("Failed to read file range:", error);
+			return {
+				success: false,
+				message: "Failed to read file range",
+				error: String(error),
+			};
+		}
+	});
+
 	ipcMain.handle("stat-file", async (_, filePath: string) => {
 		try {
 			const normalizedPath = await approveReadableVideoPath(filePath);
@@ -3123,6 +3302,35 @@ export function registerIpcHandlers(
 			return {
 				success: false,
 				message: "Failed to prepare preview audio track",
+				error: String(error),
+			};
+		}
+	});
+
+	ipcMain.handle("read-waveform-peaks-cache", async (_, filePath: string) => {
+		try {
+			return await readWaveformPeaksCache(filePath);
+		} catch (error) {
+			console.error("Failed to read waveform peaks cache:", error);
+			return {
+				success: false,
+				message: "Failed to read waveform peaks cache",
+				error: String(error),
+			};
+		}
+	});
+
+	ipcMain.handle("write-waveform-peaks-cache", async (_, filePath: string, payload: unknown) => {
+		try {
+			return await writeWaveformPeaksCache(
+				filePath,
+				payload as { durationSec: number; peaksPerSecond: number; peaks: number[] },
+			);
+		} catch (error) {
+			console.error("Failed to write waveform peaks cache:", error);
+			return {
+				success: false,
+				message: "Failed to write waveform peaks cache",
 				error: String(error),
 			};
 		}

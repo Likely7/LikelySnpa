@@ -8,6 +8,8 @@ const WAVEFORM_GAMMA = 0.6;
 export interface BackgroundWaveformProps {
 	/** Pre-computed peaks: pairs of [min, max] per block (length = 2 * N). */
 	peaks: Float32Array | null;
+	/** True while peaks are being generated or loaded from cache. */
+	loading?: boolean;
 	videoDurationMs: number;
 	/** Inset from canvas top so the waveform aligns with item content top. Defaults to 0. */
 	topInset?: number;
@@ -26,6 +28,7 @@ export interface BackgroundWaveformProps {
  */
 export default function BackgroundWaveform({
 	peaks,
+	loading = false,
 	videoDurationMs,
 	topInset = 0,
 	bottomInset = 0,
@@ -74,8 +77,6 @@ export default function BackgroundWaveform({
 		ctx.scale(dpr, dpr);
 		ctx.clearRect(0, 0, canvasSize.w, canvasSize.h);
 
-		if (!peaks || peaks.length === 0 || normFactor === 0) return;
-
 		const W = canvasSize.w;
 		const H = canvasSize.h;
 		const rangeMs = range.end - range.start;
@@ -87,6 +88,20 @@ export default function BackgroundWaveform({
 		const bottomY = H - bottomInset;
 		const drawHeight = bottomY - topY;
 		if (drawHeight <= 0) return;
+
+		if (!peaks || peaks.length === 0 || normFactor === 0) {
+			if (loading) {
+				ctx.fillStyle = "rgba(74, 222, 128, 0.18)";
+				const barCount = Math.max(12, Math.floor(W / 22));
+				const barWidth = Math.max(3, W / barCount / 3);
+				for (let i = 0; i < barCount; i++) {
+					const x = (i / barCount) * W;
+					const height = drawHeight * (0.25 + 0.45 * ((i % 5) / 4));
+					ctx.fillRect(x, bottomY - height, barWidth, height);
+				}
+			}
+			return;
+		}
 
 		const N = peaks.length / 2;
 		const amp = drawHeight * 0.9;
@@ -132,7 +147,7 @@ export default function BackgroundWaveform({
 		ctx.strokeStyle = "rgba(74, 222, 128, 0.85)";
 		ctx.lineWidth = 1;
 		ctx.stroke();
-	}, [peaks, normFactor, range, canvasSize, videoDurationMs, topInset, bottomInset]);
+	}, [peaks, loading, normFactor, range, canvasSize, videoDurationMs, topInset, bottomInset]);
 
 	return <canvas ref={canvasRef} className="absolute inset-0 pointer-events-none w-full h-full" />;
 }

@@ -172,11 +172,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	readBinaryFile: (filePath: string) => {
 		return ipcRenderer.invoke("read-binary-file", filePath);
 	},
+	readFileRange: (filePath: string, start: number, end: number) => {
+		return ipcRenderer.invoke("read-file-range", filePath, start, end);
+	},
 	statFile: (filePath: string) => {
 		return ipcRenderer.invoke("stat-file", filePath);
 	},
 	preparePreviewAudioTrack: (filePath: string) => {
 		return ipcRenderer.invoke("prepare-preview-audio-track", filePath);
+	},
+	readWaveformPeaksCache: (filePath: string) => {
+		return ipcRenderer.invoke("read-waveform-peaks-cache", filePath);
+	},
+	writeWaveformPeaksCache: (
+		filePath: string,
+		payload: { durationSec: number; peaksPerSecond: number; peaks: number[] },
+	) => {
+		return ipcRenderer.invoke("write-waveform-peaks-cache", filePath, payload);
 	},
 	clearCurrentVideoPath: () => {
 		return ipcRenderer.invoke("clear-current-video-path");

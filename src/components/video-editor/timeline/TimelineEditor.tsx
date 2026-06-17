@@ -596,7 +596,9 @@ function Timeline({
 	const localTimelineRef = useRef<HTMLDivElement | null>(null);
 	const isScrubbingTimelineRef = useRef(false);
 	const scrubPointerIdRef = useRef<number | null>(null);
-	const peaks = useAudioPeaks(showTrimWaveform ? videoUrl : undefined);
+	const { peaks, loading: waveformLoading } = useAudioPeaks(
+		showTrimWaveform ? videoUrl : undefined,
+	);
 
 	const setRefs = useCallback(
 		(node: HTMLDivElement | null) => {
@@ -802,6 +804,7 @@ function Timeline({
 					showTrimWaveform ? (
 						<BackgroundWaveform
 							peaks={peaks}
+							loading={waveformLoading}
 							videoDurationMs={videoDurationMs}
 							topInset={3}
 							bottomInset={3}

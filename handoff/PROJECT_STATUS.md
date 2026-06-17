@@ -10,7 +10,7 @@
 - Current product name: `LikelySnap`
 - Current npm package name: `likelysnap`
 - Current Electron appId: `com.likelysnap.app`
-- Latest local checkpoint: `ba701c2 fix: simplify settings footer contact copy`
+- Latest local checkpoint before this update: `ba701c2 fix: simplify settings footer contact copy`
 - Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
 - Archive before native webcam sidecar work: `archive/before-native-webcam-sidecar-20260617-131845`
 - App icon source of truth: `icons/source/logo.png`, generated through `npm run generate:icons` into the public favicon, Linux PNG set, macOS `.icns`, and Windows `.ico`.
@@ -49,6 +49,7 @@
 - Stop/finalize paths no longer whole-file patch WebM sidecars over the 2 GB safe threshold.
 - Windows native stop/finalize no longer reads the main `screen.mp4` into JS memory to repackage a webcam sidecar.
 - Editor open paths now stat webcam sidecars and skip unsafe files over the 2 GB threshold, allowing the main screen video to open without the webcam.
+- Trim waveform generation is now lazy and scalable. The editor does not generate waveforms on open by default; when the user enables the waveform switch, local media is read through bounded 1 MB ranged IPC reads, decoded incrementally with `mediabunny`, and cached as peak JSON under Electron `userData/waveform-cache` keyed by source path/size/mtime.
 - Package manifests use relative paths and can be reopened after moving the package.
 - Opening a `.likelysnap` package through the video picker/project picker resolves the package session, including webcam path and webcam offset.
 - If `manifest.json` is missing, package open/recovery can rebuild a recoverable manifest from package files.
@@ -65,6 +66,7 @@
 - Cursor telemetry is live-written, and package open can recover missing manifests; interrupted-session UX still needs real-world validation.
 - Follow Mouse zoom has targeted automated coverage and is now being refined for product feel: upstream behavior was confirmed to mix tight zoom-in tracking with smoother full-zoom tracking, so LikelySnap uses stable fixed-position auto zoom by default plus explicit per-zoom Follow Mouse.
 - Current highest remaining long-recording risk is export and multi-hour editor scale, not recording package write-out. Main screen MP4 can remain large but referenced on disk; webcam sidecars are now native MP4 for native capture and unsafe legacy WebM files are skipped at editor open.
+- The previous editor-load stall from waveform generation has been addressed architecturally, but the known ~17 minute package still needs an in-app retest to verify first-enable waveform generation and cache reuse behavior on the user's machine.
 - Windows native webcam code is implemented but not truth-tested on Windows hardware from this macOS machine.
 
 ## Latest Verification
@@ -73,3 +75,5 @@
 - `npm test -- electron/ipc/recordingPackage.test.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts` passes with 16 tests after auto zoom span and Follow Mouse refinements.
 - `npm run lint` passes.
 - `./node_modules/.bin/tsc --noEmit` passes.
+- `npm run build-vite` passes after the ranged/cached waveform refactor.
+- `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts` passes after the ranged/cached waveform refactor.

@@ -50,6 +50,8 @@
 46. Refined auto zoom span generation so long explanations produce longer stable zooms instead of repeated fixed-length jumps: dwell spans use their real duration plus padding, nearby same-area dwell runs merge, click-only suggestions stay short, and held mouse-button spans default to Follow Mouse.
 47. Simplified the editor settings footer by removing report bug, save diagnostics, and GitHub star buttons, replacing them with the centered contact line `抖音小红书：Likely7  反馈问题`.
 48. Updated README and handoff docs to reflect the current package/webcam/auto-zoom/branding state instead of the earlier pre-package plan.
+49. Investigated a real ~17 minute package that opened but stayed unresponsive for roughly 10 seconds. The package was not pathological by itself (`screen.mp4` ~429 MB, `webcam.mp4` ~243 MB, `cursor.json` ~5.9 MB); the recurring editor cost was the trim waveform path reading and decoding the whole source video in the renderer.
+50. Reworked trim waveform generation into a lazy, long-video-safe path: default waveform display is off, users can still enable it, local files are read through bounded 1 MB ranged IPC reads, `mediabunny` decodes audio incrementally in the renderer, and generated peak arrays are cached on disk under Electron `userData/waveform-cache` keyed by source path/size/mtime.
 
 ## Implemented This Pass
 
@@ -98,6 +100,9 @@
 - `electron/recording/webm-duration.ts`
 - `electron/native/wgc-capture/src/main.cpp`
 - `src/lib/nativeWindowsRecording.ts`
+- `src/hooks/useAudioPeaks.ts`
+- `src/components/video-editor/timeline/BackgroundWaveform.tsx`
+- `src/components/video-editor/timeline/TimelineEditor.tsx`
 
 ## Verification
 
@@ -118,9 +123,11 @@
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local macOS helper binary.
 - `npm run generate:icons -- /Users/macbook/Downloads/logo.png` passes and regenerates all app icon assets from the stored source logo.
 - `npm run lint` and `./node_modules/.bin/tsc --noEmit` pass after the settings footer simplification.
+- `npm run build-vite` passes after the ranged/cached waveform refactor.
+- `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts` passes after the ranged/cached waveform refactor.
 - `npm run build:native:mac` is blocked by the local machine using Command Line Tools instead of full Xcode.
 - `npm run i18n:check` still fails on pre-existing translation drift; the new `tooltips.chooseRecordingDirectory` key is no longer listed as missing.
-- Latest verified checkpoint: `ba701c2 fix: simplify settings footer contact copy`.
+- Latest verified checkpoint before this handoff update: `ba701c2 fix: simplify settings footer contact copy`.
 
 ## Next Engineering Step
 
@@ -134,3 +141,4 @@ Run real macOS durability validation against the native `webcam.mp4` path:
 6. Confirm normal auto-generated zooms are stable by default, long same-area explanations become one longer zoom, held-click/drag suggestions default to Follow Mouse, and selected zooms can still be manually switched between Follow Mouse off/on in the settings panel.
 7. Open the known package `/Users/macbook/Movies/LikelySnap/recording-1781670268254.likelysnap`; the editor should open `screen.mp4` and skip the 4 GB legacy `webcam.webm` with a warning instead of freezing.
 8. Validate the native Windows webcam sidecar on a Windows machine with `npm run build:native:win` and `npm run test:wgc-full:win`.
+9. Open `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap`, confirm the editor becomes interactive without waiting on waveform generation, then enable "Show Audio Waveform on Trim Track" once and confirm the waveform appears after background generation and opens from cache on the next load.

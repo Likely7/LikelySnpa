@@ -230,6 +230,17 @@ interface Window {
 			message?: string;
 			error?: string;
 		}>;
+		readFileRange: (
+			filePath: string,
+			start: number,
+			end: number,
+		) => Promise<{
+			success: boolean;
+			data?: ArrayBuffer;
+			path?: string;
+			message?: string;
+			error?: string;
+		}>;
 		statFile: (filePath: string) => Promise<{
 			success: boolean;
 			path?: string;
@@ -240,6 +251,28 @@ interface Window {
 		preparePreviewAudioTrack: (filePath: string) => Promise<{
 			success: boolean;
 			path?: string | null;
+			message?: string;
+			error?: string;
+		}>;
+		readWaveformPeaksCache: (filePath: string) => Promise<{
+			success: boolean;
+			path?: string;
+			durationSec?: number;
+			peaksPerSecond?: number;
+			peaks?: number[];
+			cached?: boolean;
+			message?: string;
+			error?: string;
+		}>;
+		writeWaveformPeaksCache: (
+			filePath: string,
+			payload: { durationSec: number; peaksPerSecond: number; peaks: number[] },
+		) => Promise<{
+			success: boolean;
+			path?: string;
+			durationSec?: number;
+			peaksPerSecond?: number;
+			cached?: boolean;
 			message?: string;
 			error?: string;
 		}>;

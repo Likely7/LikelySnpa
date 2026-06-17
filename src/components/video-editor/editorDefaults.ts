@@ -41,7 +41,7 @@ export const DEFAULT_EDITOR_APPEARANCE_SETTINGS: {
 	showBlur: false,
 	motionBlurAmount: 0,
 	borderRadius: 0,
-	showTrimWaveform: true,
+	showTrimWaveform: false,
 };
 
 export const DEFAULT_EDITOR_LAYOUT_SETTINGS: {
