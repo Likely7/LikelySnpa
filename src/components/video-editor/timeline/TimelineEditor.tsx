@@ -5,12 +5,14 @@ import {
 	Check,
 	ChevronDown,
 	Gauge,
+	Maximize2,
 	MessageSquare,
 	Plus,
 	ScanEye,
 	Scissors,
 	WandSparkles,
 	ZoomIn,
+	ZoomOut,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
@@ -22,6 +24,7 @@ import {
 	DropdownMenuItem,
 	DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Slider } from "@/components/ui/slider";
 import { useScopedT } from "@/contexts/I18nContext";
 import { useShortcuts } from "@/contexts/ShortcutsContext";
 import { useAudioPeaks } from "@/hooks/useAudioPeaks";
@@ -44,6 +47,7 @@ const BLUR_ROW_ID = "row-blur";
 const SPEED_ROW_ID = "row-speed";
 const FALLBACK_RANGE_MS = 1000;
 const TARGET_MARKER_COUNT = 12;
+const TIMELINE_ZOOM_STEP = 12;
 
 interface TimelineEditorProps {
 	videoDuration: number;
@@ -196,6 +200,71 @@ function clampVisibleRange(candidate: Range, totalMs: number): Range {
 
 	const start = Math.max(0, Math.min(candidate.start, totalMs - span));
 	return { start, end: start + span };
+}
+
+function clampTimelineVisibleRange(
+	candidate: Range,
+	totalMs: number,
+	minVisibleRangeMs: number,
+): Range {
+	if (totalMs <= 0) {
+		return candidate;
+	}
+
+	const minSpan = Math.min(Math.max(minVisibleRangeMs, 1), totalMs);
+	const rawSpan = Number.isFinite(candidate.end - candidate.start)
+		? candidate.end - candidate.start
+		: totalMs;
+	const span = Math.min(Math.max(rawSpan, minSpan), totalMs);
+	const rawStart = Number.isFinite(candidate.start) ? candidate.start : 0;
+	const start = Math.max(0, Math.min(rawStart, totalMs - span));
+
+	return { start, end: start + span };
+}
+
+function getTimelineZoomValue(visibleRangeMs: number, totalMs: number, minVisibleRangeMs: number) {
+	if (totalMs <= 0) return 0;
+
+	const minSpan = Math.min(Math.max(minVisibleRangeMs, 1), totalMs);
+	if (totalMs <= minSpan) return 0;
+
+	const visible = Math.min(Math.max(visibleRangeMs, minSpan), totalMs);
+	const scaleRange = Math.log(totalMs / minSpan);
+	if (scaleRange <= 0) return 0;
+
+	return Math.max(0, Math.min(100, (Math.log(totalMs / visible) / scaleRange) * 100));
+}
+
+function getVisibleRangeForZoomValue(value: number, totalMs: number, minVisibleRangeMs: number) {
+	if (totalMs <= 0) return FALLBACK_RANGE_MS;
+
+	const minSpan = Math.min(Math.max(minVisibleRangeMs, 1), totalMs);
+	if (totalMs <= minSpan) return totalMs;
+
+	const normalized = Math.max(0, Math.min(100, value)) / 100;
+	return totalMs / (totalMs / minSpan) ** normalized;
+}
+
+function formatVisibleDurationLabel(milliseconds: number) {
+	const ms = Math.max(0, Math.round(milliseconds));
+	const totalSeconds = ms / 1000;
+
+	if (totalSeconds < 1) {
+		return `${Math.max(1, Math.round(ms))}ms`;
+	}
+
+	if (totalSeconds < 60) {
+		return `${totalSeconds < 10 ? totalSeconds.toFixed(1) : Math.round(totalSeconds)}s`;
+	}
+
+	const totalMinutes = Math.round(totalSeconds / 60);
+	if (totalMinutes < 60) {
+		return `${totalMinutes}m`;
+	}
+
+	const hours = Math.floor(totalMinutes / 60);
+	const minutes = totalMinutes % 60;
+	return minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
 }
 
 function normalizeWheelDelta(delta: number, deltaMode: number, pageSizePx: number): number {
@@ -556,6 +625,7 @@ function Timeline({
 	items,
 	videoDurationMs,
 	currentTimeMs,
+	minVisibleRangeMs,
 	onSeek,
 	onRangeChange,
 	onSelectZoom,
@@ -575,6 +645,7 @@ function Timeline({
 	items: TimelineRenderItem[];
 	videoDurationMs: number;
 	currentTimeMs: number;
+	minVisibleRangeMs: number;
 	onSeek?: (time: number) => void;
 	onRangeChange?: (updater: (previous: Range) => Range) => void;
 	onSelectZoom?: (id: string | null) => void;
@@ -708,12 +779,12 @@ function Timeline({
 
 	const handleTimelineWheel = useCallback(
 		(event: React.WheelEvent<HTMLDivElement>) => {
-			if (!onRangeChange || event.ctrlKey || event.metaKey || videoDurationMs <= 0) {
+			if (!onRangeChange || videoDurationMs <= 0) {
 				return;
 			}
 
 			const visibleMs = range.end - range.start;
-			if (visibleMs <= 0 || videoDurationMs <= visibleMs) {
+			if (visibleMs <= 0) {
 				return;
 			}
 
@@ -727,6 +798,49 @@ function Timeline({
 
 			const pageWidthPx = Math.max(event.currentTarget.clientWidth - sidebarWidth, 1);
 			const normalizedDeltaPx = normalizeWheelDelta(dominantDelta, event.deltaMode, pageWidthPx);
+
+			if (event.ctrlKey || event.metaKey) {
+				const rect = event.currentTarget.getBoundingClientRect();
+				const anchorX = Math.max(
+					0,
+					Math.min(event.clientX - rect.left - sidebarWidth, pageWidthPx),
+				);
+				const anchorTime = Math.max(
+					0,
+					Math.min(range.start + pixelsToValue(anchorX), videoDurationMs),
+				);
+				const zoomIntensity = Math.max(-1, Math.min(1, normalizedDeltaPx / 320));
+				const nextSpan = Math.min(
+					videoDurationMs,
+					Math.max(minVisibleRangeMs, visibleMs * 2 ** zoomIntensity),
+				);
+
+				onRangeChange((previous) => {
+					const previousSpan = Math.max(previous.end - previous.start, 1);
+					const anchorRatio = Math.max(
+						0,
+						Math.min(1, (anchorTime - previous.start) / previousSpan),
+					);
+					const nextRange = clampTimelineVisibleRange(
+						{
+							start: anchorTime - nextSpan * anchorRatio,
+							end: anchorTime - nextSpan * anchorRatio + nextSpan,
+						},
+						videoDurationMs,
+						minVisibleRangeMs,
+					);
+
+					return nextRange.start === previous.start && nextRange.end === previous.end
+						? previous
+						: nextRange;
+				});
+				return;
+			}
+
+			if (videoDurationMs <= visibleMs) {
+				return;
+			}
+
 			const shiftMs = pixelsToValue(normalizedDeltaPx);
 
 			onRangeChange((previous) => {
@@ -743,7 +857,15 @@ function Timeline({
 					: nextRange;
 			});
 		},
-		[onRangeChange, videoDurationMs, range.end, range.start, sidebarWidth, pixelsToValue],
+		[
+			onRangeChange,
+			videoDurationMs,
+			range.end,
+			range.start,
+			sidebarWidth,
+			pixelsToValue,
+			minVisibleRangeMs,
+		],
 	);
 
 	const zoomItems = items.filter((item) => item.rowId === ZOOM_ROW_ID);
@@ -1339,11 +1461,83 @@ export default function TimelineEditor({
 			return range;
 		}
 
-		return {
-			start: Math.max(0, Math.min(range.start, totalMs)),
-			end: Math.min(range.end, totalMs),
-		};
-	}, [range, totalMs]);
+		return clampTimelineVisibleRange(range, totalMs, timelineScale.minVisibleRangeMs);
+	}, [range, totalMs, timelineScale.minVisibleRangeMs]);
+
+	const visibleRangeMs = Math.max(clampedRange.end - clampedRange.start, 1);
+	const timelineZoomValue = useMemo(
+		() => getTimelineZoomValue(visibleRangeMs, totalMs, timelineScale.minVisibleRangeMs),
+		[visibleRangeMs, totalMs, timelineScale.minVisibleRangeMs],
+	);
+	const timelineZoomLabel =
+		totalMs > 0 && visibleRangeMs >= totalMs - 1
+			? t("labels.fullRange")
+			: formatVisibleDurationLabel(visibleRangeMs);
+	const canZoomTimeline = totalMs > timelineScale.minVisibleRangeMs;
+
+	const setTimelineVisibleRange = useCallback(
+		(nextVisibleRangeMs: number) => {
+			if (totalMs <= 0) return;
+
+			setRange((previous) => {
+				const normalized = clampTimelineVisibleRange(
+					previous,
+					totalMs,
+					timelineScale.minVisibleRangeMs,
+				);
+				const span = Math.min(
+					Math.max(nextVisibleRangeMs, timelineScale.minVisibleRangeMs),
+					totalMs,
+				);
+				const currentTimeInView =
+					currentTimeMs >= normalized.start && currentTimeMs <= normalized.end;
+				const anchorTime = currentTimeInView
+					? Math.max(0, Math.min(currentTimeMs, totalMs))
+					: normalized.start + (normalized.end - normalized.start) / 2;
+				const nextRange = clampTimelineVisibleRange(
+					{
+						start: anchorTime - span / 2,
+						end: anchorTime + span / 2,
+					},
+					totalMs,
+					timelineScale.minVisibleRangeMs,
+				);
+
+				return nextRange.start === previous.start && nextRange.end === previous.end
+					? previous
+					: nextRange;
+			});
+		},
+		[currentTimeMs, timelineScale.minVisibleRangeMs, totalMs],
+	);
+
+	const handleTimelineZoomSliderChange = useCallback(
+		(value: number[]) => {
+			const nextValue = value[0] ?? 0;
+			setTimelineVisibleRange(
+				getVisibleRangeForZoomValue(nextValue, totalMs, timelineScale.minVisibleRangeMs),
+			);
+		},
+		[setTimelineVisibleRange, timelineScale.minVisibleRangeMs, totalMs],
+	);
+
+	const nudgeTimelineZoom = useCallback(
+		(direction: "in" | "out") => {
+			const nextValue =
+				direction === "in"
+					? Math.min(100, timelineZoomValue + TIMELINE_ZOOM_STEP)
+					: Math.max(0, timelineZoomValue - TIMELINE_ZOOM_STEP);
+			setTimelineVisibleRange(
+				getVisibleRangeForZoomValue(nextValue, totalMs, timelineScale.minVisibleRangeMs),
+			);
+		},
+		[setTimelineVisibleRange, timelineScale.minVisibleRangeMs, timelineZoomValue, totalMs],
+	);
+
+	const fitTimelineToVideo = useCallback(() => {
+		if (totalMs <= 0) return;
+		setRange({ start: 0, end: totalMs });
+	}, [totalMs]);
 
 	const timelineItems = useMemo<TimelineRenderItem[]>(() => {
 		const zooms: TimelineRenderItem[] = zoomRegions.map((region, index) => ({
@@ -1603,6 +1797,53 @@ export default function TimelineEditor({
 					</DropdownMenu>
 				</div>
 				<div className="flex-1" />
+				<div className="hidden lg:flex items-center gap-2 min-w-[220px] max-w-[300px] flex-[0_1_300px] px-2 py-1 rounded-xl border border-white/[0.06] bg-white/[0.025]">
+					<Button
+						onClick={() => nudgeTimelineZoom("out")}
+						disabled={!canZoomTimeline || timelineZoomValue <= 0}
+						variant="ghost"
+						size="icon"
+						className="h-6 w-6 rounded-lg text-slate-500 hover:text-[#C24B72] hover:bg-[#C24B72]/10 disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+						title={t("buttons.zoomTimelineOut")}
+					>
+						<ZoomOut className="w-3.5 h-3.5" />
+					</Button>
+					<div className="flex-1 min-w-[96px]">
+						<Slider
+							value={[timelineZoomValue]}
+							min={0}
+							max={100}
+							step={1}
+							disabled={!canZoomTimeline}
+							onValueChange={handleTimelineZoomSliderChange}
+							aria-label={t("labels.timelineZoom")}
+							className="py-1"
+						/>
+					</div>
+					<Button
+						onClick={() => nudgeTimelineZoom("in")}
+						disabled={!canZoomTimeline || timelineZoomValue >= 100}
+						variant="ghost"
+						size="icon"
+						className="h-6 w-6 rounded-lg text-slate-500 hover:text-[#C24B72] hover:bg-[#C24B72]/10 disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+						title={t("buttons.zoomTimelineIn")}
+					>
+						<ZoomIn className="w-3.5 h-3.5" />
+					</Button>
+					<Button
+						onClick={fitTimelineToVideo}
+						disabled={!canZoomTimeline || timelineZoomValue <= 0}
+						variant="ghost"
+						size="icon"
+						className="h-6 w-6 rounded-lg text-slate-500 hover:text-[#C24B72] hover:bg-[#C24B72]/10 disabled:opacity-35 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+						title={t("buttons.fitTimeline")}
+					>
+						<Maximize2 className="w-3.5 h-3.5" />
+					</Button>
+					<span className="w-12 text-right text-[10px] tabular-nums text-slate-500 font-medium">
+						{timelineZoomLabel}
+					</span>
+				</div>
 				<div className="hidden md:flex items-center gap-3 text-[10px] text-slate-500 font-medium">
 					<span className="flex items-center gap-1.5">
 						<kbd className="px-1.5 py-0.5 bg-white/5 border border-white/10 rounded text-[#C24B72] font-sans">
@@ -1648,6 +1889,7 @@ export default function TimelineEditor({
 						items={timelineItems}
 						videoDurationMs={totalMs}
 						currentTimeMs={currentTimeMs}
+						minVisibleRangeMs={timelineScale.minVisibleRangeMs}
 						onSeek={onSeek}
 						onRangeChange={setRange}
 						onSelectZoom={onSelectZoom}

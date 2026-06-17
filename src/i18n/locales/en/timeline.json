@@ -9,7 +9,10 @@
 		"addTrim": "Add Trim (T)",
 		"addAnnotation": "Add Annotation (A)",
 		"addBlur": "Add Blur (B)",
-		"addSpeed": "Add Speed (S)"
+		"addSpeed": "Add Speed (S)",
+		"zoomTimelineOut": "Zoom timeline out",
+		"zoomTimelineIn": "Zoom timeline in",
+		"fitTimeline": "Fit full timeline"
 	},
 	"hints": {
 		"pressZoom": "Press Z to add zoom",
@@ -29,7 +32,9 @@
 		"annotationItem": "Annotation",
 		"blurItem": "Blur {{index}}",
 		"imageItem": "Image",
-		"emptyText": "Empty text"
+		"emptyText": "Empty text",
+		"timelineZoom": "Timeline zoom",
+		"fullRange": "Full"
 	},
 	"emptyState": {
 		"noVideo": "No Video Loaded",

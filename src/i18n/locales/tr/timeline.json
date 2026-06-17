@@ -5,7 +5,10 @@
 		"addTrim": "Kırpma Ekle (T)",
 		"addAnnotation": "Açıklama Ekle (A)",
 		"addSpeed": "Hız Ekle (S)",
-		"addBlur": "Bulanık ekle (B)"
+		"addBlur": "Bulanık ekle (B)",
+		"zoomTimelineOut": "Zoom timeline out",
+		"zoomTimelineIn": "Zoom timeline in",
+		"fitTimeline": "Fit full timeline"
 	},
 	"hints": {
 		"pressZoom": "Yakınlaştırma eklemek için Z tuşuna basın",
@@ -25,7 +28,9 @@
 		"annotationItem": "Açıklama",
 		"imageItem": "Görüntü",
 		"emptyText": "Boş metin",
-		"blurItem": "Bulanık {{index}}"
+		"blurItem": "Bulanık {{index}}",
+		"timelineZoom": "Timeline zoom",
+		"fullRange": "Full"
 	},
 	"emptyState": {
 		"noVideo": "Video Yüklenmedi",

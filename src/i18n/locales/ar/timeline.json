@@ -5,7 +5,10 @@
 		"addTrim": "إضافة قص (T)",
 		"addAnnotation": "إضافة شرح (A)",
 		"addBlur": "إضافة تمويه (B)",
-		"addSpeed": "إضافة سرعة (S)"
+		"addSpeed": "إضافة سرعة (S)",
+		"zoomTimelineOut": "Zoom timeline out",
+		"zoomTimelineIn": "Zoom timeline in",
+		"fitTimeline": "Fit full timeline"
 	},
 	"hints": {
 		"pressZoom": "اضغط Z لإضافة تكبير",
@@ -25,7 +28,9 @@
 		"annotationItem": "شرح",
 		"blurItem": "تمويه {{index}}",
 		"imageItem": "صورة",
-		"emptyText": "نص فارغ"
+		"emptyText": "نص فارغ",
+		"timelineZoom": "Timeline zoom",
+		"fullRange": "Full"
 	},
 	"emptyState": {
 		"noVideo": "لم يتم تحميل أي فيديو",

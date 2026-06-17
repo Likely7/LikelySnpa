@@ -5,7 +5,10 @@
 		"addTrim": "Thêm Cắt (T)",
 		"addAnnotation": "Thêm Chú thích (A)",
 		"addBlur": "Thêm Làm mờ (B)",
-		"addSpeed": "Thêm Tốc độ (S)"
+		"addSpeed": "Thêm Tốc độ (S)",
+		"zoomTimelineOut": "Zoom timeline out",
+		"zoomTimelineIn": "Zoom timeline in",
+		"fitTimeline": "Fit full timeline"
 	},
 	"hints": {
 		"pressZoom": "Nhấn Z để thêm thu phóng",
@@ -25,7 +28,9 @@
 		"annotationItem": "Chú thích",
 		"blurItem": "Làm mờ {{index}}",
 		"imageItem": "Hình ảnh",
-		"emptyText": "Văn bản trống"
+		"emptyText": "Văn bản trống",
+		"timelineZoom": "Timeline zoom",
+		"fullRange": "Full"
 	},
 	"emptyState": {
 		"noVideo": "Chưa tải video",

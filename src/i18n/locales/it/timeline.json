@@ -5,7 +5,10 @@
 		"addTrim": "Aggiungi taglio (T)",
 		"addAnnotation": "Aggiungi annotazione (A)",
 		"addBlur": "Aggiungi sfocatura (B)",
-		"addSpeed": "Aggiungi velocità (S)"
+		"addSpeed": "Aggiungi velocità (S)",
+		"zoomTimelineOut": "Zoom timeline out",
+		"zoomTimelineIn": "Zoom timeline in",
+		"fitTimeline": "Fit full timeline"
 	},
 	"hints": {
 		"pressZoom": "Premi Z per aggiungere zoom",
@@ -25,7 +28,9 @@
 		"annotationItem": "Annotazione",
 		"blurItem": "Sfocatura {{index}}",
 		"imageItem": "Immagine",
-		"emptyText": "Testo vuoto"
+		"emptyText": "Testo vuoto",
+		"timelineZoom": "Timeline zoom",
+		"fullRange": "Full"
 	},
 	"emptyState": {
 		"noVideo": "Nessun video caricato",

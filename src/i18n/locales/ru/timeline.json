@@ -5,7 +5,10 @@
 		"addTrim": "Добавить обрезку (T)",
 		"addAnnotation": "Добавить аннотацию (A)",
 		"addBlur": "Добавить размытие (B)",
-		"addSpeed": "Изменить скорость (S)"
+		"addSpeed": "Изменить скорость (S)",
+		"zoomTimelineOut": "Zoom timeline out",
+		"zoomTimelineIn": "Zoom timeline in",
+		"fitTimeline": "Fit full timeline"
 	},
 	"hints": {
 		"pressZoom": "Нажмите Z для добавления масштабирования",
@@ -25,7 +28,9 @@
 		"annotationItem": "Аннотация",
 		"blurItem": "Размытие {{index}}",
 		"imageItem": "Изображение",
-		"emptyText": "Пустой текст"
+		"emptyText": "Пустой текст",
+		"timelineZoom": "Timeline zoom",
+		"fullRange": "Full"
 	},
 	"emptyState": {
 		"noVideo": "Видео не загружено",

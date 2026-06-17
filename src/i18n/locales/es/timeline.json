@@ -5,7 +5,10 @@
 		"addTrim": "Agregar recorte (T)",
 		"addAnnotation": "Agregar anotación (A)",
 		"addSpeed": "Agregar velocidad (S)",
-		"addBlur": "Agregar desenfoque (B)"
+		"addBlur": "Agregar desenfoque (B)",
+		"zoomTimelineOut": "Zoom timeline out",
+		"zoomTimelineIn": "Zoom timeline in",
+		"fitTimeline": "Fit full timeline"
 	},
 	"hints": {
 		"pressZoom": "Presiona Z para agregar zoom",
@@ -25,7 +28,9 @@
 		"annotationItem": "Anotación",
 		"imageItem": "Imagen",
 		"emptyText": "Texto vacío",
-		"blurItem": "Desenfoque {{index}}"
+		"blurItem": "Desenfoque {{index}}",
+		"timelineZoom": "Timeline zoom",
+		"fullRange": "Full"
 	},
 	"emptyState": {
 		"noVideo": "No hay video cargado",

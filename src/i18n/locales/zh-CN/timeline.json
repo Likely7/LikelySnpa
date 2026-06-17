@@ -9,7 +9,10 @@
 		"addTrim": "添加剪辑 (T)",
 		"addAnnotation": "添加标注 (A)",
 		"addSpeed": "添加速度 (S)",
-		"addBlur": "添加模糊 (B)"
+		"addBlur": "添加模糊 (B)",
+		"zoomTimelineOut": "缩小时间轴",
+		"zoomTimelineIn": "放大时间轴",
+		"fitTimeline": "显示完整时间轴"
 	},
 	"hints": {
 		"pressZoom": "按 Z 添加缩放",
@@ -29,7 +32,9 @@
 		"annotationItem": "标注",
 		"imageItem": "图片",
 		"emptyText": "空文本",
-		"blurItem": "模糊 {{index}}"
+		"blurItem": "模糊 {{index}}",
+		"timelineZoom": "时间轴缩放",
+		"fullRange": "全片"
 	},
 	"emptyState": {
 		"noVideo": "未加载视频",

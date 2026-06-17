@@ -5,7 +5,10 @@
 		"addTrim": "新增剪輯 (T)",
 		"addAnnotation": "新增標註 (A)",
 		"addSpeed": "新增速度 (S)",
-		"addBlur": "新增模糊 (B)"
+		"addBlur": "新增模糊 (B)",
+		"zoomTimelineOut": "縮小時間軸",
+		"zoomTimelineIn": "放大時間軸",
+		"fitTimeline": "顯示完整時間軸"
 	},
 	"hints": {
 		"pressZoom": "按 Z 新增縮放",
@@ -25,7 +28,9 @@
 		"annotationItem": "標註",
 		"imageItem": "圖片",
 		"emptyText": "空文字",
-		"blurItem": "模糊 {{index}}"
+		"blurItem": "模糊 {{index}}",
+		"timelineZoom": "時間軸縮放",
+		"fullRange": "全片"
 	},
 	"emptyState": {
 		"noVideo": "未載入影片",

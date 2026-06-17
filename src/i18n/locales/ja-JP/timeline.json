@@ -5,7 +5,10 @@
 		"addTrim": "トリムを追加 (T)",
 		"addAnnotation": "注釈を追加 (A)",
 		"addBlur": "ぼかしを追加 (B)",
-		"addSpeed": "再生速度を追加 (S)"
+		"addSpeed": "再生速度を追加 (S)",
+		"zoomTimelineOut": "Zoom timeline out",
+		"zoomTimelineIn": "Zoom timeline in",
+		"fitTimeline": "Fit full timeline"
 	},
 	"hints": {
 		"pressZoom": "Zキーを押してズームを追加",
@@ -25,7 +28,9 @@
 		"annotationItem": "注釈",
 		"blurItem": "ぼかし {{index}}",
 		"imageItem": "画像",
-		"emptyText": "空のテキスト"
+		"emptyText": "空のテキスト",
+		"timelineZoom": "Timeline zoom",
+		"fullRange": "Full"
 	},
 	"emptyState": {
 		"noVideo": "ビデオが読み込まれていません",
