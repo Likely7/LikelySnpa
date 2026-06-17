@@ -17,7 +17,8 @@ The central direction is final-product repair, not temporary workaround:
 
 - recording directory must be user selectable;
 - long recordings must continuously write to disk;
-- new recordings should become a single `.likelysnap` package while keeping internal files streamable;
+- new recordings are a single `.likelysnap` package while keeping internal files streamable;
 - media must be recoverable after crashes;
 - macOS audio/video sync must be measurable and fixed;
-- cursor telemetry must remain aligned so zoom features do not regress.
+- cursor telemetry must remain aligned so auto zoom and Follow Mouse do not regress;
+- app branding and icon assets must come from reproducible project files, not one-off generated output.

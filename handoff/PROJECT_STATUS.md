@@ -10,7 +10,8 @@
 - Current product name: `LikelySnap`
 - Current npm package name: `likelysnap`
 - Current Electron appId: `com.likelysnap.app`
-- Latest local checkpoint before native webcam long-recording work: `7c59ac4 fix: stabilize auto zoom follow model`
+- Latest local checkpoint: `ba701c2 fix: simplify settings footer contact copy`
+- Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
 - Archive before native webcam sidecar work: `archive/before-native-webcam-sidecar-20260617-131845`
 - App icon source of truth: `icons/source/logo.png`, generated through `npm run generate:icons` into the public favicon, Linux PNG set, macOS `.icns`, and Windows `.ico`.
 
@@ -40,6 +41,7 @@
 - Follow Mouse remains stored internally as `focusMode` for project compatibility, but user-facing UI and docs call it Follow Mouse / 跟随鼠标.
 - macOS native window recordings now use ScreenCaptureKit-reported window capture bounds for editable cursor normalization, avoiding display-bounds offset in Follow Mouse zoom.
 - User retest after this fix reported the Follow Mouse behavior is close enough to continue; treat Follow Mouse zoom as implemented unless a new concrete offset sample appears.
+- Editor settings footer no longer exposes report bug, save diagnostics, or GitHub star buttons. It shows one centered contact line: `抖音小红书：Likely7  反馈问题`.
 - New project files use `.likelysnap`; legacy `.openscreen` project files remain loadable.
 - New native recordings now write into `recording-<id>.likelysnap/` package directories with `screen.mp4`, optional `webcam.mp4`, `cursor.json`, and `manifest.json`. Browser fallback and legacy packages may still use `webcam.webm`.
 - A real ~32 minute macOS test produced healthy `screen.mp4` but a ~4 GB `webcam.webm`; stop-time WebM duration patch failed with `ERR_FS_FILE_TOO_LARGE`, and the editor could freeze when mounting that sidecar.
@@ -64,3 +66,10 @@
 - Follow Mouse zoom has targeted automated coverage and is now being refined for product feel: upstream behavior was confirmed to mix tight zoom-in tracking with smoother full-zoom tracking, so LikelySnap uses stable fixed-position auto zoom by default plus explicit per-zoom Follow Mouse.
 - Current highest remaining long-recording risk is export and multi-hour editor scale, not recording package write-out. Main screen MP4 can remain large but referenced on disk; webcam sidecars are now native MP4 for native capture and unsafe legacy WebM files are skipped at editor open.
 - Windows native webcam code is implemented but not truth-tested on Windows hardware from this macOS machine.
+
+## Latest Verification
+
+- `npm run generate:icons -- /Users/macbook/Downloads/logo.png` passes and regenerates all app icon assets from the stored source logo.
+- `npm test -- electron/ipc/recordingPackage.test.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts` passes with 16 tests after auto zoom span and Follow Mouse refinements.
+- `npm run lint` passes.
+- `./node_modules/.bin/tsc --noEmit` passes.

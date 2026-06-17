@@ -31,9 +31,12 @@ Linux/browser fallback uses Electron/Chromium capture and `MediaRecorder`.
 
 The zoom system does not require zoom to be baked into the raw recording.
 
-- Cursor samples are written beside the video as `<screenVideoPath>.cursor.json`.
+- New package recordings write cursor samples into package-local `cursor.json`; legacy loose recordings still use `<screenVideoPath>.cursor.json`.
 - Auto zoom suggestions are derived from telemetry in `src/components/video-editor/timeline/zoomSuggestionUtils.ts`.
 - Preview/export follow cursor telemetry through `src/components/video-editor/videoPlayback/zoomRegionUtils.ts` and `src/lib/exporter/frameRenderer.ts`.
+- User-facing UI calls cursor-following zoom "Follow Mouse" / `跟随鼠标`; the persisted field remains `focusMode` for compatibility.
+- Auto zoom suggestions choose time spans separately from Follow Mouse behavior. Ordinary dwell/click suggestions use stable fixed-position zooms; held mouse-button spans default to Follow Mouse.
+- Suggestion duration is data-driven: dwell spans use real dwell duration plus context padding, nearby same-area dwell runs merge, click-only suggestions stay short, and durations are clamped to bounded limits.
 
 The key contract is:
 
@@ -46,15 +49,19 @@ The key contract is:
 
 Current implementation:
 
-- New macOS recordings still write loose files in the selected recording directory.
-- `screen.mp4` is continuously written by the ScreenCaptureKit helper.
-- `recording-<id>-webcam.webm` is continuously written through a main-process stream when webcam is enabled.
-- `recording-<id>.mp4.cursor.json` is created at recording start and updated in throttled live snapshots.
-- `recording-<id>.session.json` is created at recording start and updated at stop/attach.
+- New native recordings are grouped into one user-visible `recording-<id>.likelysnap/` package directory in the selected recording directory.
+- Package files are `screen.mp4`, optional native `webcam.mp4`, `cursor.json`, and `manifest.json`.
+- macOS `screen.mp4` is continuously written by the ScreenCaptureKit helper.
+- macOS native webcam sidecars are written by the ScreenCaptureKit helper via `AVCaptureSession + AVAssetWriter` as package-local `webcam.mp4`.
+- Windows native webcam sidecars use the WGC helper's Media Foundation/DirectShow path as package-local `webcam.mp4`.
+- Cursor telemetry and the manifest are created at recording start and updated during/after capture.
+- The manifest uses relative paths so moved packages can reopen.
+- Missing `manifest.json` can be rebuilt from package files for recovery.
+- Legacy loose recordings and legacy package `webcam.webm` sidecars remain loadable. Huge or unsafe legacy webcam sidecars are skipped so the main screen video can still open.
 
-Next implementation target:
+## Branding And Support UI
 
-- New recordings should be grouped into one `recording-<id>.likelysnap/` package directory.
-- Package files should be `manifest.json`, `screen.mp4`, `webcam.webm`, and `cursor.json`.
-- The manifest should use relative paths so the package can be moved.
-- Legacy loose recordings must remain loadable.
+- Product-facing name is `LikelySnap`; the package is `likelysnap`; the Electron app id is `com.likelysnap.app`.
+- The app icon source of truth is `icons/source/logo.png`.
+- Run `npm run generate:icons` to regenerate `public/likelysnap.png`, `public/openscreen.png`, Linux PNG icons, macOS `.icns`, and Windows `.ico`.
+- The editor settings footer no longer exposes GitHub/report/diagnostic buttons. It now shows one centered contact line: `抖音小红书：Likely7  反馈问题`.

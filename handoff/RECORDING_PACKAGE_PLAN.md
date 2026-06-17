@@ -2,23 +2,23 @@
 
 ## Goal
 
-Implementation status: package model is implemented in code and now needs real macOS recording validation.
+Implementation status: package model is implemented in code and now needs real macOS/Windows recording validation.
 
-Move new recordings from four loose sibling files to one Finder-friendly recording package:
+New recordings are grouped into one Finder-friendly recording package:
 
 ```text
 recording-<id>.likelysnap/
   manifest.json
   screen.mp4
-  webcam.webm
+  webcam.mp4
   cursor.json
 ```
 
-On macOS this should behave like a single user-facing document/package while staying a normal directory internally. This preserves continuous disk writing and crash recovery.
+On macOS this behaves like a single user-facing document/package while staying a normal directory internally. This preserves continuous disk writing and crash recovery.
 
 ## Why Package Directory, Not Zip Or Single Binary
 
-- A directory package allows `screen.mp4`, `webcam.webm`, `cursor.json`, and `manifest.json` to be written during capture.
+- A directory package allows `screen.mp4`, `webcam.mp4`/fallback `webcam.webm`, `cursor.json`, and `manifest.json` to be written during capture.
 - Zip would only exist after capture, so a crash before finalization still leaves loose partial files or no package.
 - Embedding everything into MP4 or a custom binary container would make live writes, recovery, and editor reads much more fragile.
 
@@ -44,7 +44,7 @@ Use relative paths so packages can be moved between folders and machines:
   "brand": "LikelySnap",
   "media": {
     "screenVideoPath": "screen.mp4",
-    "webcamVideoPath": "webcam.webm",
+    "webcamVideoPath": "webcam.mp4",
     "webcamStartOffsetMs": 120,
     "cursorTelemetryPath": "cursor.json"
   },
@@ -69,14 +69,15 @@ Status transitions:
 During recording:
 
 - `screen.mp4` is written by the macOS ScreenCaptureKit helper.
-- `webcam.webm` is written through the existing renderer `MediaRecorder` to main-process file stream.
+- Native macOS and Windows recordings write package-local `webcam.mp4`.
+- Browser/fallback recordings may still write package-local `webcam.webm`.
 - `cursor.json` is created at start and refreshed in throttled snapshots.
 - `manifest.json` is created at start and updated as paths/status/diagnostics become available.
 
 On stop:
 
 - Flush/close screen and webcam streams.
-- Patch `webcam.webm` duration if streamed WebM needs it.
+- Patch `webcam.webm` duration if a fallback streamed WebM needs it and is below the safe whole-file threshold.
 - Finalize cursor telemetry with pause/warmup offsets applied.
 - Update `manifest.json` to `ready`.
 - Open editor using the package manifest.
@@ -94,33 +95,41 @@ For each package:
 1. Read `manifest.json` if present.
 2. If missing, rebuild it from files in the package.
 3. Require readable `screen.mp4`; without it the package is failed.
-4. Attach `webcam.webm` if present.
+4. Attach `webcam.mp4` or fallback `webcam.webm` if present and safe to mount.
 5. Attach `cursor.json` if present.
 6. Mark as `recoverable` if stop/finalize did not complete cleanly.
 
 Legacy recovery should still scan loose `recording-<id>.mp4` files and infer sibling sidecars.
 
-## Implementation Steps
+## Implementation Status
 
-1. Add package path helpers in the main process:
+Implemented:
+
+1. Added package path helpers in the main process:
    - create package directory path;
-   - resolve `screen.mp4`, `webcam.webm`, `cursor.json`, `manifest.json`;
+   - resolve `screen.mp4`, `webcam.mp4`, fallback `webcam.webm`, `cursor.json`, `manifest.json`;
    - validate paths stay inside the package.
-2. Change native macOS recording output path to package `screen.mp4`.
-3. Change macOS webcam stream file name/path to package `webcam.webm`.
-4. Change cursor live telemetry path to package `cursor.json`.
-5. Change session manifest writer to write package `manifest.json`.
-6. Add package open/load IPC and dialog filter for `.likelysnap` packages.
-7. Update editor media normalization to resolve manifest-relative media paths.
-8. Keep legacy loose-file loader as a compatibility path.
-9. Add startup recovery scan for packages and legacy loose recordings.
-10. Register macOS document/package metadata in electron-builder so Finder treats `.likelysnap` as one app document.
+2. Changed native macOS recording output path to package `screen.mp4`.
+3. Changed native macOS/Windows webcam sidecars to package `webcam.mp4`.
+4. Changed cursor live telemetry path to package `cursor.json`.
+5. Changed session manifest writer to write package `manifest.json`.
+6. Added package open/load IPC and dialog filter for `.likelysnap` packages.
+7. Updated editor media normalization to resolve manifest-relative media paths.
+8. Kept legacy loose-file loader as a compatibility path.
+9. Added missing-manifest package recovery.
+10. Registered macOS document/package metadata in electron-builder so Finder treats `.likelysnap` as one app document.
+
+Still pending:
+
+- Real macOS long-recording validation against package-local native `webcam.mp4`.
+- Real Windows validation of WGC package-local `webcam.mp4`.
+- Interrupted-recording/kill-process recovery validation on real packages.
 
 ## Acceptance Criteria
 
 - A new recording creates exactly one visible `recording-<id>.likelysnap` package in the recording directory.
 - During active recording, package contents are present and growing/updating.
-- Opening the package loads screen, webcam, cursor telemetry, and webcam offset.
+- Opening the package loads screen, safe webcam sidecar, cursor telemetry, and webcam offset.
 - Moving the package to another folder still opens correctly because manifest paths are relative.
 - Deleting `manifest.json` and reopening the package rebuilds a usable manifest.
 - Legacy loose MP4 recordings still open and recover sidecars when present.

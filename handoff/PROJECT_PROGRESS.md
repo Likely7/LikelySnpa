@@ -48,6 +48,8 @@
 44. Replaced the app logo/icon chain from the user-provided square logo and added a reproducible `npm run generate:icons` pipeline that creates rounded-corner PNG, macOS `.icns`, Windows `.ico`, and public favicon assets.
 45. Changed user-facing zoom wording from Focus Mode/Auto-Focus to Follow Mouse/跟随鼠标 while keeping the internal `focusMode` field for old project compatibility.
 46. Refined auto zoom span generation so long explanations produce longer stable zooms instead of repeated fixed-length jumps: dwell spans use their real duration plus padding, nearby same-area dwell runs merge, click-only suggestions stay short, and held mouse-button spans default to Follow Mouse.
+47. Simplified the editor settings footer by removing report bug, save diagnostics, and GitHub star buttons, replacing them with the centered contact line `抖音小红书：Likely7  反馈问题`.
+48. Updated README and handoff docs to reflect the current package/webcam/auto-zoom/branding state instead of the earlier pre-package plan.
 
 ## Implemented This Pass
 
@@ -86,6 +88,7 @@
 - `src/components/video-editor/timeline/zoomSuggestionUtils.test.ts`
 - `src/components/video-editor/videoPlayback/cursorFollowUtils.ts`
 - `src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts`
+- `src/components/video-editor/SettingsPanel.tsx`
 - `scripts/generate-icons.mjs`
 - `icons/source/logo.png`
 - `icons/icons/*`
@@ -114,9 +117,10 @@
 - `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after native webcam sidecar refactor with deprecation warnings only.
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local macOS helper binary.
 - `npm run generate:icons -- /Users/macbook/Downloads/logo.png` passes and regenerates all app icon assets from the stored source logo.
+- `npm run lint` and `./node_modules/.bin/tsc --noEmit` pass after the settings footer simplification.
 - `npm run build:native:mac` is blocked by the local machine using Command Line Tools instead of full Xcode.
 - `npm run i18n:check` still fails on pre-existing translation drift; the new `tooltips.chooseRecordingDirectory` key is no longer listed as missing.
-- Latest verified checkpoint before native webcam implementation: `7c59ac4 fix: stabilize auto zoom follow model`.
+- Latest verified checkpoint: `ba701c2 fix: simplify settings footer contact copy`.
 
 ## Next Engineering Step
 
