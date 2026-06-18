@@ -1,0 +1,884 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>LikelySnap GitHub Promo</title>
+		<style>
+			:root {
+				--bg: #07070a;
+				--panel: #101016;
+				--panel-2: #15151e;
+				--line: rgba(255, 255, 255, 0.1);
+				--line-strong: rgba(255, 255, 255, 0.18);
+				--text: #f5eef3;
+				--muted: #9b94a3;
+				--pink: #ff4f8b;
+				--pink-2: #a72555;
+				--green: #35d08a;
+				--amber: #f1a342;
+				--blue: #68a8ff;
+				--mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+				--sans: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				width: 100%;
+				height: 100%;
+				margin: 0;
+				overflow: hidden;
+				background: var(--bg);
+				color: var(--text);
+				font-family: var(--sans);
+			}
+
+			body {
+				display: grid;
+				place-items: center;
+			}
+
+			.stage {
+				position: relative;
+				width: 1920px;
+				height: 1080px;
+				overflow: hidden;
+				background:
+					radial-gradient(circle at 70% 18%, rgba(255, 79, 139, 0.16), transparent 34%),
+					radial-gradient(circle at 20% 78%, rgba(53, 208, 138, 0.08), transparent 32%),
+					linear-gradient(180deg, #0b090d 0%, #07070a 100%);
+				transform-origin: center;
+			}
+
+			.stage::before {
+				position: absolute;
+				inset: 0;
+				content: "";
+				background-image:
+					linear-gradient(rgba(255, 255, 255, 0.045) 1px, transparent 1px),
+					linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+				background-size: 64px 64px;
+				mask-image: radial-gradient(circle at center, black 0%, transparent 80%);
+				opacity: 0.28;
+			}
+
+			.scene {
+				position: absolute;
+				inset: 0;
+			}
+
+			.logo-scene {
+				display: grid;
+				place-items: center;
+			}
+
+			.brand-lockup {
+				position: absolute;
+				top: 78px;
+				left: 92px;
+				display: flex;
+				align-items: center;
+				gap: 18px;
+				opacity: var(--brand-lockup-opacity, 0);
+				transform: translateY(var(--brand-lockup-y, -12px));
+			}
+
+			.brand-lockup img {
+				width: 48px;
+				height: 48px;
+				border-radius: 14px;
+				box-shadow: 0 0 34px rgba(255, 79, 139, 0.28);
+			}
+
+			.brand-lockup span {
+				font-size: 26px;
+				font-weight: 760;
+				letter-spacing: 0;
+			}
+
+			.hero-logo {
+				position: absolute;
+				left: 50%;
+				top: 43%;
+				width: 154px;
+				height: 154px;
+				padding: 10px;
+				border: 1px solid rgba(255, 255, 255, 0.18);
+				border-radius: 36px;
+				background: rgba(255, 255, 255, 0.06);
+				box-shadow: 0 34px 120px rgba(255, 79, 139, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+				transform: translate(-50%, -50%) scale(var(--hero-scale, 1));
+				opacity: var(--hero-opacity, 1);
+			}
+
+			.hero-logo img {
+				width: 100%;
+				height: 100%;
+				border-radius: 28px;
+				display: block;
+			}
+
+			.hero-title {
+				position: absolute;
+				top: 56%;
+				left: 0;
+				width: 100%;
+				text-align: center;
+				font-size: 76px;
+				font-weight: 820;
+				letter-spacing: 0;
+				opacity: var(--hero-text-opacity, 1);
+				transform: translateY(var(--hero-text-y, 0));
+			}
+
+			.hero-subtitle {
+				position: absolute;
+				top: 65%;
+				left: 0;
+				width: 100%;
+				text-align: center;
+				color: #bdb5c2;
+				font-size: 26px;
+				font-weight: 550;
+				opacity: var(--hero-sub-opacity, 1);
+				transform: translateY(var(--hero-sub-y, 0));
+			}
+
+			.package {
+				position: absolute;
+				left: 116px;
+				top: 180px;
+				width: 560px;
+				border: 1px solid var(--line-strong);
+				border-radius: 26px;
+				background: rgba(16, 16, 22, 0.86);
+				box-shadow: 0 28px 90px rgba(0, 0, 0, 0.42);
+				overflow: hidden;
+				opacity: var(--package-opacity, 0);
+				transform: translateX(var(--package-x, -42px)) translateY(var(--package-y, 0)) scale(var(--package-scale, 1));
+			}
+
+			.package-head {
+				display: flex;
+				align-items: center;
+				gap: 14px;
+				height: 76px;
+				padding: 0 26px;
+				border-bottom: 1px solid var(--line);
+				font-family: var(--mono);
+				color: #f7d7e3;
+				background: linear-gradient(90deg, rgba(255, 79, 139, 0.14), transparent);
+			}
+
+			.folder-dot {
+				width: 18px;
+				height: 18px;
+				border-radius: 5px;
+				background: var(--pink);
+				box-shadow: 0 0 22px rgba(255, 79, 139, 0.55);
+			}
+
+			.file-list {
+				padding: 18px 22px 22px;
+			}
+
+			.file-row {
+				display: grid;
+				grid-template-columns: 32px 1fr auto;
+				align-items: center;
+				gap: 14px;
+				height: 58px;
+				padding: 0 14px;
+				border-radius: 15px;
+				color: var(--text);
+				font-family: var(--mono);
+				font-size: 22px;
+				opacity: var(--row-opacity, 0);
+				transform: translateY(var(--row-y, 16px));
+			}
+
+			.file-row[data-lit="true"] {
+				background: rgba(255, 255, 255, 0.055);
+			}
+
+			.file-icon {
+				width: 22px;
+				height: 22px;
+				border-radius: 6px;
+				border: 1px solid rgba(255, 255, 255, 0.22);
+			}
+
+			.file-row .tag {
+				color: var(--muted);
+				font-size: 15px;
+				font-family: var(--sans);
+			}
+
+			.editor {
+				position: absolute;
+				right: 92px;
+				top: 122px;
+				width: 1160px;
+				height: 768px;
+				border: 1px solid var(--line-strong);
+				border-radius: 30px;
+				background: rgba(11, 11, 16, 0.88);
+				box-shadow: 0 42px 150px rgba(0, 0, 0, 0.5);
+				overflow: hidden;
+				opacity: var(--editor-opacity, 0);
+				transform: translateX(var(--editor-x, 80px)) scale(var(--editor-scale, 0.98));
+			}
+
+			.editor-top {
+				height: 68px;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0 26px;
+				border-bottom: 1px solid var(--line);
+				background: rgba(255, 255, 255, 0.03);
+			}
+
+			.window-dots {
+				display: flex;
+				gap: 9px;
+			}
+
+			.window-dots i {
+				width: 13px;
+				height: 13px;
+				border-radius: 50%;
+				background: #3b3942;
+			}
+
+			.export-pill {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				height: 36px;
+				padding: 0 16px;
+				border-radius: 11px;
+				background: rgba(53, 208, 138, 0.14);
+				color: #bff8da;
+				font-size: 15px;
+				font-weight: 700;
+			}
+
+			.editor-body {
+				display: grid;
+				grid-template-columns: 1fr 258px;
+				height: 700px;
+			}
+
+			.preview-shell {
+				position: relative;
+				padding: 30px 30px 20px;
+			}
+
+			.preview {
+				position: relative;
+				height: 430px;
+				border: 1px solid var(--line);
+				border-radius: 24px;
+				background:
+					linear-gradient(135deg, rgba(255, 79, 139, 0.16), transparent 35%),
+					linear-gradient(160deg, #1d2430, #0f1015 58%, #191119);
+				overflow: hidden;
+			}
+
+			.preview-grid {
+				position: absolute;
+				inset: 42px;
+				display: grid;
+				grid-template-columns: 190px 1fr;
+				gap: 24px;
+				opacity: 0.62;
+				transform: scale(var(--preview-content-scale, 1));
+				transform-origin: var(--zoom-origin, 62% 48%);
+			}
+
+			.mock-sidebar {
+				border-radius: 18px;
+				background: rgba(255, 255, 255, 0.065);
+				padding: 18px;
+			}
+
+			.mock-line {
+				height: 12px;
+				border-radius: 99px;
+				background: rgba(255, 255, 255, 0.18);
+				margin-bottom: 16px;
+			}
+
+			.mock-main {
+				border-radius: 20px;
+				background: rgba(0, 0, 0, 0.24);
+				padding: 24px;
+			}
+
+			.mock-title {
+				width: 62%;
+				height: 22px;
+				border-radius: 99px;
+				background: rgba(255, 255, 255, 0.26);
+				margin-bottom: 28px;
+			}
+
+			.mock-card {
+				width: 74%;
+				height: 58px;
+				border-radius: 17px;
+				background: rgba(255, 255, 255, 0.08);
+				margin-bottom: 18px;
+				border: 1px solid rgba(255, 255, 255, 0.08);
+			}
+
+			.zoom-frame {
+				position: absolute;
+				left: var(--zoom-left, 566px);
+				top: var(--zoom-top, 176px);
+				width: 226px;
+				height: 138px;
+				border: 3px solid var(--pink);
+				border-radius: 19px;
+				box-shadow: 0 0 0 999px rgba(0, 0, 0, var(--zoom-dim, 0)), 0 0 34px rgba(255, 79, 139, 0.62);
+				opacity: var(--zoom-frame-opacity, 0);
+			}
+
+			.cursor {
+				position: absolute;
+				left: var(--cursor-x, 690px);
+				top: var(--cursor-y, 268px);
+				width: 46px;
+				height: 46px;
+				filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.58));
+				opacity: var(--cursor-opacity, 0);
+				transform: rotate(-8deg) scale(var(--cursor-scale, 1));
+			}
+
+			.cursor::before {
+				content: "";
+				position: absolute;
+				left: 8px;
+				top: 2px;
+				width: 0;
+				height: 0;
+				border-left: 0 solid transparent;
+				border-right: 30px solid transparent;
+				border-top: 42px solid #fff2f7;
+			}
+
+			.cursor::after {
+				content: "";
+				position: absolute;
+				left: 10px;
+				top: 6px;
+				width: 0;
+				height: 0;
+				border-left: 0 solid transparent;
+				border-right: 24px solid transparent;
+				border-top: 34px solid var(--pink);
+			}
+
+			.side-panel {
+				border-left: 1px solid var(--line);
+				padding: 24px 20px;
+				background: rgba(255, 255, 255, 0.025);
+			}
+
+			.side-title {
+				color: #f4dbe5;
+				font-size: 18px;
+				font-weight: 760;
+				margin-bottom: 18px;
+			}
+
+			.control-chip {
+				height: 42px;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0 14px;
+				margin-bottom: 12px;
+				border: 1px solid var(--line);
+				border-radius: 13px;
+				color: var(--muted);
+				font-size: 14px;
+			}
+
+			.toggle-on {
+				width: 36px;
+				height: 20px;
+				border-radius: 99px;
+				background: rgba(255, 79, 139, 0.9);
+				position: relative;
+			}
+
+			.toggle-on::after {
+				position: absolute;
+				right: 3px;
+				top: 3px;
+				content: "";
+				width: 14px;
+				height: 14px;
+				border-radius: 50%;
+				background: #fff;
+			}
+
+			.timeline {
+				position: absolute;
+				left: 30px;
+				right: 30px;
+				bottom: 24px;
+				height: 222px;
+				border: 1px solid var(--line);
+				border-radius: 22px;
+				background: rgba(0, 0, 0, 0.28);
+				overflow: hidden;
+			}
+
+			.time-ruler {
+				height: 48px;
+				display: grid;
+				grid-template-columns: repeat(6, 1fr);
+				border-bottom: 1px solid var(--line);
+				color: #716f7d;
+				font-family: var(--mono);
+				font-size: 13px;
+			}
+
+			.time-ruler span {
+				padding: 18px 0 0 14px;
+				border-left: 1px solid rgba(255, 255, 255, 0.045);
+			}
+
+			.track {
+				position: relative;
+				height: 43px;
+				border-bottom: 1px solid rgba(255, 255, 255, 0.045);
+			}
+
+			.clip {
+				position: absolute;
+				top: 8px;
+				height: 27px;
+				border-radius: 8px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-size: 13px;
+				font-weight: 700;
+				color: rgba(255, 255, 255, 0.86);
+			}
+
+			.clip.zoom {
+				background: rgba(255, 79, 139, 0.28);
+				border: 1px solid rgba(255, 79, 139, 0.58);
+			}
+
+			.clip.video {
+				background: rgba(104, 168, 255, 0.22);
+				border: 1px solid rgba(104, 168, 255, 0.45);
+			}
+
+			.clip.cursor-lane {
+				background: rgba(53, 208, 138, 0.18);
+				border: 1px solid rgba(53, 208, 138, 0.42);
+			}
+
+			.playhead {
+				position: absolute;
+				top: 0;
+				bottom: 0;
+				left: var(--playhead-left, 22%);
+				width: 2px;
+				background: var(--pink);
+				box-shadow: 0 0 24px rgba(255, 79, 139, 0.75);
+			}
+
+			.claims {
+				position: absolute;
+				left: 116px;
+				bottom: 104px;
+				display: flex;
+				gap: 16px;
+				opacity: var(--claims-opacity, 0);
+				transform: translateY(var(--claims-y, 24px));
+			}
+
+			.claim {
+				height: 54px;
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				padding: 0 20px;
+				border: 1px solid rgba(255, 255, 255, 0.14);
+				border-radius: 16px;
+				background: rgba(16, 16, 22, 0.78);
+				font-size: 18px;
+				font-weight: 760;
+				box-shadow: 0 18px 44px rgba(0, 0, 0, 0.25);
+			}
+
+			.claim i {
+				width: 11px;
+				height: 11px;
+				border-radius: 50%;
+				background: var(--pink);
+				box-shadow: 0 0 18px rgba(255, 79, 139, 0.72);
+			}
+
+			.final {
+				display: grid;
+				place-items: center;
+				opacity: var(--final-opacity, 0);
+				transform: scale(var(--final-scale, 1.02));
+			}
+
+			.final-card {
+				position: relative;
+				display: grid;
+				place-items: center;
+				text-align: center;
+			}
+
+			.final-card img {
+				width: 132px;
+				height: 132px;
+				border-radius: 32px;
+				margin-bottom: 30px;
+				box-shadow: 0 0 80px rgba(255, 79, 139, 0.42);
+			}
+
+			.final-card h1 {
+				margin: 0;
+				font-size: 84px;
+				line-height: 1;
+				letter-spacing: 0;
+			}
+
+			.final-card p {
+				margin: 22px 0 0;
+				font-size: 27px;
+				color: var(--muted);
+				font-weight: 560;
+			}
+
+			.github-pill {
+				margin-top: 34px;
+				height: 48px;
+				display: inline-flex;
+				align-items: center;
+				gap: 12px;
+				padding: 0 18px;
+				border: 1px solid rgba(255, 255, 255, 0.15);
+				border-radius: 14px;
+				background: rgba(255, 255, 255, 0.055);
+				color: #f5eef3;
+				font-family: var(--mono);
+				font-size: 16px;
+			}
+
+			.github-mark {
+				width: 18px;
+				height: 18px;
+				border-radius: 50%;
+				background: #f5eef3;
+			}
+
+			.watermark {
+				position: absolute;
+				right: 46px;
+				bottom: 34px;
+				color: rgba(255, 255, 255, 0.34);
+				font-family: var(--mono);
+				font-size: 13px;
+				opacity: var(--watermark-opacity, 1);
+			}
+		</style>
+	</head>
+	<body>
+		<div class="stage" id="stage">
+			<div class="brand-lockup" id="brandLockup">
+				<img src="../../public/likelysnap.png" alt="" />
+				<span>LikelySnap</span>
+			</div>
+
+			<section class="scene logo-scene">
+				<div class="hero-logo" id="heroLogo"><img src="../../public/likelysnap.png" alt="" /></div>
+				<div class="hero-title" id="heroTitle">LikelySnap</div>
+				<div class="hero-subtitle" id="heroSubtitle">Long recordings. Smooth editing.</div>
+			</section>
+
+			<section class="package" id="package">
+				<div class="package-head"><span class="folder-dot"></span><strong>recording-1781751103481.likelysnap</strong></div>
+				<div class="file-list">
+					<div class="file-row" id="row1" data-lit="true"><span class="file-icon"></span><span>screen.mp4</span><span class="tag">video</span></div>
+					<div class="file-row" id="row2"><span class="file-icon"></span><span>webcam.mp4</span><span class="tag">sidecar</span></div>
+					<div class="file-row" id="row3" data-lit="true"><span class="file-icon"></span><span>cursor.json</span><span class="tag">editable</span></div>
+					<div class="file-row" id="row4"><span class="file-icon"></span><span>manifest.json</span><span class="tag">recoverable</span></div>
+				</div>
+			</section>
+
+			<section class="editor" id="editor">
+				<div class="editor-top">
+					<div class="window-dots"><i></i><i></i><i></i></div>
+					<div class="export-pill">FFmpeg export ready</div>
+				</div>
+				<div class="editor-body">
+					<div class="preview-shell">
+						<div class="preview" id="preview">
+							<div class="preview-grid" id="previewGrid">
+								<div class="mock-sidebar">
+									<div class="mock-line" style="width: 72%"></div>
+									<div class="mock-line" style="width: 48%"></div>
+									<div class="mock-line" style="width: 84%"></div>
+									<div class="mock-line" style="width: 52%"></div>
+								</div>
+								<div class="mock-main">
+									<div class="mock-title"></div>
+									<div class="mock-card"></div>
+									<div class="mock-card" style="margin-left: 54px; width: 66%"></div>
+									<div class="mock-card" style="width: 82%"></div>
+								</div>
+							</div>
+							<div class="zoom-frame" id="zoomFrame"></div>
+							<div class="cursor" id="cursor"></div>
+						</div>
+						<div class="timeline">
+							<div class="time-ruler"><span>0:00</span><span>0:10</span><span>0:20</span><span>0:30</span><span>0:40</span><span>0:50</span></div>
+							<div class="track">
+								<div class="clip video" style="left: 3%; width: 92%">screen.mp4</div>
+							</div>
+							<div class="track">
+								<div class="clip video" style="left: 12%; width: 38%">webcam.mp4</div>
+							</div>
+							<div class="track">
+								<div class="clip zoom" style="left: 22%; width: 16%">1.8x auto zoom</div>
+								<div class="clip zoom" style="left: 52%; width: 20%">follow mouse</div>
+							</div>
+							<div class="track">
+								<div class="clip cursor-lane" style="left: 6%; width: 84%">cursor.json telemetry</div>
+							</div>
+							<div class="playhead" id="playhead"></div>
+						</div>
+					</div>
+					<aside class="side-panel">
+						<div class="side-title">Cursor + Zoom</div>
+						<div class="control-chip">Editable cursor <span class="toggle-on"></span></div>
+						<div class="control-chip">Follow mouse <span class="toggle-on"></span></div>
+						<div class="control-chip">Auto zoom <span style="color: var(--pink); font-weight: 800">1.8x</span></div>
+						<div class="side-title" style="margin-top: 34px">Recording</div>
+						<div class="control-chip">Native capture <span style="color: var(--green)">on</span></div>
+						<div class="control-chip">Disk-backed <span style="color: var(--green)">ready</span></div>
+					</aside>
+				</div>
+			</section>
+
+			<section class="claims" id="claims">
+				<div class="claim"><i></i>Native capture</div>
+				<div class="claim"><i></i>Disk-backed projects</div>
+				<div class="claim"><i></i>Editable cursor</div>
+				<div class="claim"><i></i>FFmpeg export</div>
+			</section>
+
+			<section class="scene final" id="final">
+				<div class="final-card">
+					<img src="../../public/likelysnap.png" alt="" />
+					<h1>LikelySnap</h1>
+					<p>Open the repo. Try the build.</p>
+					<div class="github-pill"><span class="github-mark"></span>github.com/Likely7/LikelySnpa</div>
+				</div>
+			</section>
+
+			<div class="watermark" id="watermark">Created by Huashu-Design</div>
+		</div>
+
+		<script>
+			const DURATION = 10;
+			const stage = document.getElementById("stage");
+
+			const refs = {
+				brandLockup: document.getElementById("brandLockup"),
+				heroLogo: document.getElementById("heroLogo"),
+				heroTitle: document.getElementById("heroTitle"),
+				heroSubtitle: document.getElementById("heroSubtitle"),
+				package: document.getElementById("package"),
+				editor: document.getElementById("editor"),
+				previewGrid: document.getElementById("previewGrid"),
+				zoomFrame: document.getElementById("zoomFrame"),
+				cursor: document.getElementById("cursor"),
+				playhead: document.getElementById("playhead"),
+				claims: document.getElementById("claims"),
+				final: document.getElementById("final"),
+				watermark: document.getElementById("watermark"),
+				rows: [1, 2, 3, 4].map((n) => document.getElementById(`row${n}`)),
+			};
+
+			const clamp = (v, min = 0, max = 1) => Math.min(max, Math.max(min, v));
+			const mix = (a, b, p) => a + (b - a) * p;
+			const smooth = (p) => {
+				const x = clamp(p);
+				return x * x * (3 - 2 * x);
+			};
+			const easeOut = (p) => 1 - Math.pow(1 - clamp(p), 3);
+			const easeInOut = (p) => {
+				const x = clamp(p);
+				return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+			};
+			const between = (t, a, b) => clamp((t - a) / (b - a));
+
+			function set(el, values) {
+				for (const [key, value] of Object.entries(values)) {
+					el.style.setProperty(key, String(value));
+				}
+			}
+
+			function render(t) {
+				const time = clamp(t, 0, DURATION);
+				const heroIn = easeOut(between(time, 0.0, 0.55));
+				const heroOut = easeInOut(between(time, 1.0, 1.45));
+				set(refs.heroLogo, {
+					"--hero-scale": mix(0.84, 1, heroIn) + heroOut * 0.12,
+					"--hero-opacity": (1 - heroOut).toFixed(3),
+				});
+				set(refs.heroTitle, {
+					"--hero-text-opacity": (heroIn * (1 - heroOut)).toFixed(3),
+					"--hero-text-y": `${mix(26, 0, heroIn) - heroOut * 18}px`,
+				});
+				set(refs.heroSubtitle, {
+					"--hero-sub-opacity": (smooth(between(time, 0.28, 0.8)) * (1 - heroOut)).toFixed(3),
+					"--hero-sub-y": `${mix(22, 0, smooth(between(time, 0.28, 0.8))) - heroOut * 12}px`,
+				});
+
+				const lockupIn = smooth(between(time, 1.0, 1.55));
+				const lockupOut = smooth(between(time, 8.7, 9.05));
+				set(refs.brandLockup, {
+					"--brand-lockup-opacity": (lockupIn * (1 - lockupOut)).toFixed(3),
+					"--brand-lockup-y": `${mix(-12, 0, lockupIn)}px`,
+				});
+
+				const packageIn = smooth(between(time, 1.05, 1.65));
+				const packageMove = smooth(between(time, 3.0, 4.1));
+				const packageOut = smooth(between(time, 7.9, 8.75));
+				set(refs.package, {
+					"--package-opacity": (packageIn * (1 - packageOut)).toFixed(3),
+					"--package-x": `${mix(-48, 0, packageIn) - packageMove * 38}px`,
+					"--package-y": `${packageMove * 22}px`,
+					"--package-scale": (1 - packageMove * 0.08).toFixed(3),
+				});
+				refs.rows.forEach((row, i) => {
+					const rowIn = smooth(between(time, 1.42 + i * 0.18, 1.86 + i * 0.18));
+					set(row, {
+						"--row-opacity": rowIn.toFixed(3),
+						"--row-y": `${mix(18, 0, rowIn)}px`,
+					});
+				});
+
+				const editorIn = smooth(between(time, 2.85, 3.65));
+				const editorCenter = smooth(between(time, 4.1, 5.1));
+				const editorOut = smooth(between(time, 8.4, 9.05));
+				set(refs.editor, {
+					"--editor-opacity": (editorIn * (1 - editorOut)).toFixed(3),
+					"--editor-x": `${mix(96, 0, editorIn) - editorCenter * 44}px`,
+					"--editor-scale": (mix(0.965, 1, editorIn) + editorCenter * 0.012).toFixed(3),
+				});
+
+				const cursorIn = smooth(between(time, 4.8, 5.25));
+				const cursorMove = easeInOut(between(time, 5.15, 6.85));
+				const cx = mix(404, 694, cursorMove);
+				const cy = mix(278, 184, cursorMove);
+				set(refs.cursor, {
+					"--cursor-opacity": (cursorIn * (1 - smooth(between(time, 8.45, 8.9)))).toFixed(3),
+					"--cursor-x": `${cx}px`,
+					"--cursor-y": `${cy}px`,
+					"--cursor-scale": (1 + smooth(between(time, 5.95, 6.25)) * 0.1).toFixed(3),
+				});
+
+				const zoomIn = smooth(between(time, 5.35, 5.85));
+				const zoomPulse = Math.sin(clamp(between(time, 5.85, 7.35), 0, 1) * Math.PI);
+				set(refs.zoomFrame, {
+					"--zoom-frame-opacity": (zoomIn * (1 - smooth(between(time, 8.25, 8.8)))).toFixed(3),
+					"--zoom-left": `${mix(292, 548, cursorMove)}px`,
+					"--zoom-top": `${mix(192, 116, cursorMove)}px`,
+					"--zoom-dim": (zoomIn * 0.24).toFixed(3),
+				});
+				set(refs.previewGrid, {
+					"--preview-content-scale": (1 + smooth(between(time, 5.55, 6.35)) * 0.32 + zoomPulse * 0.02).toFixed(3),
+					"--zoom-origin": `${mix(44, 68, cursorMove)}% ${mix(56, 38, cursorMove)}%`,
+				});
+				set(refs.playhead, {
+					"--playhead-left": `${mix(12, 78, smooth(between(time, 3.35, 8.2)))}%`,
+				});
+
+				const claimsIn = smooth(between(time, 7.15, 7.8));
+				const claimsOut = smooth(between(time, 8.65, 9.05));
+				set(refs.claims, {
+					"--claims-opacity": (claimsIn * (1 - claimsOut)).toFixed(3),
+					"--claims-y": `${mix(28, 0, claimsIn)}px`,
+				});
+
+				const finalIn = smooth(between(time, 8.82, 9.42));
+				set(refs.final, {
+					"--final-opacity": finalIn.toFixed(3),
+					"--final-scale": mix(1.035, 1, finalIn).toFixed(3),
+				});
+				set(refs.watermark, {
+					"--watermark-opacity": time < 8.9 ? 0.42 : (0.42 * (1 - finalIn)).toFixed(3),
+				});
+			}
+
+			function fit() {
+				const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+				stage.style.transform = `scale(${scale})`;
+			}
+
+			let playing = false;
+			let time = 0;
+			let lastTick = null;
+			const frozen = new URLSearchParams(window.location.search).get("t");
+			if (frozen !== null) {
+				time = Number(frozen);
+				playing = false;
+			} else {
+				playing = !window.__seekRender;
+			}
+
+			window.__seek = (nextTime) => {
+				time = clamp(Number(nextTime) || 0, 0, DURATION);
+				render(time);
+			};
+
+			function tick(now) {
+				if (lastTick === null) {
+					lastTick = now;
+					render(time);
+					window.__ready = true;
+					requestAnimationFrame(tick);
+					return;
+				}
+				const dt = (now - lastTick) / 1000;
+				lastTick = now;
+				if (playing) {
+					time += dt;
+					if (time >= DURATION) {
+						time = window.__recording ? DURATION - 0.001 : 0;
+					}
+					render(time);
+				}
+				requestAnimationFrame(tick);
+			}
+
+			window.addEventListener("resize", fit);
+			document.fonts.ready.then(() => {
+				fit();
+				render(time);
+				requestAnimationFrame(tick);
+			});
+		</script>
+	</body>
+</html>
