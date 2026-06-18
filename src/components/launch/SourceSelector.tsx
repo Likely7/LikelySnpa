@@ -1,5 +1,5 @@
+import { Check } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
-import { MdCheck } from "react-icons/md";
 import { useScopedT } from "@/contexts/I18nContext";
 import { Button } from "../ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
@@ -126,7 +126,7 @@ export function SourceSelector() {
 					{isSelected && (
 						<div className="absolute right-1.5 top-1.5">
 							<div className={styles.checkBadge}>
-								<MdCheck size={11} className="text-white" />
+								<Check size={11} className="text-white" />
 							</div>
 						</div>
 					)}

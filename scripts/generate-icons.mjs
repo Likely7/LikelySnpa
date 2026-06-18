@@ -11,10 +11,7 @@ const sourcePath = path.resolve(process.argv[2] ?? path.join(repoRoot, "icons/so
 const pngDir = path.join(repoRoot, "icons/icons/png");
 const macIconPath = path.join(repoRoot, "icons/icons/mac/icon.icns");
 const winIconPath = path.join(repoRoot, "icons/icons/win/icon.ico");
-const publicIconPaths = [
-	path.join(repoRoot, "public/likelysnap.png"),
-	path.join(repoRoot, "public/openscreen.png"),
-];
+const publicIconPaths = [path.join(repoRoot, "public/likelysnap.png")];
 
 const pngSizes = [16, 24, 32, 48, 64, 128, 256, 512, 1024];
 const icoSizes = [16, 24, 32, 48, 64, 128, 256];

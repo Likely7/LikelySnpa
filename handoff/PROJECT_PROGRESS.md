@@ -116,12 +116,21 @@
 - `icons/source/logo.png`
 - `icons/icons/*`
 - `public/likelysnap.png`
-- `public/openscreen.png`
 - `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`
 - `electron/recording/webm-duration.ts`
 - `electron/native/wgc-capture/src/main.cpp`
 - `src/lib/nativeWindowsRecording.ts`
 - `src/hooks/useAudioPeaks.ts`
+
+## 2026-06-18 Package Size Cleanup Pass 1
+
+- Created checkpoint commit `6ee1bfd` before size cleanup.
+- Kept auto captions and bundled caption assets intact.
+- Replaced remaining `react-icons` usage in the launch UI with existing `lucide-react` icons so the full `react-icons` package can be removed from production dependencies.
+- Removed unused production dependencies with no runtime imports: `react-icons`, `emoji-picker-react`, `gsap`, `mp4box`, `@pixi/filter-drop-shadow`, and `fix-webm-duration`; moved `@types/gif.js` and `tailwindcss-animate` to dev-only usage.
+- Removed unused public/demo assets that were copied into `dist`/`app.asar`: `public/openscreen.png`, `public/preview3.png`, `public/preview4.png`, `public/sample.png`, `public/demo.png`, and `public/vite.svg`.
+- Removed old Nix packaging files (`flake.nix`, `flake.lock`, `nix/`) from the LikelySnap mainline because current deliverables are macOS/Windows packages.
+- Updated `scripts/generate-icons.mjs` so future icon generation only writes `public/likelysnap.png` plus platform icons.
 - `src/components/video-editor/timeline/BackgroundWaveform.tsx`
 - `src/components/video-editor/timeline/TimelineEditor.tsx`
 - `src/components/launch/AppSettingsDialog.tsx`

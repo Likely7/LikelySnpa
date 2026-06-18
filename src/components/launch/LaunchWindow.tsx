@@ -1,32 +1,33 @@
 import {
 	Check,
 	ChevronDown,
+	CircleDot,
 	Clapperboard,
 	Columns3,
+	FileVideo,
+	FolderOpen,
+	GripVertical,
 	Languages,
+	Mic,
+	MicOff,
+	Minus,
+	Monitor,
+	MousePointer2,
+	PauseCircle,
+	PlayCircle,
+	RefreshCcw,
 	Rows3,
 	Settings,
+	Square,
+	Video,
+	VideoOff,
+	Volume2,
+	VolumeX,
+	X,
+	XCircle,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { BsPauseCircle, BsPlayCircle, BsRecordCircle } from "react-icons/bs";
-import { FaRegStopCircle } from "react-icons/fa";
-import { FaFolderOpen } from "react-icons/fa6";
-import { FiMinus, FiX } from "react-icons/fi";
-import {
-	MdCancel,
-	MdMic,
-	MdMicOff,
-	MdMonitor,
-	MdMouse,
-	MdRestartAlt,
-	MdVideocam,
-	MdVideocamOff,
-	MdVideoFile,
-	MdVolumeOff,
-	MdVolumeUp,
-} from "react-icons/md";
-import { RxDragHandleDots2 } from "react-icons/rx";
 import { useI18n, useScopedT } from "@/contexts/I18nContext";
 import { getAvailableLocales, getLocaleName } from "@/i18n/loader";
 import { loadUserPreferences, saveUserPreferences } from "@/lib/userPreferences";
@@ -50,25 +51,25 @@ const HUD_DEVICE_POPUP_GAP = 28;
 const HUD_DEVICE_POPUP_HORIZONTAL_BOTTOM = 68;
 
 const ICON_CONFIG = {
-	drag: { icon: RxDragHandleDots2, size: ICON_SIZE },
-	monitor: { icon: MdMonitor, size: ICON_SIZE },
-	volumeOn: { icon: MdVolumeUp, size: ICON_SIZE },
-	volumeOff: { icon: MdVolumeOff, size: ICON_SIZE },
-	micOn: { icon: MdMic, size: ICON_SIZE },
-	micOff: { icon: MdMicOff, size: ICON_SIZE },
-	webcamOn: { icon: MdVideocam, size: ICON_SIZE },
-	webcamOff: { icon: MdVideocamOff, size: ICON_SIZE },
-	cursor: { icon: MdMouse, size: ICON_SIZE },
-	pause: { icon: BsPauseCircle, size: ICON_SIZE },
-	resume: { icon: BsPlayCircle, size: ICON_SIZE },
-	stop: { icon: FaRegStopCircle, size: ICON_SIZE },
-	restart: { icon: MdRestartAlt, size: ICON_SIZE },
-	cancel: { icon: MdCancel, size: ICON_SIZE },
-	record: { icon: BsRecordCircle, size: ICON_SIZE },
-	videoFile: { icon: MdVideoFile, size: ICON_SIZE },
-	folder: { icon: FaFolderOpen, size: ICON_SIZE },
-	minimize: { icon: FiMinus, size: ICON_SIZE },
-	close: { icon: FiX, size: ICON_SIZE },
+	drag: { icon: GripVertical, size: ICON_SIZE },
+	monitor: { icon: Monitor, size: ICON_SIZE },
+	volumeOn: { icon: Volume2, size: ICON_SIZE },
+	volumeOff: { icon: VolumeX, size: ICON_SIZE },
+	micOn: { icon: Mic, size: ICON_SIZE },
+	micOff: { icon: MicOff, size: ICON_SIZE },
+	webcamOn: { icon: Video, size: ICON_SIZE },
+	webcamOff: { icon: VideoOff, size: ICON_SIZE },
+	cursor: { icon: MousePointer2, size: ICON_SIZE },
+	pause: { icon: PauseCircle, size: ICON_SIZE },
+	resume: { icon: PlayCircle, size: ICON_SIZE },
+	stop: { icon: Square, size: ICON_SIZE },
+	restart: { icon: RefreshCcw, size: ICON_SIZE },
+	cancel: { icon: XCircle, size: ICON_SIZE },
+	record: { icon: CircleDot, size: ICON_SIZE },
+	videoFile: { icon: FileVideo, size: ICON_SIZE },
+	folder: { icon: FolderOpen, size: ICON_SIZE },
+	minimize: { icon: Minus, size: ICON_SIZE },
+	close: { icon: X, size: ICON_SIZE },
 } as const;
 
 type IconName = keyof typeof ICON_CONFIG;

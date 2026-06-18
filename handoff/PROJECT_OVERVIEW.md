@@ -64,7 +64,7 @@ Current implementation:
 
 - Product-facing name is `LikelySnap`; the package is `likelysnap`; the Electron app id is `com.likelysnap.app`.
 - The app icon source of truth is `icons/source/logo.png`.
-- Run `npm run generate:icons` to regenerate `public/likelysnap.png`, `public/openscreen.png`, Linux PNG icons, macOS `.icns`, and Windows `.ico`.
+- Run `npm run generate:icons` to regenerate `public/likelysnap.png`, Linux PNG icons, macOS `.icns`, and Windows `.ico`.
 - The editor settings footer no longer exposes GitHub/report/diagnostic buttons. It now shows one centered contact line: `抖音小红书：Likely7  反馈问题`.
 
 ## App Settings
