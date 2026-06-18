@@ -90,13 +90,24 @@ let activeRecordingsDir = getDefaultRecordingsDir();
 const ffmpegFrameExportService = new FfmpegService();
 
 type RecordingQuality = "standard" | "high" | "ultra";
+type RecordingResolutionMode = "source" | "1080p" | "1440p" | "4k" | "custom";
+type RecordingFrameRateMode = "preset" | "custom";
+type RecordingBitrateMode = "preset" | "custom";
+type RecordingFrameRatePreset = 24 | 30 | 60;
 
 type AppSettings = {
 	recordingDirectory: string;
 	projectDirectory: string;
 	cacheDirectory: string;
 	recordingQuality: RecordingQuality;
-	defaultFrameRate: 30 | 60;
+	recordingResolutionMode: RecordingResolutionMode;
+	recordingCustomWidth: number;
+	recordingCustomHeight: number;
+	recordingFrameRateMode: RecordingFrameRateMode;
+	defaultFrameRate: RecordingFrameRatePreset;
+	recordingCustomFrameRate: number;
+	recordingBitrateMode: RecordingBitrateMode;
+	recordingCustomBitrateMbps: number;
 	defaultEditableCursor: boolean;
 	defaultMicrophoneEnabled: boolean;
 	defaultSystemAudioEnabled: boolean;
@@ -131,8 +142,62 @@ function normalizeQuality(value: unknown): RecordingQuality {
 	return value === "standard" || value === "high" || value === "ultra" ? value : "high";
 }
 
-function normalizeFrameRate(value: unknown): 30 | 60 {
-	return value === 30 ? 30 : 60;
+function normalizeResolutionMode(value: unknown): RecordingResolutionMode {
+	return value === "source" ||
+		value === "1080p" ||
+		value === "1440p" ||
+		value === "4k" ||
+		value === "custom"
+		? value
+		: "source";
+}
+
+function normalizeFrameRateMode(value: unknown): RecordingFrameRateMode {
+	return value === "custom" ? "custom" : "preset";
+}
+
+function normalizeBitrateMode(value: unknown): RecordingBitrateMode {
+	return value === "custom" ? "custom" : "preset";
+}
+
+function normalizeFrameRate(value: unknown): RecordingFrameRatePreset {
+	return value === 24 || value === 30 || value === 60 ? value : 30;
+}
+
+function normalizeBoundedNumber(
+	value: unknown,
+	fallback: number,
+	minimum: number,
+	maximum: number,
+): number {
+	const parsed =
+		typeof value === "number"
+			? value
+			: typeof value === "string" && value.trim()
+				? Number(value)
+				: NaN;
+	if (!Number.isFinite(parsed)) {
+		return fallback;
+	}
+	return Math.round(Math.min(maximum, Math.max(minimum, parsed)));
+}
+
+function normalizeBoundedDecimal(
+	value: unknown,
+	fallback: number,
+	minimum: number,
+	maximum: number,
+): number {
+	const parsed =
+		typeof value === "number"
+			? value
+			: typeof value === "string" && value.trim()
+				? Number(value)
+				: NaN;
+	if (!Number.isFinite(parsed)) {
+		return fallback;
+	}
+	return Math.round(Math.min(maximum, Math.max(minimum, parsed)) * 10) / 10;
 }
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
@@ -162,7 +227,14 @@ async function loadAppSettings(): Promise<AppSettings> {
 			normalizeRecordingDirectoryPath(raw.projectDirectory) ?? getDefaultProjectDir(),
 		cacheDirectory: normalizeRecordingDirectoryPath(raw.cacheDirectory) ?? getDefaultCacheDir(),
 		recordingQuality: normalizeQuality(raw.recordingQuality),
+		recordingResolutionMode: normalizeResolutionMode(raw.recordingResolutionMode),
+		recordingCustomWidth: normalizeBoundedNumber(raw.recordingCustomWidth, 1920, 320, 7680),
+		recordingCustomHeight: normalizeBoundedNumber(raw.recordingCustomHeight, 1080, 240, 4320),
+		recordingFrameRateMode: normalizeFrameRateMode(raw.recordingFrameRateMode),
 		defaultFrameRate: normalizeFrameRate(raw.defaultFrameRate),
+		recordingCustomFrameRate: normalizeBoundedNumber(raw.recordingCustomFrameRate, 30, 1, 120),
+		recordingBitrateMode: normalizeBitrateMode(raw.recordingBitrateMode),
+		recordingCustomBitrateMbps: normalizeBoundedDecimal(raw.recordingCustomBitrateMbps, 12, 1, 300),
 		defaultEditableCursor: normalizeBoolean(raw.defaultEditableCursor, true),
 		defaultMicrophoneEnabled: normalizeBoolean(raw.defaultMicrophoneEnabled, false),
 		defaultSystemAudioEnabled: normalizeBoolean(raw.defaultSystemAudioEnabled, false),
@@ -182,7 +254,40 @@ async function saveAppSettings(partial: Partial<AppSettings>): Promise<AppSettin
 		cacheDirectory:
 			normalizeRecordingDirectoryPath(partial.cacheDirectory) ?? current.cacheDirectory,
 		recordingQuality: normalizeQuality(partial.recordingQuality ?? current.recordingQuality),
+		recordingResolutionMode: normalizeResolutionMode(
+			partial.recordingResolutionMode ?? current.recordingResolutionMode,
+		),
+		recordingCustomWidth: normalizeBoundedNumber(
+			partial.recordingCustomWidth ?? current.recordingCustomWidth,
+			current.recordingCustomWidth,
+			320,
+			7680,
+		),
+		recordingCustomHeight: normalizeBoundedNumber(
+			partial.recordingCustomHeight ?? current.recordingCustomHeight,
+			current.recordingCustomHeight,
+			240,
+			4320,
+		),
+		recordingFrameRateMode: normalizeFrameRateMode(
+			partial.recordingFrameRateMode ?? current.recordingFrameRateMode,
+		),
 		defaultFrameRate: normalizeFrameRate(partial.defaultFrameRate ?? current.defaultFrameRate),
+		recordingCustomFrameRate: normalizeBoundedNumber(
+			partial.recordingCustomFrameRate ?? current.recordingCustomFrameRate,
+			current.recordingCustomFrameRate,
+			1,
+			120,
+		),
+		recordingBitrateMode: normalizeBitrateMode(
+			partial.recordingBitrateMode ?? current.recordingBitrateMode,
+		),
+		recordingCustomBitrateMbps: normalizeBoundedDecimal(
+			partial.recordingCustomBitrateMbps ?? current.recordingCustomBitrateMbps,
+			current.recordingCustomBitrateMbps,
+			1,
+			300,
+		),
 		defaultEditableCursor: normalizeBoolean(
 			partial.defaultEditableCursor,
 			current.defaultEditableCursor,
@@ -2324,6 +2429,8 @@ export function registerIpcHandlers(
 					fps: request.video.fps,
 					videoWidth: request.video.width,
 					videoHeight: request.video.height,
+					videoResolutionMode: request.video.resolutionMode ?? "source",
+					videoBitrate: request.video.bitrate ?? 0,
 					displayX: bounds.x,
 					displayY: bounds.y,
 					displayW: bounds.width,
@@ -2598,7 +2705,8 @@ export function registerIpcHandlers(
 					requestedWidth: request.video.width,
 					requestedHeight: request.video.height,
 					requestedFps: request.video.fps,
-					bitrateMultiplier: request.video.bitrateMultiplier ?? 1,
+					requestedResolutionMode: request.video.resolutionMode ?? "source",
+					requestedBitrate: request.video.bitrate ?? null,
 				},
 			};
 			nativeMacCursorOffsetMs = 0;

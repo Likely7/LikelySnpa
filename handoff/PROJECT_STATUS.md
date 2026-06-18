@@ -46,7 +46,9 @@
 - App settings are now persisted in `app-settings.json` under Electron `userData`, with compatibility mirroring of the recording directory to legacy `recording-settings.json`.
 - Recording directory is now user-selectable from both the HUD folder button and the standalone app settings window.
 - Project file default directory and cache directory are now user-selectable from the standalone app settings window.
-- Recording quality defaults are now real settings, not placeholder UI. Standard intentionally caps at 1080p/30 with lower bitrate. High/Ultra preserve the native capture size on macOS and use quality multipliers so the helper computes bitrate from the actual ScreenCaptureKit output dimensions and FPS instead of a fixed 4K assumption. Windows native and browser fallback still consume the configured profile through their existing paths.
+- Recording quality defaults are now real OBS-style settings, not placeholder UI. Standard maps to `1080p / 30 FPS / 5 Mbps`, High maps to `source resolution / 30 FPS / 8 Mbps`, and Ultra maps to `source resolution / 60 FPS / 15 Mbps`. Users can override resolution, FPS, and bitrate independently, including custom width/height, custom FPS, and custom Mbps.
+- macOS native recording now distinguishes source resolution from explicit target resolution. Source mode keeps ScreenCaptureKit display/window backing pixels; explicit `1080p`, `1440p`, `4K`, or custom modes pass the requested output dimensions to the helper. Bitrate is passed as explicit bps instead of a hidden multiplier.
+- Windows native recording now consumes the configured FPS and explicit bitrate. The WGC encoder still records at the WGC source texture dimensions until a dedicated GPU scaling pass exists, so Windows resolution selection is documented as source-size for now instead of pretending to downscale.
 - Recording default toggles are now real settings: editable cursor, microphone, system audio, and webcam defaults are loaded when the HUD starts.
 - macOS default recording directory is now `~/Movies/LikelySnap`; non-macOS default is `~/Videos/LikelySnap`.
 - Legacy `RECORDINGS_DIR = path.join(app.getPath("userData"), "recordings")` remains trusted for reading old recordings.
@@ -103,7 +105,7 @@
 - Windows native webcam code is implemented and now has a persisted sidecar timeline offset, but it is still not truth-tested on Windows hardware from this macOS machine.
 - Windows x64 packaging still depends on the native WGC helper binaries being built on Windows. Public GitHub release/build automation was removed until the project has a clean LikelySnap-owned release pipeline.
 - Windows export performance is now on the FFmpeg path, but still needs real Windows x64 validation with Task Manager/video encode metrics and app-side diagnostics showing the selected encoder.
-- Current P0 is to validate and continue the editor-open/export architecture. The first code pass removes the largest known first-screen cursor/waveform/auto-zoom blockers and MP4 final-Blob export risk, but package-local media info/cursor indexes, preview proxies, source-aware FPS, and export diagnostics are still open.
+- Current P0 is to validate and continue the editor-open/export architecture plus the new OBS-style recording controls. The first editor-open code pass removes the largest known first-screen cursor/waveform/auto-zoom blockers and MP4 final-Blob export risk, but package-local media info/cursor indexes, preview proxies, source-aware export FPS, export diagnostics, and Windows GPU scaling for recording resolution are still open.
 
 ## Latest Verification
 
@@ -137,4 +139,8 @@
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the dev helper after the macOS raw recording quality fix.
 - `npx tsc --noEmit` passes after the macOS raw recording quality fix.
 - `npx biome check electron/ipc/handlers.ts electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the macOS raw recording quality fix.
-- Direct helper validation on the user's built-in Retina display: before fix, raw `screen.mp4` was `1710x1112`; after fix, raw `screen.mp4` is `3420x2224` with `yuv420p(tv, bt709, progressive)`. A second validation confirms High quality now selects a 28 Mbps target from the actual `3420x2224 @ 30fps` output instead of inheriting a fixed 4K-derived 76.5 Mbps target.
+- Direct helper validation on the user's built-in Retina display: before the Retina fix, raw `screen.mp4` was `1710x1112`; after the fix, raw source-mode `screen.mp4` is `3420x2224` with BT.709 metadata. After the OBS-style settings work, a direct helper validation confirmed source High records `3420x2224 @ 30fps` with requested `8,000,000` bps, while explicit 1080p records `1920x1080 @ 30fps` with requested `5,000,000` bps.
+- `npx tsc --noEmit` passes after the OBS-style recording settings work.
+- `npx biome check src/lib/appSettings.ts src/hooks/useScreenRecorder.ts src/components/launch/AppSettingsDialog.tsx src/lib/nativeMacRecording.ts src/lib/nativeWindowsRecording.ts electron/ipc/handlers.ts` passes after the OBS-style recording settings work.
+- `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the OBS-style recording settings work with existing deprecation warnings only.
+- `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local dev helper after the OBS-style recording settings work.

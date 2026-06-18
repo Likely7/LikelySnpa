@@ -6,6 +6,7 @@ import {
 	type AppSettings,
 	cursorCaptureModeFromSetting,
 	type RecordingQuality,
+	type RecordingResolutionMode,
 } from "@/lib/appSettings";
 import {
 	type NativeMacRecordingRequest,
@@ -20,23 +21,27 @@ import type { CursorCaptureMode } from "@/lib/recordingSession";
 import { requestCameraAccess } from "@/lib/requestCameraAccess";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
 
-const TARGET_FRAME_RATE = 60;
-const MIN_FRAME_RATE = 30;
+const MIN_FRAME_RATE = 1;
 const TARGET_WIDTH = 3840;
 const TARGET_HEIGHT = 2160;
-const FOUR_K_PIXELS = TARGET_WIDTH * TARGET_HEIGHT;
-const QHD_WIDTH = 2560;
-const QHD_HEIGHT = 1440;
-const QHD_PIXELS = QHD_WIDTH * QHD_HEIGHT;
-
-const BITRATE_4K = 45_000_000;
-const BITRATE_QHD = 28_000_000;
-const BITRATE_BASE = 18_000_000;
-const HIGH_FRAME_RATE_THRESHOLD = 60;
-const HIGH_FRAME_RATE_BOOST = 1.7;
+const TARGET_FRAME_RATE = 30;
 
 const DEFAULT_WIDTH = 1920;
 const DEFAULT_HEIGHT = 1080;
+const DEFAULT_CUSTOM_BITRATE_MBPS = 12;
+const PRESET_BITRATE_MBPS: Record<RecordingQuality, number> = {
+	standard: 5,
+	high: 8,
+	ultra: 15,
+};
+const RESOLUTION_PRESETS: Record<
+	Exclude<RecordingResolutionMode, "source" | "custom">,
+	{ width: number; height: number }
+> = {
+	"1080p": { width: 1920, height: 1080 },
+	"1440p": { width: 2560, height: 1440 },
+	"4k": { width: 3840, height: 2160 },
+};
 
 const CODEC_ALIGNMENT = 2;
 
@@ -49,16 +54,18 @@ const RECORDING_PACKAGE_FALLBACK_WEBCAM_VIDEO = "webcam.webm";
 
 const AUDIO_BITRATE_VOICE = 128_000;
 const AUDIO_BITRATE_SYSTEM = 192_000;
+const WEBCAM_FALLBACK_VIDEO_BITRATE = 2_500_000;
 
 const MIC_GAIN_BOOST = 1.4;
 const WEBCAM_TARGET_FRAME_RATE = 30;
 
 type RecordingVideoProfile = {
 	quality: RecordingQuality;
-	fps: 30 | 60;
+	fps: number;
 	width: number;
 	height: number;
-	bitrateMultiplier: number;
+	bitrate: number;
+	resolutionMode: RecordingResolutionMode;
 };
 
 type UseScreenRecorderReturn = {
@@ -107,24 +114,38 @@ function recordingPackageFileName(recordingId: number, childName: string) {
 
 function createRecordingVideoProfile(settings?: AppSettings | null): RecordingVideoProfile {
 	const quality = settings?.recordingQuality ?? "high";
-	const requestedFps = settings?.defaultFrameRate ?? TARGET_FRAME_RATE;
-
-	if (quality === "standard") {
-		return {
-			quality,
-			fps: 30,
-			width: DEFAULT_WIDTH,
-			height: DEFAULT_HEIGHT,
-			bitrateMultiplier: 0.75,
-		};
-	}
+	const fps =
+		settings?.recordingFrameRateMode === "custom"
+			? Math.round(settings.recordingCustomFrameRate)
+			: (settings?.defaultFrameRate ?? TARGET_FRAME_RATE);
+	const safeFps = Math.min(120, Math.max(1, Number.isFinite(fps) ? fps : TARGET_FRAME_RATE));
+	const resolutionMode =
+		settings?.recordingResolutionMode ?? (quality === "standard" ? "1080p" : "source");
+	const presetResolution =
+		resolutionMode === "source"
+			? { width: TARGET_WIDTH, height: TARGET_HEIGHT }
+			: resolutionMode === "custom"
+				? {
+						width: settings?.recordingCustomWidth ?? DEFAULT_WIDTH,
+						height: settings?.recordingCustomHeight ?? DEFAULT_HEIGHT,
+					}
+				: RESOLUTION_PRESETS[resolutionMode];
+	const bitrateMbps =
+		settings?.recordingBitrateMode === "custom"
+			? settings.recordingCustomBitrateMbps
+			: PRESET_BITRATE_MBPS[quality];
+	const safeBitrateMbps = Math.min(
+		300,
+		Math.max(1, Number.isFinite(bitrateMbps) ? bitrateMbps : DEFAULT_CUSTOM_BITRATE_MBPS),
+	);
 
 	return {
 		quality,
-		fps: requestedFps,
-		width: TARGET_WIDTH,
-		height: TARGET_HEIGHT,
-		bitrateMultiplier: quality === "ultra" ? 1.35 : 1,
+		fps: safeFps,
+		width: presetResolution.width,
+		height: presetResolution.height,
+		bitrate: safeBitrateMbps * BITS_PER_MEGABIT,
+		resolutionMode,
 	};
 }
 
@@ -196,27 +217,6 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		];
 
 		return preferred.find((type) => MediaRecorder.isTypeSupported(type)) ?? "video/webm";
-	};
-
-	const computeBitrate = (
-		width: number,
-		height: number,
-		frameRate = TARGET_FRAME_RATE,
-		qualityMultiplier = 1,
-	) => {
-		const pixels = width * height;
-		const highFrameRateBoost = frameRate >= HIGH_FRAME_RATE_THRESHOLD ? HIGH_FRAME_RATE_BOOST : 1;
-		const multiplier = highFrameRateBoost * qualityMultiplier;
-
-		if (pixels >= FOUR_K_PIXELS) {
-			return Math.round(BITRATE_4K * multiplier);
-		}
-
-		if (pixels >= QHD_PIXELS) {
-			return Math.round(BITRATE_QHD * multiplier);
-		}
-
-		return Math.round(BITRATE_BASE * multiplier);
 	};
 
 	const teardownMedia = useCallback(() => {
@@ -819,6 +819,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					fps: videoProfile.fps,
 					width: videoProfile.width,
 					height: videoProfile.height,
+					resolutionMode: videoProfile.resolutionMode,
+					bitrate: videoProfile.bitrate,
 				},
 				audio: {
 					system: {
@@ -935,7 +937,8 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					fps: videoProfile.fps,
 					width: videoProfile.width,
 					height: videoProfile.height,
-					bitrateMultiplier: videoProfile.bitrateMultiplier,
+					resolutionMode: videoProfile.resolutionMode,
+					bitrate: videoProfile.bitrate,
 					hideSystemCursor: effectiveCursorCaptureMode === "editable-overlay",
 				},
 				audio: {
@@ -1137,10 +1140,14 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					mandatory: {
 						chromeMediaSource: CHROME_MEDIA_SOURCE,
 						chromeMediaSourceId: selectedSource.id,
-						maxWidth: videoProfile.width,
-						maxHeight: videoProfile.height,
 						maxFrameRate: videoProfile.fps,
 						minFrameRate: MIN_FRAME_RATE,
+						...(videoProfile.resolutionMode === "source"
+							? {}
+							: {
+									maxWidth: videoProfile.width,
+									maxHeight: videoProfile.height,
+								}),
 					},
 				};
 
@@ -1286,12 +1293,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			width = Math.floor(width / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;
 			height = Math.floor(height / CODEC_ALIGNMENT) * CODEC_ALIGNMENT;
 
-			const videoBitsPerSecond = computeBitrate(
-				width,
-				height,
-				Math.round(frameRate) || videoProfile.fps,
-				videoProfile.bitrateMultiplier,
-			);
+			const videoBitsPerSecond = videoProfile.bitrate;
 			const mimeType = selectMimeType();
 
 			console.log(
@@ -1330,7 +1332,10 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			if (webcamStream.current) {
 				webcamRecorder.current = createRecorderHandle(
 					webcamStream.current,
-					{ mimeType, videoBitsPerSecond: Math.min(videoBitsPerSecond, BITRATE_BASE) },
+					{
+						mimeType,
+						videoBitsPerSecond: Math.min(videoBitsPerSecond, WEBCAM_FALLBACK_VIDEO_BITRATE),
+					},
 					recordingPackageFileName(activeRecordingId, RECORDING_PACKAGE_FALLBACK_WEBCAM_VIDEO),
 				);
 			}

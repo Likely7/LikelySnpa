@@ -21,7 +21,9 @@
 6. Validate killing the app mid-recording leaves recoverable package artifacts.
 7. Validate native Windows x64 webcam sidecar recording as bounded `webcam.mp4` on Windows hardware, including the persisted `webcamStartOffsetMs` manifest field.
 8. Validate the known ~17 minute package `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap` opens interactively with waveform on by default and confirm generated peaks are cached for subsequent opens.
-9. Validate the standalone settings window end to end from both entry points: launch HUD gear and editor top-bar gear. Confirm recording/project/cache directory pickers, cache size/clear, quality/FPS settings, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
+9. Validate the standalone settings window end to end from both entry points: launch HUD gear and editor top-bar gear. Confirm recording/project/cache directory pickers, cache size/clear, OBS-style quality/resolution/FPS/bitrate settings, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
+10. Validate macOS native recordings from the settings UI for all preset profiles: Standard should request `1080p / 30 FPS / 5 Mbps`, High should request source backing pixels / `30 FPS / 8 Mbps`, and Ultra should request source backing pixels / `60 FPS / 15 Mbps`.
+11. Validate Windows native recordings on Windows x64 after the helper rebuild: FPS and bitrate should match the settings, while encoded width/height should remain the WGC source size until GPU scaling is implemented.
 
 ## P1
 
@@ -39,6 +41,7 @@
 12. Add a user-facing encoder setting (`auto`, `prefer hardware`, `compatibility CPU`) and diagnostics showing whether the finished export used GPU or CPU encoding.
 13. Make MP4 export frame rate source-aware instead of hard-coded to 60 FPS; default to source FPS or a user-selected export FPS so 30 FPS recordings do not pay for double-frame export work.
 14. Move GIF export to a streaming/temp-file path or explicitly label it as short-form only.
+15. Add a real Windows native recording GPU scaling pass if Windows must honor recording resolution choices (`1080p`, `1440p`, `4K`, custom). The current WGC encoder uses source texture dimensions because `CopyResource` requires matching texture sizes.
 
 ## P2
 
@@ -60,7 +63,7 @@
 10. Kill the app mid-recording and verify the package is recoverable.
 11. Open an old package with `webcam.webm`; if the sidecar is oversized, confirm the app warns and still opens the main video.
 12. Open a long recording with the trim waveform visible by default, confirm the editor remains responsive during generation, then close/reopen and confirm the waveform loads from cache.
-13. Change recording quality/FPS in the standalone settings window and confirm the next native macOS recording request uses the configured profile.
+13. Change recording quality/resolution/FPS/bitrate in the standalone settings window and confirm the next native macOS recording request uses the configured profile.
 14. Open settings from the editor top-bar gear and confirm the same persisted values are shown as the launch HUD settings entry.
 15. On a Windows x64 build machine, run `npm run build:win:portable` and confirm the produced zip contains `resources/electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`.
 16. On Windows x64, record with webcam enabled and inspect `.likelysnap/manifest.json`; confirm `media.webcamStartOffsetMs` is present when `webcam.mp4` exists, then verify preview/export webcam sync.

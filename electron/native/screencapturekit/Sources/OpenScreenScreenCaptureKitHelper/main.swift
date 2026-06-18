@@ -25,7 +25,7 @@ struct RecordingRequest: Decodable {
 		let width: Int
 		let height: Int
 		let bitrate: Int?
-		let bitrateMultiplier: Double?
+		let resolutionMode: String?
 		let hideSystemCursor: Bool
 	}
 
@@ -392,6 +392,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 	}
 
 	private func makeCaptureTarget(from content: SCShareableContent) throws -> CaptureTarget {
+		let explicitWidth = evenCaptureDimension(request.video.width, fallback: 1920)
+		let explicitHeight = evenCaptureDimension(request.video.height, fallback: 1080)
+		let shouldUseSourceResolution = request.video.resolutionMode == nil || request.video.resolutionMode == "source"
+
 		switch request.source.type {
 		case "display":
 			guard let displayId = request.source.displayId else {
@@ -403,8 +407,8 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			let pixelSize = Self.pixelSize(for: display.displayID)
 			return CaptureTarget(
 				filter: SCContentFilter(display: display, excludingWindows: []),
-				width: evenCaptureDimension(pixelSize.width, fallback: request.video.width),
-				height: evenCaptureDimension(pixelSize.height, fallback: request.video.height),
+				width: shouldUseSourceResolution ? evenCaptureDimension(pixelSize.width, fallback: explicitWidth) : explicitWidth,
+				height: shouldUseSourceResolution ? evenCaptureDimension(pixelSize.height, fallback: explicitHeight) : explicitHeight,
 				bounds: display.frame
 			)
 		case "window":
@@ -422,8 +426,8 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			let height = Int(window.frame.height) * scaleFactor
 			return CaptureTarget(
 				filter: SCContentFilter(desktopIndependentWindow: window),
-				width: evenCaptureDimension(width, fallback: request.video.width),
-				height: evenCaptureDimension(height, fallback: request.video.height),
+				width: shouldUseSourceResolution ? evenCaptureDimension(width, fallback: explicitWidth) : explicitWidth,
+				height: shouldUseSourceResolution ? evenCaptureDimension(height, fallback: explicitHeight) : explicitHeight,
 				bounds: window.frame
 			)
 		default:
@@ -478,9 +482,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		let writer = try AVAssetWriter(outputURL: outputUrl, fileType: .mp4)
 		let bitrate = request.video.bitrate ?? defaultBitrate(
 			width: outputWidth,
-			height: outputHeight,
-			fps: request.video.fps,
-			qualityMultiplier: request.video.bitrateMultiplier ?? 1
+			height: outputHeight
 		)
 		selectedVideoBitrate = bitrate
 		let settings: [String: Any] = [
@@ -656,7 +658,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			"requestedHeight": request.video.height,
 			"requestedFps": request.video.fps,
 			"requestedBitrate": request.video.bitrate as Any,
-			"bitrateMultiplier": request.video.bitrateMultiplier ?? 1,
+			"requestedResolutionMode": request.video.resolutionMode ?? "source",
 			"colorPrimaries": "ITU_R_709_2",
 			"transferFunction": "ITU_R_709_2",
 			"yCbCrMatrix": "ITU_R_709_2",
@@ -869,19 +871,17 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		return max(2, candidate - (candidate % 2))
 	}
 
-	private func defaultBitrate(width: Int, height: Int, fps: Int, qualityMultiplier: Double) -> Int {
+	private func defaultBitrate(width: Int, height: Int) -> Int {
 		let pixels = width * height
 		let base: Int
 		if pixels >= 3840 * 2160 {
-			base = 45_000_000
+			base = 15_000_000
 		} else if pixels >= 2560 * 1440 {
-			base = 28_000_000
+			base = 8_000_000
 		} else {
-			base = 18_000_000
+			base = 5_000_000
 		}
-		let frameRateMultiplier = fps >= 60 ? 1.7 : 1
-		let multiplier = max(0.1, qualityMultiplier) * frameRateMultiplier
-		return Int(Double(base) * multiplier)
+		return base
 	}
 
 	private static func scaleFactor(for displayId: CGDirectDisplayID) -> Int {

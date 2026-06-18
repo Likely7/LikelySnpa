@@ -1,4 +1,5 @@
 import type { Rectangle } from "electron";
+import type { RecordingResolutionMode } from "./appSettings";
 import type { CursorCaptureMode } from "./recordingSession";
 
 export type NativeMacSourceType = "display" | "window";
@@ -17,7 +18,8 @@ export type NativeMacRecordingRequest = {
 		fps: number;
 		width: number;
 		height: number;
-		bitrateMultiplier?: number;
+		resolutionMode?: RecordingResolutionMode;
+		bitrate?: number;
 		hideSystemCursor: boolean;
 	};
 	audio: {
@@ -59,6 +61,8 @@ export type NativeMacHelperRecordingStartedEvent = {
 	timestampMs: number;
 	width?: number;
 	height?: number;
+	fps?: number;
+	bitrate?: number;
 	captureBounds?: Rectangle;
 };
 

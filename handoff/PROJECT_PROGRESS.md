@@ -199,7 +199,7 @@
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes after the macOS raw recording quality fix and refreshes the local dev helper.
 - `npx tsc --noEmit` passes after the macOS raw recording quality fix.
 - `npx biome check electron/ipc/handlers.ts electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the macOS raw recording quality fix.
-- Direct helper validation recorded the same built-in display at `3420x2224` with `yuv420p(tv, bt709, progressive)`, replacing the previous `1710x1112` raw source output. A follow-up validation confirmed High quality chooses a 28 Mbps target for `3420x2224 @ 30fps` instead of applying a fixed 4K-derived 76.5 Mbps target.
+- Direct helper validation recorded the same built-in display at `3420x2224` with `yuv420p(tv, bt709, progressive)`, replacing the previous `1710x1112` raw source output. The later OBS-style settings validation confirmed High quality requests an explicit `8 Mbps` target for `3420x2224 @ 30fps` instead of applying any fixed 4K-derived target.
 
 ## Next Engineering Step
 
@@ -212,3 +212,20 @@ Continue validation and hardening from the current staged editor-open + FFmpeg e
 5. Add source-aware export FPS so 30 FPS recordings do not export at a fixed 60 FPS unless the user explicitly asks for it.
 6. Add visible background preparation state for long media and preview proxy generation for very long/high-resolution recordings.
 7. Keep validating `.likelysnap` package recovery: moved packages, missing manifest, interrupted recording, native `webcam.mp4`, and legacy oversized `webcam.webm` skip behavior.
+
+## 2026-06-18 OBS-Style Recording Settings Update
+
+- Created archive tag `archive/before-obs-style-recording-settings-20260618-100000` before changing the recording settings path.
+- Replaced the hidden fixed-4K/native bitrate assumption with explicit preset bitrates: Standard `5 Mbps`, High `8 Mbps`, Ultra `15 Mbps`.
+- Added persistent OBS-style recording controls: source/1080p/1440p/4K/custom resolution, preset/custom FPS, and preset/custom bitrate Mbps.
+- Updated the settings UI so quality presets apply coherent bundles: Standard `1080p / 30 FPS / 5 Mbps`, High `source / 30 FPS / 8 Mbps`, Ultra `source / 60 FPS / 15 Mbps`.
+- Updated macOS native recording requests to pass `resolutionMode` and explicit `bitrate` in bps. Source mode preserves ScreenCaptureKit backing pixels; explicit resolution modes request the chosen output size.
+- Updated Windows native recording requests and WGC helper parsing to consume explicit bitrate and FPS. Windows native resolution remains source-size because the current WGC path copies same-size textures; a real GPU scaling pass is required before Windows can honestly honor downscale/custom output sizes.
+- Refreshed the local macOS ScreenCaptureKit dev helper binary with `swiftc -parse-as-library ... -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper`.
+- Direct macOS helper validation on the built-in Retina display passed:
+  - Source High request recorded `3420x2224 @ 30fps` with requested `8,000,000` bps and BT.709 metadata.
+  - Explicit 1080p request recorded `1920x1080 @ 30fps` with requested `5,000,000` bps and BT.709 metadata.
+- Verification passed:
+  - `npx tsc --noEmit`
+  - `npx biome check src/lib/appSettings.ts src/hooks/useScreenRecorder.ts src/components/launch/AppSettingsDialog.tsx src/lib/nativeMacRecording.ts src/lib/nativeWindowsRecording.ts electron/ipc/handlers.ts`
+  - `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` with existing warnings only.

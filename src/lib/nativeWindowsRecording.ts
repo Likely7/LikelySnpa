@@ -1,3 +1,5 @@
+import type { RecordingResolutionMode } from "./appSettings";
+
 export type NativeWindowsSourceType = "display" | "window";
 
 export type NativeWindowsRecordingRequest = {
@@ -12,6 +14,8 @@ export type NativeWindowsRecordingRequest = {
 		fps: number;
 		width: number;
 		height: number;
+		resolutionMode?: RecordingResolutionMode;
+		bitrate?: number;
 	};
 	audio: {
 		system: {
