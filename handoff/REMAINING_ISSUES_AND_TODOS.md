@@ -9,7 +9,10 @@
 5. Add video metadata ready timing from `VideoPlayback` and connect it to the `[editor-open]` log story.
 6. Prevent `StreamingVideoDecoder.loadMetadata()` and whole-file `readBinaryFile` paths from running during first-screen editor open. The editor is staged now, but export still uses whole-source WebDemuxer loading and should not leak back into first-screen open.
 7. Add visible editor preparation state for long media: waveform, cursor index, auto zoom suggestions, thumbnails/proxies.
-8. Add preview proxy generation for very long/high-resolution recordings.
+8. Implement the real preview-proxy pipeline for very long/high-resolution recordings. This is not done yet: generate `proxy-screen.mp4` / `proxy-webcam.mp4` in a package/global cache, record proxy health in metadata, switch editor playback to proxies when ready, and keep export on original media.
+9. Add a background job manager for media preparation so media info, waveform, thumbnails, cursor indexes, auto zoom suggestions, and proxy generation are coordinated instead of being separate ad hoc effects.
+10. Before another Windows one-hour optimization, add hard timing checkpoints for manifest read, file stat, session preparation, video metadata readiness, first React paint, cursor preview load, waveform start/cache/generation, auto zoom start/finish, and proxy generation.
+11. Complete the Auto Zoom / Follow Mouse model upgrade: three per-zoom modes (`Off`, `Smart Follow Mouse`, `Always Follow Mouse`), mutually exclusive global Smart/Always controls, scale-aware smart safe areas, slower eased always-follow motion, and intent-scored candidate selection.
 
 ## Existing P0 Validation
 
@@ -33,7 +36,7 @@
 3. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
 4. Add broader automated tests for custom recording directories and interrupted package recovery.
 5. Add real macOS long-recording validation evidence.
-6. Validate the refined auto zoom and Follow Mouse model on real recordings: ordinary dwells/clicks should produce stable fixed-position zooms, held mouse-button spans should produce Follow Mouse zooms, and per-zoom settings should override either result.
+6. Validate the refined auto zoom and Follow Mouse model on real recordings: accidental click-and-leave actions should not create distracting zooms, meaningful click/press/drag/dwell actions should create explainable zooms, Smart Follow should only pan near scale-aware boundaries, Always Follow should feel slower/eased, and each selected zoom should override the global defaults.
 7. Add append/chunked cursor telemetry storage for multi-hour recordings. The current editor uses package-local `cursor-preview.json`, but recording still keeps and rewrites full cursor snapshots.
 8. Add sidecar/proxy diagnostics for file size, duration, codec, and skipped webcam state.
 9. Add Windows CI or documented manual verification for `npm run build:native:win`, `npm run build:win:portable`, and `npm run test:wgc-full:win`.
@@ -57,15 +60,16 @@
 3. Confirm package contains `screen.mp4`, optional native `webcam.mp4`, `cursor.json`, and `manifest.json`.
 4. Confirm raw source file plays in Finder/QuickTime with audio in sync.
 5. Confirm editor auto zoom suggestions still appear from cursor telemetry.
-6. Confirm selected zoom settings can switch a single zoom between Follow Mouse off/on even when the global Follow Mouse button has been used.
-7. Confirm long same-area explanations become one longer fixed-position zoom instead of repeated short jumps.
-8. Confirm held mouse-button spans default their suggested zoom to Follow Mouse, while ordinary dwells/clicks default to stable fixed-position zoom.
-9. Confirm export MP4 remains in sync.
-10. Kill the app mid-recording and verify the package is recoverable.
-11. Open an old package with `webcam.webm`; if the sidecar is oversized, confirm the app warns and still opens the main video.
-12. Open a long recording with the trim waveform visible by default, confirm the editor remains responsive during generation, then close/reopen and confirm the waveform loads from cache.
-13. Change recording quality/resolution/FPS/bitrate in the standalone settings window and confirm the next native macOS recording request uses the configured profile.
-14. Open settings from the editor top-bar gear and confirm the same persisted values are shown as the launch HUD settings entry.
-15. On a Windows x64 build machine, run `npm run build:win:portable` and confirm the produced zip contains `resources/electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`.
-16. On Windows x64, record with webcam enabled and inspect `.likelysnap/manifest.json`; confirm `media.webcamStartOffsetMs` is present when `webcam.mp4` exists, then verify preview/export webcam sync.
-17. On Windows x64, export the same project with Task Manager's CPU/GPU video encode graphs visible and confirm the UI/diagnostics report the actual encoder path. Current code-level expectation is hardware-first only when FFmpeg exposes `h264_nvenc`; otherwise it falls back to CPU.
+6. Confirm selected zoom settings can switch a single zoom between `Off`, `Smart Follow Mouse`, and `Always Follow Mouse` even when a global follow button has been used.
+7. Confirm the global Smart Follow Mouse and global Always Follow Mouse buttons are mutually exclusive.
+8. Confirm long same-area explanations do not become huge unstable zoom spans or repeated short jumps.
+9. Confirm held mouse-button/drag spans default their suggested zoom to Smart Follow Mouse, while accidental click-and-leave actions are down-ranked.
+10. Confirm export MP4 remains in sync.
+11. Kill the app mid-recording and verify the package is recoverable.
+12. Open an old package with `webcam.webm`; if the sidecar is oversized, confirm the app warns and still opens the main video.
+13. Open a long recording with the trim waveform visible by default, confirm the editor remains responsive during generation, then close/reopen and confirm the waveform loads from cache.
+14. Change recording quality/resolution/FPS/bitrate in the standalone settings window and confirm the next native macOS recording request uses the configured profile.
+15. Open settings from the editor top-bar gear and confirm the same persisted values are shown as the launch HUD settings entry.
+16. On a Windows x64 build machine, run `npm run build:win:portable` and confirm the produced zip contains `resources/electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`.
+17. On Windows x64, record with webcam enabled and inspect `.likelysnap/manifest.json`; confirm `media.webcamStartOffsetMs` is present when `webcam.mp4` exists, then verify preview/export webcam sync.
+18. On Windows x64, export the same project with Task Manager's CPU/GPU video encode graphs visible and confirm the UI/diagnostics report the actual encoder path. Current code-level expectation is hardware-first only when FFmpeg exposes `h264_nvenc`; otherwise it falls back to CPU.

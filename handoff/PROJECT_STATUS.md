@@ -16,7 +16,7 @@
 - Public GitHub cleanup checkpoint: removed obsolete release/build workflows and public README platform packaging instructions; internal build scripts remain in `package.json`.
 - Archive before NLE-style editor architecture work: `archive/before-nle-editor-architecture-20260618-000347`
 - Archive before FFmpeg export pipeline work: `archive/before-export-architecture-pivot-20260618-011443`
-- Current local checkpoint being created on 2026-06-18: Windows long-recording editor-open fix with movable package-local `cursor-preview.json`, plus synchronized docs.
+- Current main checkpoint after rollback on 2026-06-19: `2458939 docs: note live cursor preview validation`. This is the stable staged-editor-open baseline with package-local `cursor-preview.json`; the later MP4 faststart/webcam sidecar cleanup direction was force-rolled back from GitHub `main`.
 - App settings checkpoints: `eb0f2c4 feat: add app settings center`, `7d1a3c2 fix: open app settings in standalone window`
 - Archive before app settings center work: `archive/before-app-settings-20260617`
 - Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
@@ -56,9 +56,10 @@
 - Project persistence already stores real media paths via `screenVideoPath` and optional `webcamVideoPath`.
 - Project persistence now also stores optional `webcamStartOffsetMs` when a webcam sidecar exists.
 - Cursor telemetry is separate from video bytes and is required for auto zoom and Follow Mouse zoom.
-- Auto zoom suggestions now separate span selection from Follow Mouse behavior: ordinary dwell/click suggestions use stable fixed-position zooms, held mouse-button spans default to `focusMode: auto`, and the selected zoom's settings panel can override Follow Mouse per region.
-- Auto zoom suggestion duration is no longer one fixed value: dwell suggestions use the real cursor dwell span plus context padding, nearby same-area dwell runs merge into one longer zoom, click-only suggestions stay short, and durations are clamped to a maintainable bounded range.
-- Follow Mouse remains stored internally as `focusMode` for project compatibility, but user-facing UI and docs call it Follow Mouse / 跟随鼠标.
+- Auto zoom suggestions separate span selection from camera-follow behavior. The current follow model is being upgraded from two states to three states: `Off`, `Smart Follow Mouse`, and `Always Follow Mouse`.
+- Smart Follow Mouse is the intended generated-zoom default: stable while the cursor remains inside a scale-aware safe area, eased follow only near the visible zoom boundary. Always Follow Mouse remains available but should be slower and damped rather than tightly locked to cursor samples.
+- Auto zoom suggestion duration and candidate selection are being rebalanced against upstream OpenScreen and Screen Studio behavior: click/press/drag intent should matter, accidental click-and-leave should be weak, and long dwell should not automatically create a huge zoom span.
+- Follow Mouse remains stored internally as `focusMode` for project compatibility, but user-facing UI and docs call it Follow Mouse / 跟随鼠标. Existing `focusMode: auto` projects should continue to open as Always Follow Mouse unless explicitly migrated by user action.
 - macOS native window recordings now use ScreenCaptureKit-reported window capture bounds for editable cursor normalization, avoiding display-bounds offset in Follow Mouse zoom.
 - User retest after this fix reported the Follow Mouse behavior is close enough to continue; treat Follow Mouse zoom as implemented unless a new concrete offset sample appears.
 - Editor settings footer no longer exposes report bug, save diagnostics, or GitHub star buttons. It shows one centered contact line: `抖音小红书：Likely7  反馈问题`.
@@ -86,6 +87,7 @@
 - A real Windows one-hour recording on a high-end RTX 5070 PC opened but stayed non-interactive for more than five minutes while CPU/GPU/memory utilization stayed low. This points to low-efficiency serialized editor preparation work, not insufficient user hardware.
 - New editor architecture direction is documented in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`: instant timeline open, background waveform/cursor/auto-zoom/proxy jobs, package-local cache indexes, and no heavy analysis on first screen.
 - First NLE-style editor-open pass is implemented locally: editor cursor loading now uses preview-level native bridge data backed by `cursor-preview.json` instead of full cursor recording data, the main process caches parsed cursor files, automatic zoom suggestions run in idle time, waveform generation starts in idle time, and editor-open timing logs are emitted.
+- Important clarification: this is not a finished video-proxy implementation. No `proxy-screen.mp4` / `proxy-webcam.mp4` files are generated yet, and editor playback does not switch to proxy media. The implemented work is a staged-open/indexing pass, not the actual proxy-media pass.
 - `cursor-preview.json` is invalidated by the source cursor file's size/mtime and stores package-local source identity instead of absolute paths, so moving a `.likelysnap` package does not force a full cursor parse on the next open.
 - Export still loads full cursor recording data on demand, so the preview downsampling does not reduce final cursor overlay quality.
 - Cursor preview data intentionally omits the full native cursor asset table for speed; cursor rendering now falls back to built-in themed cursor assets so the mouse overlay and mouse settings panel stay visible in editor preview.
@@ -110,6 +112,7 @@
 - Windows x64 packaging still depends on the native WGC helper binaries being built on Windows. Public GitHub release/build automation was removed until the project has a clean LikelySnap-owned release pipeline.
 - Windows export performance is now on the FFmpeg path, but still needs real Windows x64 validation with Task Manager/video encode metrics and app-side diagnostics showing the selected encoder.
 - Windows one-hour editor-open freeze has a concrete code-level fix in place for the largest cursor bottleneck: editor open now reads `cursor-preview.json` instead of parsing/transferring full `cursor.json`. This still needs the user's Windows package retest.
+- Repeated attempts to patch isolated editor-open bottlenecks did not produce reliable Windows one-hour behavior. Treat true proxy/media-cache work (`cache/media-info.json`, thumbnails, proxy MP4s, background job manager, and proxy playback selection) as the next serious direction instead of another narrow open-time patch.
 - The Windows layout panel is expected to be disabled when the package has no webcam sidecar. Do not treat it as a broken Windows layout feature unless webcam was recorded and the manifest/session still lacks `webcamVideoPath`.
 - Current P0 is to validate and continue the editor-open/export architecture plus the new OBS-style recording controls. The latest editor-open code pass removes the largest known first-screen cursor/waveform/auto-zoom blockers and MP4 final-Blob export risk, but package-local media info, chunked/append cursor storage, preview proxies, source-aware export FPS, export diagnostics, and Windows GPU scaling for recording resolution are still open.
 

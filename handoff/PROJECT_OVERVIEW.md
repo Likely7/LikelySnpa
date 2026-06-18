@@ -36,8 +36,12 @@ The zoom system does not require zoom to be baked into the raw recording.
 - Auto zoom suggestions are derived from telemetry in `src/components/video-editor/timeline/zoomSuggestionUtils.ts`.
 - Preview/export follow cursor telemetry through `src/components/video-editor/videoPlayback/zoomRegionUtils.ts` and `src/lib/exporter/frameRenderer.ts`.
 - User-facing UI calls cursor-following zoom "Follow Mouse" / `跟随鼠标`; the persisted field remains `focusMode` for compatibility.
-- Auto zoom suggestions choose time spans separately from Follow Mouse behavior. Ordinary dwell/click suggestions use stable fixed-position zooms; held mouse-button spans default to Follow Mouse.
-- Suggestion duration is data-driven: dwell spans use real dwell duration plus context padding, nearby same-area dwell runs merge, click-only suggestions stay short, and durations are clamped to bounded limits.
+- Auto zoom suggestions choose time spans separately from camera-follow behavior. The product model is now three-state: `Off`, `Smart Follow Mouse`, and `Always Follow Mouse`.
+- Smart Follow Mouse is designed as the default generated-zoom behavior. It keeps the camera stable while the cursor stays inside a scale-aware safe area, then eases the camera only when the cursor approaches the cropped boundary.
+- Always Follow Mouse is a continuous follow mode, but should still be damped and eased so the cursor leads slightly and the picture catches up smoothly instead of locking tightly to every cursor sample.
+- The global Smart Follow Mouse and global Always Follow Mouse controls are mutually exclusive. They are batch/default controls; each selected zoom can still override its own follow mode.
+- Auto zoom suggestion generation should score user intent, not only cursor dwell duration. Click-and-stay, double click, long press, drag, and repeated interaction are stronger than accidental click-and-leave motion.
+- Suggestion duration is bounded and explainable. Long dwell should not automatically become a huge zoom span unless there is sustained interaction that makes that behavior intentional.
 
 The key contract is:
 

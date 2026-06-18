@@ -23,6 +23,9 @@ Build a durable macOS/Windows LikelySnap recorder/editor that can record long vi
 17. Windows export should not be CPU-only by accident. The product now has an explicit FFmpeg hardware-first strategy with software fallback, and still needs UI/diagnostics that report the actual encoder mode used.
 18. The editor must move toward a mainstream NLE architecture: instant timeline open, asynchronous media preparation, package/cache indexes, waveform/proxy/background jobs, and original-media export.
 19. Recording quality must be explicit and inspectable, not hidden behind fixed 4K assumptions. Presets are `Standard = 1080p/30/5Mbps`, `High = source/60/8Mbps`, and `Ultra = source/60/15Mbps`; manual resolution/FPS/bitrate controls are only active on the separate Custom route, with custom bitrate capped at `60 Mbps`.
+20. Auto Zoom must use a maintainable intent model instead of one-off cursor dwell heuristics. Zoom regions must support three independent follow modes: `Off`, `Smart Follow Mouse`, and `Always Follow Mouse`.
+21. Smart Follow Mouse is the default global follow behavior for generated zooms and must be mutually exclusive with the global Always Follow Mouse batch toggle. Enabling one global follow mode disables the other.
+22. Smart Follow Mouse must respect each zoom region's effective scale/custom scale. Higher zoom levels have a smaller visible viewport, so the safe cursor area and edge-follow threshold must be derived from the actual zoom scale, not a fixed percentage.
 
 ## Current Priority
 
@@ -30,6 +33,7 @@ Push the package model from "recording works" to "long recordings remain editabl
 
 - Make editor-open interactive before waveform, cursor, auto zoom, thumbnails, and proxy generation finish.
 - Keep the newly implemented staged editor-open path intact: package-local `cursor-preview.json`, preview cursor bridge data, main-process cursor cache, idle auto zoom, idle waveform preparation, and first-screen timing logs.
+- Do not confuse the current staged-open work with a finished proxy-media pipeline. Actual preview proxy files and proxy playback selection have not been implemented yet.
 - Add package-local media caches and deeper cursor chunk indexes so cold app launches do not need to parse/index from scratch.
 - Avoid whole-file media reads and packet scans in first-screen editor open.
 - Add the remaining timing instrumentation for video metadata readiness and future proxy/cache jobs.
@@ -40,6 +44,8 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Confirm missing-manifest recovery rebuilds a usable package session.
 - Confirm editor preview and exported MP4 stay in sync.
 - Validate the updated auto zoom and Follow Mouse model: normal auto zoom suggestions should default to stable fixed-position zooms, suggestions created from held mouse-button spans should default to Follow Mouse, and every selected zoom must remain individually switchable between Follow Mouse off/on in the settings panel.
+- Replace the current two-state Follow Mouse behavior with the three-state model: `Off`, `Smart Follow Mouse`, and `Always Follow Mouse`. Smart follow should hold the camera still while the cursor remains inside a scale-aware safe area, then ease toward the cursor only when it approaches the cropped zoom boundary. Always follow should still follow continuously, but with slower eased camera motion so the cursor leads and the picture catches up instead of shaking tightly.
+- Auto Zoom selection should be rebalanced against OpenScreen/Screen Studio behavior: click/press/drag intent should matter, accidental click-and-leave actions should be down-ranked, long dwells should not create huge unstable spans by default, and accepted regions should be explainable by interaction type.
 - Validate the implemented long-recording native webcam plan in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: macOS native `webcam.mp4`, Windows native `webcam.mp4`, legacy `webcam.webm` compatibility, and editor-side degradation for huge sidecars.
 - Validate Windows native `webcam.mp4` sidecar sync after the WGC helper now emits and persists `webcamStartOffsetMs`.
 - Produce the Windows x64 portable zip on a Windows x64 build machine with `npm run build:win:portable`; this macOS Apple Silicon machine cannot produce the final Windows zip because the WGC helper binary is missing and electron-builder's Wine resource step cannot execute.
@@ -52,3 +58,19 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Validate FFmpeg MP4 export on longer real projects: renderer compositing feeds frames, FFmpeg handles hardware-first encoding, audio muxing, and temp-file/streaming output.
 - Keep the legacy WebCodecs MP4 exporter only as a compatibility fallback; do not reintroduce Blob-based final MP4 saves as the main path.
 - Keep source-aware FPS on the export track: current MP4 export is fixed at 60 FPS, so long 30 FPS recordings can do unnecessary work.
+
+## 2026-06-19 Rollback Note
+
+`main` has been intentionally rolled back to `2458939` after the later MP4 faststart/webcam sidecar cleanup attempt made Windows long-project open behavior worse. The stable baseline contains the first staged editor-open pass, not a complete video-proxy pass. Future long-video work should start from explicit measurement and true media-cache/proxy architecture, not another isolated patch that changes package contents or MP4 finalization behavior.
+
+## 2026-06-19 Auto Zoom / Follow Mouse Work
+
+The next implementation pass starts from the stable rollback baseline and targets the product feel of Auto Zoom rather than package/media architecture. The intended durable model:
+
+- Per zoom region: `Off`, `Smart Follow Mouse`, `Always Follow Mouse`.
+- Global Smart Follow Mouse: default on; applies to generated zooms unless a region is manually changed.
+- Global Always Follow Mouse: retained as a batch control for users who want every zoom to follow the cursor continuously.
+- Global Smart Follow Mouse and global Always Follow Mouse are mutually exclusive to avoid conflicting camera instructions.
+- Smart Follow Mouse uses a scale-aware safe area. At higher custom zoom scales, the visible area is smaller, so the cursor boundary threshold is tighter and the camera begins easing before the cursor is cropped.
+- Always Follow Mouse is not a hard cursor lock. It should use slower damped motion with lead/lag, soft start, and soft settle so the view does not shake.
+- Auto Zoom generation should move from raw dwell duration to intent scoring: click with local stay, repeated click, press/drag, and meaningful dwell are strong; click-and-immediately-leave is weak.

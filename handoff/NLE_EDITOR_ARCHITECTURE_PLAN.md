@@ -58,6 +58,32 @@ Auto zoom suggestion generation now runs after the editor is interactive using i
 
 ## First Implementation Status
 
+## 2026-06-19 Clarification: What Was Actually Implemented
+
+After rolling `main` back to `2458939`, the project is at the stable staged-editor-open baseline. It is important not to mislabel this as a finished proxy-media implementation.
+
+What has actually been implemented:
+
+- package-local `cursor-preview.json`;
+- preview-level cursor loading for editor open;
+- main-process cursor parse/cache helpers;
+- idle scheduling for auto zoom suggestion generation;
+- idle startup plus ranged/disk-cached waveform generation;
+- FFmpeg temp-file/streaming MP4 export path;
+- timing logs for several editor-open preparation phases.
+
+What has not been implemented yet:
+
+- no `proxy-screen.mp4` or `proxy-webcam.mp4` is generated;
+- the editor preview does not switch playback to proxy media;
+- no package-local `cache/media-info.json` exists yet;
+- no package-local thumbnail cache exists yet;
+- no chunked cursor storage/index exists yet;
+- no persistent auto-zoom suggestion cache exists yet;
+- no background job manager owns media-info, waveform, thumbnail, and proxy preparation as one pipeline.
+
+So the previous work was the first NLE-style staged-open pass, not the actual video-proxy pass. The right next architectural step, if long recordings remain the priority, is to implement real proxy/media-cache infrastructure instead of continuing to patch isolated open-time bottlenecks.
+
 Implemented in the first architecture pass:
 
 1. Created `CursorPreviewData` on the native bridge.
