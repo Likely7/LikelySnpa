@@ -25,6 +25,7 @@ This baseline is based on OpenScreen 1.5.0 and has been rebuilt as LikelySnap.
 
 ### Fixed
 
+- Fixed blurry/washed macOS native source recordings by using the display mode backing-pixel dimensions for ScreenCaptureKit output instead of the scaled logical display size, writing BT.709 H.264 color metadata, and computing macOS native recording bitrate from the actual output dimensions/FPS instead of a fixed 4K assumption.
 - Restored cursor rendering and cursor settings after the staged editor-open optimization hid full cursor assets from preview data.
 - Preserved full cursor data for export while keeping editor open fast.
 - Avoided Windows native stop/finalize paths that loaded the main screen MP4 into JavaScript memory.

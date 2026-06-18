@@ -25,6 +25,7 @@ struct RecordingRequest: Decodable {
 		let width: Int
 		let height: Int
 		let bitrate: Int?
+		let bitrateMultiplier: Double?
 		let hideSystemCursor: Bool
 	}
 
@@ -160,6 +161,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 	private var microphoneAudioSamplesDroppedInputNotReady = 0
 	private var microphoneAudioAppendFailures = 0
 	private var webcamRecorder: NativeWebcamRecorder?
+	private var selectedVideoBitrate = 0
 
 	init(request: RecordingRequest) {
 		self.request = request
@@ -326,6 +328,8 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 						"timestampMs": Int(Date().timeIntervalSince1970 * 1000),
 						"width": outputWidth,
 						"height": outputHeight,
+						"fps": request.video.fps,
+						"bitrate": selectedVideoBitrate,
 						"captureBounds": [
 							"x": targetCaptureBounds.origin.x,
 							"y": targetCaptureBounds.origin.y,
@@ -396,12 +400,11 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			guard let display = content.displays.first(where: { $0.displayID == displayId }) else {
 				throw HelperError.sourceNotFound("No ScreenCaptureKit display found for id \(displayId).")
 			}
-			let width = Int(CGDisplayPixelsWide(display.displayID))
-			let height = Int(CGDisplayPixelsHigh(display.displayID))
+			let pixelSize = Self.pixelSize(for: display.displayID)
 			return CaptureTarget(
 				filter: SCContentFilter(display: display, excludingWindows: []),
-				width: clampCaptureDimension(width, fallback: request.video.width),
-				height: clampCaptureDimension(height, fallback: request.video.height),
+				width: evenCaptureDimension(pixelSize.width, fallback: request.video.width),
+				height: evenCaptureDimension(pixelSize.height, fallback: request.video.height),
 				bounds: display.frame
 			)
 		case "window":
@@ -419,8 +422,8 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			let height = Int(window.frame.height) * scaleFactor
 			return CaptureTarget(
 				filter: SCContentFilter(desktopIndependentWindow: window),
-				width: clampCaptureDimension(width, fallback: request.video.width),
-				height: clampCaptureDimension(height, fallback: request.video.height),
+				width: evenCaptureDimension(width, fallback: request.video.width),
+				height: evenCaptureDimension(height, fallback: request.video.height),
 				bounds: window.frame
 			)
 		default:
@@ -473,13 +476,26 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		)
 
 		let writer = try AVAssetWriter(outputURL: outputUrl, fileType: .mp4)
+		let bitrate = request.video.bitrate ?? defaultBitrate(
+			width: outputWidth,
+			height: outputHeight,
+			fps: request.video.fps,
+			qualityMultiplier: request.video.bitrateMultiplier ?? 1
+		)
+		selectedVideoBitrate = bitrate
 		let settings: [String: Any] = [
 			AVVideoCodecKey: AVVideoCodecType.h264,
 			AVVideoWidthKey: outputWidth,
 			AVVideoHeightKey: outputHeight,
+			AVVideoColorPropertiesKey: [
+				AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+				AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+				AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+			],
 			AVVideoCompressionPropertiesKey: [
-				AVVideoAverageBitRateKey: request.video.bitrate ?? 18_000_000,
+				AVVideoAverageBitRateKey: bitrate,
 				AVVideoExpectedSourceFrameRateKey: request.video.fps,
+				AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
 			],
 		]
 		let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
@@ -548,6 +564,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			emit([
 				"event": "recording-stopped",
 				"screenPath": request.outputs.screenPath,
+				"width": outputWidth,
+				"height": outputHeight,
+				"fps": request.video.fps,
+				"bitrate": selectedVideoBitrate,
 			])
 		} else {
 			emitError(
@@ -627,6 +647,20 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			"microphone": request.audio.microphone.enabled,
 		]
 		diagnostics["nativeMicrophoneEnabled"] = nativeMicrophoneEnabled
+		diagnostics["recordingStarted"] = [
+			"width": outputWidth,
+			"height": outputHeight,
+			"fps": request.video.fps,
+			"bitrate": selectedVideoBitrate,
+			"requestedWidth": request.video.width,
+			"requestedHeight": request.video.height,
+			"requestedFps": request.video.fps,
+			"requestedBitrate": request.video.bitrate as Any,
+			"bitrateMultiplier": request.video.bitrateMultiplier ?? 1,
+			"colorPrimaries": "ITU_R_709_2",
+			"transferFunction": "ITU_R_709_2",
+			"yCbCrMatrix": "ITU_R_709_2",
+		]
 		diagnostics["writerSamples"] = [
 			"video": [
 				"appended": videoSamplesAppended,
@@ -830,11 +864,24 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		return status == .complete
 	}
 
-	private func clampCaptureDimension(_ value: Int, fallback: Int) -> Int {
-		let requested = max(2, fallback)
-		let candidate = value > 0 ? value : requested
-		let clamped = min(candidate, requested)
-		return max(2, clamped - (clamped % 2))
+	private func evenCaptureDimension(_ value: Int, fallback: Int) -> Int {
+		let candidate = value > 0 ? value : max(2, fallback)
+		return max(2, candidate - (candidate % 2))
+	}
+
+	private func defaultBitrate(width: Int, height: Int, fps: Int, qualityMultiplier: Double) -> Int {
+		let pixels = width * height
+		let base: Int
+		if pixels >= 3840 * 2160 {
+			base = 45_000_000
+		} else if pixels >= 2560 * 1440 {
+			base = 28_000_000
+		} else {
+			base = 18_000_000
+		}
+		let frameRateMultiplier = fps >= 60 ? 1.7 : 1
+		let multiplier = max(0.1, qualityMultiplier) * frameRateMultiplier
+		return Int(Double(base) * multiplier)
 	}
 
 	private static func scaleFactor(for displayId: CGDirectDisplayID) -> Int {
@@ -843,6 +890,20 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		}
 
 		return max(1, mode.pixelWidth / max(1, mode.width))
+	}
+
+	private static func pixelSize(for displayId: CGDirectDisplayID) -> (width: Int, height: Int) {
+		guard let mode = CGDisplayCopyDisplayMode(displayId) else {
+			return (
+				width: Int(CGDisplayPixelsWide(displayId)),
+				height: Int(CGDisplayPixelsHigh(displayId))
+			)
+		}
+
+		return (
+			width: max(mode.pixelWidth, Int(CGDisplayPixelsWide(displayId))),
+			height: max(mode.pixelHeight, Int(CGDisplayPixelsHigh(displayId)))
+		)
 	}
 
 	private func supportsNativeMicrophoneCapture(streamConfig: SCStreamConfiguration) -> Bool {

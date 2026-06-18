@@ -33,6 +33,9 @@
 ## Confirmed Code Facts
 
 - macOS native recording writes MP4 with `AVAssetWriter`; it is already a disk-writing path, not renderer-memory-first.
+- macOS native display recording now uses ScreenCaptureKit display mode backing pixels instead of scaled logical display size. On the user's built-in display, this fixes raw `screen.mp4` output from `1710x1112` to `3420x2224`.
+- macOS native H.264 screen recordings now include BT.709 color primaries, transfer function, and YCbCr matrix metadata to avoid washed/gray playback.
+- macOS native recording diagnostics now persist actual `recordingStarted` width, height, FPS, bitrate, requested dimensions, and color metadata into `manifest.json`.
 - macOS native webcam sidecar now records in the ScreenCaptureKit helper with `AVCaptureSession + AVAssetWriter` and writes package-local `webcam.mp4`.
 - Windows native webcam sidecar now uses the WGC helper's Media Foundation/DirectShow path and writes package-local `webcam.mp4`; renderer webcam recording is no longer used on the native Windows path.
 - Windows support is currently scoped to x64 only. The WGC helper resolver and build scripts target `electron/native/bin/win32-x64`; Windows ARM64 is not a supported packaging target.
@@ -43,7 +46,7 @@
 - App settings are now persisted in `app-settings.json` under Electron `userData`, with compatibility mirroring of the recording directory to legacy `recording-settings.json`.
 - Recording directory is now user-selectable from both the HUD folder button and the standalone app settings window.
 - Project file default directory and cache directory are now user-selectable from the standalone app settings window.
-- Recording quality defaults are now real settings, not placeholder UI: Standard maps to 1080p/30 with lower bitrate, High maps to 4K with the selected FPS, and Ultra maps to 4K with the selected FPS plus higher bitrate. macOS native, Windows native, and browser fallback paths all consume the configured profile.
+- Recording quality defaults are now real settings, not placeholder UI. Standard intentionally caps at 1080p/30 with lower bitrate. High/Ultra preserve the native capture size on macOS and use quality multipliers so the helper computes bitrate from the actual ScreenCaptureKit output dimensions and FPS instead of a fixed 4K assumption. Windows native and browser fallback still consume the configured profile through their existing paths.
 - Recording default toggles are now real settings: editable cursor, microphone, system audio, and webcam defaults are loaded when the HUD starts.
 - macOS default recording directory is now `~/Movies/LikelySnap`; non-macOS default is `~/Videos/LikelySnap`.
 - Legacy `RECORDINGS_DIR = path.join(app.getPath("userData"), "recordings")` remains trusted for reading old recordings.
@@ -130,3 +133,8 @@
 - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/lib/cursor/nativeCursor.test.ts src/lib/cursor/cursorPathSmoothing.test.ts` passes after the first NLE editor-open architecture pass.
 - `npm run build-vite` passes after the first NLE editor-open architecture pass.
 - User manually tested the post-optimization app and reported the main functionality looked OK before this documentation/archive checkpoint.
+- `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the macOS raw recording quality fix with existing deprecation warnings only.
+- `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the dev helper after the macOS raw recording quality fix.
+- `npx tsc --noEmit` passes after the macOS raw recording quality fix.
+- `npx biome check electron/ipc/handlers.ts electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the macOS raw recording quality fix.
+- Direct helper validation on the user's built-in Retina display: before fix, raw `screen.mp4` was `1710x1112`; after fix, raw `screen.mp4` is `3420x2224` with `yuv420p(tv, bt709, progressive)`. A second validation confirms High quality now selects a 28 Mbps target from the actual `3420x2224 @ 30fps` output instead of inheriting a fixed 4K-derived 76.5 Mbps target.

@@ -1576,14 +1576,22 @@ function normalizeRectangle(value: unknown): Rectangle | null {
 type NativeMacCaptureStartInfo = {
 	timestampMs: number;
 	captureBounds: Rectangle | null;
+	width?: number;
+	height?: number;
+	fps?: number;
+	bitrate?: number;
 };
+
+function normalizePositiveNumber(value: unknown) {
+	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
+}
 
 function inspectNativeMacCaptureOutput() {
 	for (const line of nativeMacCaptureOutput.split(/\r?\n/)) {
 		const event = tryParseNativeHelperEvent(line.trim());
 		if (event) {
 			if (event.event === "recording-diagnostics") {
-				nativeMacCaptureDiagnostics = event;
+				nativeMacCaptureDiagnostics = { ...(nativeMacCaptureDiagnostics ?? {}), ...event };
 			}
 			nativeMacCaptureEvents.emit("helper-event", event);
 		}
@@ -1609,7 +1617,7 @@ function attachNativeMacCaptureOutputDrain(proc: ChildProcessWithoutNullStreams)
 			const event = tryParseNativeHelperEvent(line.trim());
 			if (event) {
 				if (event.event === "recording-diagnostics") {
-					nativeMacCaptureDiagnostics = event;
+					nativeMacCaptureDiagnostics = { ...(nativeMacCaptureDiagnostics ?? {}), ...event };
 				}
 				nativeMacCaptureEvents.emit("helper-event", event);
 			}
@@ -1644,6 +1652,10 @@ function waitForNativeMacCaptureStart(proc: ChildProcessWithoutNullStreams) {
 							? event.timestampMs
 							: Date.now(),
 					captureBounds: normalizeRectangle(event.captureBounds),
+					width: normalizePositiveNumber(event.width),
+					height: normalizePositiveNumber(event.height),
+					fps: normalizePositiveNumber(event.fps),
+					bitrate: normalizePositiveNumber(event.bitrate),
 				});
 				return;
 			}
@@ -2576,6 +2588,19 @@ export function registerIpcHandlers(
 			const captureStartedAtMs = captureStart.timestampMs;
 			nativeMacCaptureBounds =
 				request.source.type === "window" ? (captureStart.captureBounds ?? null) : (bounds ?? null);
+			nativeMacCaptureDiagnostics = {
+				...(nativeMacCaptureDiagnostics ?? {}),
+				recordingStarted: {
+					width: captureStart.width,
+					height: captureStart.height,
+					fps: captureStart.fps,
+					bitrate: captureStart.bitrate,
+					requestedWidth: request.video.width,
+					requestedHeight: request.video.height,
+					requestedFps: request.video.fps,
+					bitrateMultiplier: request.video.bitrateMultiplier ?? 1,
+				},
+			};
 			nativeMacCursorOffsetMs = 0;
 			if (cursorCaptureMode === "editable-overlay") {
 				nativeMacCursorRecordingStartMs = captureStartedAtMs;

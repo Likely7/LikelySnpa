@@ -17,7 +17,7 @@ export type NativeMacRecordingRequest = {
 		fps: number;
 		width: number;
 		height: number;
-		bitrate?: number;
+		bitrateMultiplier?: number;
 		hideSystemCursor: boolean;
 	};
 	audio: {

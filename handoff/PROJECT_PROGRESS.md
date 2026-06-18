@@ -72,6 +72,7 @@
 68. Added the FFmpeg MP4 export pipeline: `FfmpegVideoExporter`, FFmpeg resolver, main-process FFmpeg service, IPC start/write/finish/cancel handlers, preload/native bridge contracts, audio timeline filter generation, temp-file output, and hardware-first encoder selection with CPU fallback.
 69. Switched `VideoEditor` MP4 export to the FFmpeg path. GIF export remains on the existing GIF path, and the old WebCodecs MP4 exporter remains in the codebase as compatibility/fallback.
 70. Added `CHANGELOG.md` and synchronized README plus handoff docs with the current baseline: staged long-recording editor open, restored cursor UI/rendering, FFmpeg streaming MP4 export, and remaining validation work.
+71. Fixed macOS raw recording quality regression: ScreenCaptureKit display capture now uses display mode backing pixels instead of logical display size, H.264 output includes BT.709 color metadata, helper events/manifest diagnostics include actual width/height/FPS/bitrate/color data, macOS bitrate is computed in the helper from the actual output dimensions and quality multiplier, and the local dev helper binary was rebuilt.
 
 ## Implemented This Pass
 
@@ -194,6 +195,11 @@
 - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/lib/cursor/nativeCursor.test.ts src/lib/exporter/audioEncoder.test.ts src/lib/exporter/streamingDecoder.test.ts src/lib/exporter/timestampedVideoFrameQueue.test.ts` passes after the FFmpeg MP4 export path and cursor preview fallback.
 - `npx biome check electron/ffmpeg/ffmpegResolver.ts electron/native-bridge/services/ffmpegService.ts electron/ipc/handlers.ts electron/ipc/nativeBridge.ts electron/preload.ts electron/electron-env.d.ts src/lib/exporter/ffmpegVideoExporter.ts src/lib/exporter/ffmpegExportTypes.ts src/lib/exporter/exportTimeline.ts src/lib/exporter/audioEncoder.ts src/lib/exporter/streamingDecoder.ts src/lib/exporter/types.ts src/lib/exporter/index.ts src/lib/cursor/nativeCursor.ts src/native/client.ts src/native/contracts.ts src/components/video-editor/VideoEditor.tsx` passes after the FFmpeg MP4 export path and cursor preview fallback.
 - User manually tested the current app before this archive checkpoint and reported no obvious functional issue.
+- `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the macOS raw recording quality fix with existing deprecation warnings only.
+- `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes after the macOS raw recording quality fix and refreshes the local dev helper.
+- `npx tsc --noEmit` passes after the macOS raw recording quality fix.
+- `npx biome check electron/ipc/handlers.ts electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the macOS raw recording quality fix.
+- Direct helper validation recorded the same built-in display at `3420x2224` with `yuv420p(tv, bt709, progressive)`, replacing the previous `1710x1112` raw source output. A follow-up validation confirmed High quality chooses a 28 Mbps target for `3420x2224 @ 30fps` instead of applying a fixed 4K-derived 76.5 Mbps target.
 
 ## Next Engineering Step
 
@@ -201,7 +207,8 @@ Continue validation and hardening from the current staged editor-open + FFmpeg e
 
 1. Validate FFmpeg MP4 export on real long macOS and Windows x64 projects, with microphone/system audio/webcam/cursor/zoom/trims/speed changes.
 2. On Windows x64, confirm whether FFmpeg uses `h264_nvenc` on the RTX 5070 machine or falls back to CPU, then expose that result in the UI/diagnostics.
-3. Add package-local `cache/media-info.json` and `cache/cursor-index.json` so cold app launches do not need to recompute preview metadata/indexes.
-4. Add source-aware export FPS so 30 FPS recordings do not export at a fixed 60 FPS unless the user explicitly asks for it.
-5. Add visible background preparation state for long media and preview proxy generation for very long/high-resolution recordings.
-6. Keep validating `.likelysnap` package recovery: moved packages, missing manifest, interrupted recording, native `webcam.mp4`, and legacy oversized `webcam.webm` skip behavior.
+3. Run an in-app macOS recording with webcam/mic/system audio/editable cursor enabled and confirm the package `screen.mp4` is full Retina/backing-pixel size with BT.709 metadata.
+4. Add package-local `cache/media-info.json` and `cache/cursor-index.json` so cold app launches do not need to recompute preview metadata/indexes.
+5. Add source-aware export FPS so 30 FPS recordings do not export at a fixed 60 FPS unless the user explicitly asks for it.
+6. Add visible background preparation state for long media and preview proxy generation for very long/high-resolution recordings.
+7. Keep validating `.likelysnap` package recovery: moved packages, missing manifest, interrupted recording, native `webcam.mp4`, and legacy oversized `webcam.webm` skip behavior.

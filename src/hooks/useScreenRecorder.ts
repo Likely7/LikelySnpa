@@ -935,12 +935,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 					fps: videoProfile.fps,
 					width: videoProfile.width,
 					height: videoProfile.height,
-					bitrate: computeBitrate(
-						videoProfile.width,
-						videoProfile.height,
-						videoProfile.fps,
-						videoProfile.bitrateMultiplier,
-					),
+					bitrateMultiplier: videoProfile.bitrateMultiplier,
 					hideSystemCursor: effectiveCursorCaptureMode === "editable-overlay",
 				},
 				audio: {
