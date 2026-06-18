@@ -73,6 +73,7 @@
 69. Switched `VideoEditor` MP4 export to the FFmpeg path. GIF export remains on the existing GIF path, and the old WebCodecs MP4 exporter remains in the codebase as compatibility/fallback.
 70. Added `CHANGELOG.md` and synchronized README plus handoff docs with the current baseline: staged long-recording editor open, restored cursor UI/rendering, FFmpeg streaming MP4 export, and remaining validation work.
 71. Fixed macOS raw recording quality regression: ScreenCaptureKit display capture now uses display mode backing pixels instead of logical display size, H.264 output includes BT.709 color metadata, helper events/manifest diagnostics include actual width/height/FPS/bitrate/color data, macOS bitrate is computed in the helper from the actual output dimensions and quality multiplier, and the local dev helper binary was rebuilt.
+72. Added package-local `cursor-preview.json` as a movable preview index for cursor data. The main process now writes and validates it by package-relative source identity, the editor uses it instead of parsing full `cursor.json` on open, and package paths/tests now include it as a first-class package file.
 
 ## Implemented This Pass
 
@@ -121,6 +122,12 @@
 - `electron/native/wgc-capture/src/main.cpp`
 - `src/lib/nativeWindowsRecording.ts`
 - `src/hooks/useAudioPeaks.ts`
+- `electron/ipc/handlers.ts`
+- `electron/ipc/recordingPackage.ts`
+- `electron/ipc/recordingPackage.test.ts`
+- `electron/ipc/nativeBridge.ts`
+- `electron/native-bridge/cursor/telemetryCursorAdapter.ts`
+- `src/native/hooks/useCursorEditorData.ts`
 
 ## 2026-06-18 Package Size Cleanup Pass 1
 

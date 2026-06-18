@@ -7,6 +7,7 @@ import type { CursorNativeAdapter, CursorTelemetryLoadResult } from "./adapter";
 
 interface TelemetryCursorAdapterOptions {
 	loadRecordingData: (videoPath: string) => Promise<CursorRecordingData>;
+	loadPreviewData: (videoPath: string, sampleIntervalMs?: number) => Promise<CursorPreviewData>;
 	resolveVideoPath: (videoPath?: string | null) => string | null;
 	loadTelemetry: (videoPath: string) => Promise<CursorTelemetryLoadResult>;
 }
@@ -42,20 +43,21 @@ export class TelemetryCursorAdapter implements CursorNativeAdapter {
 		videoPath?: string | null,
 		sampleIntervalMs?: number,
 	): Promise<CursorPreviewData> {
-		const recordingData = await this.getRecordingData(videoPath);
-		const intervalMs =
-			typeof sampleIntervalMs === "number" && Number.isFinite(sampleIntervalMs)
-				? Math.max(16, Math.round(sampleIntervalMs))
-				: 100;
-		const samples = downsampleCursorSamples(recordingData.samples, intervalMs);
+		const resolvedVideoPath = this.options.resolveVideoPath(videoPath);
+		if (!resolvedVideoPath) {
+			return {
+				version: 2,
+				provider: this.kind,
+				samples: [],
+				originalSampleCount: 0,
+				sampleIntervalMs:
+					typeof sampleIntervalMs === "number" && Number.isFinite(sampleIntervalMs)
+						? Math.max(16, Math.round(sampleIntervalMs))
+						: 100,
+			};
+		}
 
-		return {
-			version: recordingData.version,
-			provider: recordingData.provider,
-			samples,
-			originalSampleCount: recordingData.samples.length,
-			sampleIntervalMs: intervalMs,
-		};
+		return this.options.loadPreviewData(resolvedVideoPath, sampleIntervalMs);
 	}
 
 	async getTelemetry(videoPath?: string | null) {
@@ -70,32 +72,4 @@ export class TelemetryCursorAdapter implements CursorNativeAdapter {
 
 		return this.options.loadTelemetry(resolvedVideoPath);
 	}
-}
-
-function downsampleCursorSamples(
-	samples: CursorRecordingData["samples"],
-	sampleIntervalMs: number,
-): CursorRecordingData["samples"] {
-	if (samples.length <= 2) {
-		return samples;
-	}
-
-	const downsampled: CursorRecordingData["samples"] = [];
-	let lastKeptTimeMs = Number.NEGATIVE_INFINITY;
-
-	for (const sample of samples) {
-		const keepForTime = sample.timeMs - lastKeptTimeMs >= sampleIntervalMs;
-		const keepForInteraction = sample.interactionType && sample.interactionType !== "move";
-		if (keepForTime || keepForInteraction) {
-			downsampled.push(sample);
-			lastKeptTimeMs = sample.timeMs;
-		}
-	}
-
-	const finalSample = samples[samples.length - 1];
-	if (downsampled[downsampled.length - 1] !== finalSample) {
-		downsampled.push(finalSample);
-	}
-
-	return downsampled;
 }

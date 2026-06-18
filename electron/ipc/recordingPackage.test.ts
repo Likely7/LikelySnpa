@@ -2,6 +2,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
 	buildRecordingPackageManifest,
+	getCursorPreviewPathForVideo,
 	getCursorTelemetryPathForVideo,
 	getRecordingManifestPathForVideo,
 	getRecordingPackageDirForVideoPath,
@@ -24,6 +25,9 @@ describe("recording package paths", () => {
 		expect(paths.cursorTelemetryPath).toBe(
 			path.join("/recordings", "recording-123.likelysnap", "cursor.json"),
 		);
+		expect(paths.cursorPreviewPath).toBe(
+			path.join("/recordings", "recording-123.likelysnap", "cursor-preview.json"),
+		);
 	});
 
 	it("allows only known package child paths under the recording directory", () => {
@@ -36,6 +40,9 @@ describe("recording package paths", () => {
 		expect(
 			resolveRecordingOutputPathInDirectory("recording-123.likelysnap/webcam.webm", "/r"),
 		).toBe(path.join("/r", "recording-123.likelysnap", "webcam.webm"));
+		expect(
+			resolveRecordingOutputPathInDirectory("recording-123.likelysnap/cursor-preview.json", "/r"),
+		).toBe(path.join("/r", "recording-123.likelysnap", "cursor-preview.json"));
 		expect(resolveRecordingOutputPathInDirectory("recording-123.webm", "/r")).toBe(
 			path.join("/r", "recording-123.webm"),
 		);
@@ -58,8 +65,19 @@ describe("recording package paths", () => {
 		expect(getCursorTelemetryPathForVideo(screenPath)).toBe(
 			path.join("/r", "recording-123.likelysnap", "cursor.json"),
 		);
+		expect(getCursorPreviewPathForVideo(screenPath)).toBe(
+			path.join("/r", "recording-123.likelysnap", "cursor-preview.json"),
+		);
 		expect(getRecordingManifestPathForVideo(screenPath, ".session.json")).toBe(
 			path.join("/r", "recording-123.likelysnap", "manifest.json"),
+		);
+	});
+
+	it("keeps preview sidecars package-local even after the package is moved", () => {
+		const screenPath = path.join("/moved", "recording-123.likelysnap", "screen.mp4");
+
+		expect(getCursorPreviewPathForVideo(screenPath)).toBe(
+			path.join("/moved", "recording-123.likelysnap", "cursor-preview.json"),
 		);
 	});
 
@@ -68,6 +86,7 @@ describe("recording package paths", () => {
 
 		expect(getRecordingPackageDirForVideoPath(screenPath)).toBeNull();
 		expect(getCursorTelemetryPathForVideo(screenPath)).toBe(`${screenPath}.cursor.json`);
+		expect(getCursorPreviewPathForVideo(screenPath)).toBe(`${screenPath}.cursor-preview.json`);
 		expect(getRecordingManifestPathForVideo(screenPath, ".session.json")).toBe(
 			path.join("/r", "recording-123.session.json"),
 		);

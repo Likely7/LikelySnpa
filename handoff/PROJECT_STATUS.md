@@ -16,7 +16,7 @@
 - Public GitHub cleanup checkpoint: removed obsolete release/build workflows and public README platform packaging instructions; internal build scripts remain in `package.json`.
 - Archive before NLE-style editor architecture work: `archive/before-nle-editor-architecture-20260618-000347`
 - Archive before FFmpeg export pipeline work: `archive/before-export-architecture-pivot-20260618-011443`
-- Current local checkpoint being created on 2026-06-18: staged editor-open, cursor feature restoration, FFmpeg MP4 export, and synchronized docs.
+- Current local checkpoint being created on 2026-06-18: Windows long-recording editor-open fix with movable package-local `cursor-preview.json`, plus synchronized docs.
 - App settings checkpoints: `eb0f2c4 feat: add app settings center`, `7d1a3c2 fix: open app settings in standalone window`
 - Archive before app settings center work: `archive/before-app-settings-20260617`
 - Previous durable checkpoints: `cb24f07 fix: stabilize auto zoom spans and refresh branding`, `0291a23 fix: make native webcam sidecars long-recording safe`
@@ -40,7 +40,7 @@
 - Windows native webcam sidecar now uses the WGC helper's Media Foundation/DirectShow path and writes package-local `webcam.mp4`; renderer webcam recording is no longer used on the native Windows path.
 - Windows support is currently scoped to x64 only. The WGC helper resolver and build scripts target `electron/native/bin/win32-x64`; Windows ARM64 is not a supported packaging target.
 - Windows native webcam sidecars now persist `webcamStartOffsetMs` from the WGC helper's first written webcam-sidecar frame relative to the screen timeline. Editor preview and MP4/GIF export already consume this manifest field, matching the macOS webcam offset path.
-- Cursor telemetry now creates a package-local `cursor.json` file at recording start and refreshes it in throttled snapshots, with final corrected telemetry written at stop. Legacy loose recordings still use `.cursor.json`.
+- Cursor telemetry now creates a package-local `cursor.json` file at recording start and refreshes it in throttled snapshots, with final corrected telemetry written at stop. It also writes package-local `cursor-preview.json` as a bounded preview index for editor open. Legacy loose recordings still use `.cursor.json` plus `.cursor-preview.json`.
 - Session manifests are now created at recording start and updated after stop/attach. New packages use `manifest.json`; legacy loose recordings still use `.session.json`.
 - Browser fallback uses `MediaRecorder` and has a streaming-to-disk wrapper, with in-memory allowed only when no file-backed stream is requested.
 - App settings are now persisted in `app-settings.json` under Electron `userData`, with compatibility mirroring of the recording directory to legacy `recording-settings.json`.
@@ -63,7 +63,7 @@
 - User retest after this fix reported the Follow Mouse behavior is close enough to continue; treat Follow Mouse zoom as implemented unless a new concrete offset sample appears.
 - Editor settings footer no longer exposes report bug, save diagnostics, or GitHub star buttons. It shows one centered contact line: `抖音小红书：Likely7  反馈问题`.
 - Project files use `.likelysnap` only.
-- New native recordings now write into `recording-<id>.likelysnap/` package directories with `screen.mp4`, optional `webcam.mp4`, `cursor.json`, and `manifest.json`. Browser fallback and legacy packages may still use `webcam.webm`.
+- New native recordings now write into `recording-<id>.likelysnap/` package directories with `screen.mp4`, optional `webcam.mp4`, `cursor.json`, `cursor-preview.json`, and `manifest.json`. Browser fallback and legacy packages may still use `webcam.webm`.
 - A real ~32 minute macOS test produced healthy `screen.mp4` but a ~4 GB `webcam.webm`; stop-time WebM duration patch failed with `ERR_FS_FILE_TOO_LARGE`, and the editor could freeze when mounting that sidecar.
 - Long-recording direction is now implemented and documented in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: native `webcam.mp4` sidecars on macOS/Windows, bounded WebM fallback, sidecar degradation in editor, and NLE-style large media handling.
 - Stop/finalize paths no longer whole-file patch WebM sidecars over the 2 GB safe threshold.
@@ -85,9 +85,11 @@
 - MP4 export currently uses a fixed 60 FPS target in `src/components/video-editor/VideoEditor.tsx`, which can double frame work for 30 FPS sources and is a likely contributor to slow Windows export until the FFmpeg path becomes source-aware.
 - A real Windows one-hour recording on a high-end RTX 5070 PC opened but stayed non-interactive for more than five minutes while CPU/GPU/memory utilization stayed low. This points to low-efficiency serialized editor preparation work, not insufficient user hardware.
 - New editor architecture direction is documented in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`: instant timeline open, background waveform/cursor/auto-zoom/proxy jobs, package-local cache indexes, and no heavy analysis on first screen.
-- First NLE-style editor-open pass is implemented locally: editor cursor loading now uses preview-level native bridge data instead of full cursor recording data, the main process caches parsed cursor files, automatic zoom suggestions run in idle time, waveform generation starts in idle time, and editor-open timing logs are emitted.
+- First NLE-style editor-open pass is implemented locally: editor cursor loading now uses preview-level native bridge data backed by `cursor-preview.json` instead of full cursor recording data, the main process caches parsed cursor files, automatic zoom suggestions run in idle time, waveform generation starts in idle time, and editor-open timing logs are emitted.
+- `cursor-preview.json` is invalidated by the source cursor file's size/mtime and stores package-local source identity instead of absolute paths, so moving a `.likelysnap` package does not force a full cursor parse on the next open.
 - Export still loads full cursor recording data on demand, so the preview downsampling does not reduce final cursor overlay quality.
 - Cursor preview data intentionally omits the full native cursor asset table for speed; cursor rendering now falls back to built-in themed cursor assets so the mouse overlay and mouse settings panel stay visible in editor preview.
+- The editor still loads full `cursor.json` on demand for export and future deep cursor editing, so preview indexing does not remove cursor quality or features from final renders.
 - User tested the current app after the staged editor-open and cursor fallback fixes and reported that the visible functionality has no obvious issue.
 
 ## Current Risk Summary
@@ -107,7 +109,9 @@
 - Windows native webcam code is implemented and now has a persisted sidecar timeline offset, but it is still not truth-tested on Windows hardware from this macOS machine.
 - Windows x64 packaging still depends on the native WGC helper binaries being built on Windows. Public GitHub release/build automation was removed until the project has a clean LikelySnap-owned release pipeline.
 - Windows export performance is now on the FFmpeg path, but still needs real Windows x64 validation with Task Manager/video encode metrics and app-side diagnostics showing the selected encoder.
-- Current P0 is to validate and continue the editor-open/export architecture plus the new OBS-style recording controls. The first editor-open code pass removes the largest known first-screen cursor/waveform/auto-zoom blockers and MP4 final-Blob export risk, but package-local media info/cursor indexes, preview proxies, source-aware export FPS, export diagnostics, and Windows GPU scaling for recording resolution are still open.
+- Windows one-hour editor-open freeze has a concrete code-level fix in place for the largest cursor bottleneck: editor open now reads `cursor-preview.json` instead of parsing/transferring full `cursor.json`. This still needs the user's Windows package retest.
+- The Windows layout panel is expected to be disabled when the package has no webcam sidecar. Do not treat it as a broken Windows layout feature unless webcam was recorded and the manifest/session still lacks `webcamVideoPath`.
+- Current P0 is to validate and continue the editor-open/export architecture plus the new OBS-style recording controls. The latest editor-open code pass removes the largest known first-screen cursor/waveform/auto-zoom blockers and MP4 final-Blob export risk, but package-local media info, chunked/append cursor storage, preview proxies, source-aware export FPS, export diagnostics, and Windows GPU scaling for recording resolution are still open.
 
 ## Latest Verification
 
@@ -146,3 +150,5 @@
 - `npx biome check src/lib/appSettings.ts src/hooks/useScreenRecorder.ts src/components/launch/AppSettingsDialog.tsx src/lib/nativeMacRecording.ts src/lib/nativeWindowsRecording.ts electron/ipc/handlers.ts` passes after the OBS-style recording settings work.
 - `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the OBS-style recording settings work with existing deprecation warnings only.
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local dev helper after the OBS-style recording settings work.
+- `npx tsc --noEmit` passes after the package-local `cursor-preview.json` editor-open fix.
+- `npx vitest run electron/ipc/recordingPackage.test.ts src/lib/cursor/nativeCursor.test.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts` passes after the package-local `cursor-preview.json` editor-open fix. The run still prints the known jsdom `HTMLCanvasElement.getContext()` warning, but all 23 tests pass.

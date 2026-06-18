@@ -5,7 +5,7 @@
 1. Validate the FFmpeg MP4 export path on long real projects on macOS and Windows x64, including audio sync, webcam offset, cursor overlay, zoom, trims, and speed changes.
 2. Validate Windows x64 FFmpeg encoder selection on real NVIDIA/Intel/AMD machines and expose the actual encoder used in UI/diagnostics.
 3. Add package-local `cache/media-info.json` so editor-open can trust persisted media metadata before deeper validation.
-4. Add package-local `cache/cursor-index.json` so preview cursor samples and click/hold spans survive cold app launches without reparsing the full `cursor.json`.
+4. Extend the current package-local `cursor-preview.json` into chunked/append cursor storage for true multi-hour recordings. Preview samples now survive cold app launches, but live recording still keeps samples in memory and rewrites full cursor snapshots.
 5. Add video metadata ready timing from `VideoPlayback` and connect it to the `[editor-open]` log story.
 6. Prevent `StreamingVideoDecoder.loadMetadata()` and whole-file `readBinaryFile` paths from running during first-screen editor open. The editor is staged now, but export still uses whole-source WebDemuxer loading and should not leak back into first-screen open.
 7. Add visible editor preparation state for long media: waveform, cursor index, auto zoom suggestions, thumbnails/proxies.
@@ -21,9 +21,10 @@
 6. Validate killing the app mid-recording leaves recoverable package artifacts.
 7. Validate native Windows x64 webcam sidecar recording as bounded `webcam.mp4` on Windows hardware, including the persisted `webcamStartOffsetMs` manifest field.
 8. Validate the known ~17 minute package `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap` opens interactively with waveform on by default and confirm generated peaks are cached for subsequent opens.
-9. Validate the standalone settings window end to end from both entry points: launch HUD gear and editor top-bar gear. Confirm recording/project/cache directory pickers, cache size/clear, OBS-style Standard/High/Ultra/Custom routes, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
-10. Validate macOS native recordings from the settings UI for all preset profiles: Standard should request `1080p / 30 FPS / 5 Mbps`, High should request source backing pixels / `60 FPS / 8 Mbps`, Ultra should request source backing pixels / `60 FPS / 15 Mbps`, and Custom should honor manual resolution/FPS/Mbps with bitrate capped at `60 Mbps`.
-11. Validate Windows native recordings on Windows x64 after the helper rebuild: FPS and bitrate should match the settings, while encoded width/height should remain the WGC source size until GPU scaling is implemented.
+9. Validate the Windows one-hour package against the `cursor-preview.json` fix. Expected result: editor becomes interactive without waiting for a full `cursor.json` parse; logs should show `[editor-open] cursor preview cache hit` or `[editor-open] cursor preview prepared`.
+10. Validate the standalone settings window end to end from both entry points: launch HUD gear and editor top-bar gear. Confirm recording/project/cache directory pickers, cache size/clear, OBS-style Standard/High/Ultra/Custom routes, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
+11. Validate macOS native recordings from the settings UI for all preset profiles: Standard should request `1080p / 30 FPS / 5 Mbps`, High should request source backing pixels / `60 FPS / 8 Mbps`, Ultra should request source backing pixels / `60 FPS / 15 Mbps`, and Custom should honor manual resolution/FPS/Mbps with bitrate capped at `60 Mbps`.
+12. Validate Windows native recordings on Windows x64 after the helper rebuild: FPS and bitrate should match the settings, while encoded width/height should remain the WGC source size until GPU scaling is implemented.
 
 ## P1
 
@@ -33,7 +34,7 @@
 4. Add broader automated tests for custom recording directories and interrupted package recovery.
 5. Add real macOS long-recording validation evidence.
 6. Validate the refined auto zoom and Follow Mouse model on real recordings: ordinary dwells/clicks should produce stable fixed-position zooms, held mouse-button spans should produce Follow Mouse zooms, and per-zoom settings should override either result.
-7. Persist cursor telemetry indexing/downsampling for multi-hour recordings in package-local cache. The current editor uses preview bridge data, but it is not yet stored in the package cache.
+7. Add append/chunked cursor telemetry storage for multi-hour recordings. The current editor uses package-local `cursor-preview.json`, but recording still keeps and rewrites full cursor snapshots.
 8. Add sidecar/proxy diagnostics for file size, duration, codec, and skipped webcam state.
 9. Add Windows CI or documented manual verification for `npm run build:native:win`, `npm run build:win:portable`, and `npm run test:wgc-full:win`.
 10. Consider progressive waveform progress reporting if first-time generation on multi-hour recordings needs a visible percentage instead of the current lightweight skeleton.

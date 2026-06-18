@@ -42,9 +42,11 @@ Editor-open should trust package manifest metadata or `HTMLVideoElement.loadedme
 
 ### Cursor JSON Double Load
 
-This was the first concrete editor-open fix. `VideoEditor.tsx` now uses `useCursorEditorData()` as a single cursor load path for the editor. The main process caches parsed `cursor.json` by file path/size/mtime, and the renderer receives preview-level cursor samples for interaction instead of full recording data on first open.
+This was the first concrete editor-open fix. `VideoEditor.tsx` now uses `useCursorEditorData()` as a single cursor load path for the editor. The main process writes and reads package-local `cursor-preview.json`, validates it against `cursor.json` size/mtime, and the renderer receives preview-level cursor samples for interaction instead of full recording data on first open.
 
 Full cursor recording data is still loaded on demand for export, so preview responsiveness does not reduce final render quality.
+
+`cursor-preview.json` stores package-relative source identity when it lives inside a `.likelysnap` package. That matters because moved packages must stay fast; an absolute source path would make the preview index look stale after the user moves the package.
 
 ### Waveform Still Scans Full Audio
 
@@ -62,18 +64,19 @@ Implemented in the first architecture pass:
 2. Added `cursor.getPreviewData(videoPath, sampleIntervalMs)` for bounded preview cursor samples.
 3. Kept `cursor.getRecordingData(videoPath)` for full-fidelity export and future deep editing.
 4. Replaced duplicate editor cursor loads with `useCursorEditorData()`.
-5. Added main-process cursor parse caching keyed by telemetry file size/mtime.
+5. Added main-process cursor preview caching keyed by telemetry file size/mtime.
 6. Changed editor preview/auto zoom to use preview cursor data, while export loads full cursor data on demand.
 7. Deferred automatic zoom suggestion generation with idle scheduling.
 8. Deferred waveform generation with idle scheduling while keeping waveform visible by default.
 9. Added timing logs for initial editor data load, cursor parse/load, waveform cache/generation, and auto zoom suggestion generation.
 10. Restored cursor rendering and cursor settings after preview cursor data intentionally omitted the full native cursor asset table. Preview rendering now falls back to built-in cursor assets, while export still loads full cursor data.
 11. MP4 export has moved to the FFmpeg frame-streaming path: renderer compositing remains in-app, but final encode/mux/output is handled by FFmpeg through a temp file.
+12. Added `cursor-preview.json` as a first-class package child. Recording writes it next to `cursor.json`; editor open reads it directly on cold launches; legacy loose files use `<video>.cursor-preview.json`.
 
 Remaining from the first phase:
 
 1. Add video metadata ready timing from `VideoPlayback`.
-2. Add package-local `cache/cursor-index.json` instead of recomputing preview data per cold app launch.
+2. Extend cursor storage to append/chunked files so multi-hour recording no longer keeps all cursor samples in memory or rewrites full snapshots. The current `cursor-preview.json` fixes editor open, not the long-recording write model.
 3. Add package-local `cache/media-info.json`.
 4. Add visible background preparation status in the UI.
 5. Validate the Windows one-hour package against the new staged load path.
@@ -88,10 +91,12 @@ recording-xxxx.likelysnap/
   screen.mp4
   webcam.mp4
   cursor.json
+  cursor-preview.json
   manifest.json
   cache/
     media-info.json
     waveform.peaks.json
+    cursor-chunks/
     cursor-index.json
     auto-zoom-suggestions.json
     proxy-screen.mp4
@@ -108,13 +113,23 @@ Stores lightweight metadata needed for instant open:
 - cursor file size, sample count if known;
 - cache schema version.
 
-### `cursor-index.json`
+### `cursor-preview.json`
 
-Stores a bounded, editor-friendly cursor representation:
+Implemented. Stores bounded, editor-friendly cursor samples for first-screen preview and auto zoom bootstrap:
 
-- downsampled preview samples, e.g. 5-10 fps;
+- downsampled preview samples;
+- click/mouseup interaction samples retained even between preview intervals;
+- original source sample count;
+- source cursor file size/mtime for invalidation;
+- package-relative source path for movable `.likelysnap` packages.
+
+### `cache/cursor-index.json` And Cursor Chunks
+
+Still pending. This is the deeper multi-hour recording fix:
+
+- append/chunk cursor samples during recording;
 - click/drag/hold events;
-- optional time chunks for future range reads;
+- optional time chunks for future range reads and deep editing;
 - source cursor file size/mtime for invalidation.
 
 ### `waveform.peaks.json`
@@ -153,7 +168,7 @@ The first phase is about making long recordings interactive. It does not need to
 ## Second Implementation Phase
 
 1. Add package-local `cache/media-info.json`.
-2. Add package-local `cache/cursor-index.json`.
+2. Add append/chunk cursor recording storage and package-local `cache/cursor-index.json`.
 3. Add progressive waveform writes.
 4. Add preview proxy generation and proxy selection in playback.
 5. Add package cache invalidation by source path/size/mtime.

@@ -1,5 +1,6 @@
 import { ipcMain } from "electron";
 import {
+	type CursorPreviewData,
 	NATIVE_BRIDGE_CHANNEL,
 	NATIVE_BRIDGE_VERSION,
 	type NativeBridgeErrorCode,
@@ -37,6 +38,10 @@ export interface NativeBridgeContext {
 	loadCursorRecordingData: (
 		videoPath: string,
 	) => Promise<import("../../src/native/contracts").CursorRecordingData>;
+	loadCursorPreviewData: (
+		videoPath: string,
+		sampleIntervalMs?: number,
+	) => Promise<CursorPreviewData>;
 	loadCursorTelemetry: (videoPath: string) => Promise<CursorTelemetryLoadResult>;
 }
 
@@ -111,6 +116,7 @@ export function registerNativeBridgeHandlers(context: NativeBridgeContext) {
 		store,
 		adapter: new TelemetryCursorAdapter({
 			loadRecordingData: context.loadCursorRecordingData,
+			loadPreviewData: context.loadCursorPreviewData,
 			resolveVideoPath: context.resolveVideoPath,
 			loadTelemetry: context.loadCursorTelemetry,
 		}),

@@ -55,6 +55,7 @@ import { registerNativeBridgeHandlers } from "./nativeBridge";
 import {
 	buildRecordingPackageManifest,
 	buildRecoveredRecordingPackageManifest,
+	getCursorPreviewPathForVideo,
 	getCursorTelemetryPathForVideo,
 	getRecordingManifestPathForVideo,
 	getRecordingPackageDirForVideoPath,
@@ -112,6 +113,20 @@ type AppSettings = {
 	defaultMicrophoneEnabled: boolean;
 	defaultSystemAudioEnabled: boolean;
 	defaultWebcamEnabled: boolean;
+};
+
+type CursorPreviewFile = {
+	schemaVersion: 1;
+	source: {
+		path: string;
+		size: number;
+		mtimeMs: number;
+	};
+	version: number;
+	provider: CursorProviderKind;
+	samples: CursorRecordingSample[];
+	originalSampleCount: number;
+	sampleIntervalMs: number;
 };
 
 // Paths the user approved via file picker or project load (i.e. outside the default dirs).
@@ -907,13 +922,24 @@ function isTrustedProjectPath(filePath?: string | null) {
 const CURSOR_TELEMETRY_VERSION = 2;
 const CURSOR_SAMPLE_INTERVAL_MS = 33;
 const CURSOR_TELEMETRY_FLUSH_INTERVAL_MS = 500;
-const MAX_CURSOR_SAMPLES = 60 * 60 * 30; // 1 hour @ 30Hz
+const MAX_CURSOR_SAMPLES = Number.MAX_SAFE_INTEGER;
+const CURSOR_PREVIEW_SCHEMA_VERSION = 1;
+const DEFAULT_CURSOR_PREVIEW_INTERVAL_MS = 100;
 const cursorRecordingDataCache = new Map<
 	string,
 	{
 		mtimeMs: number;
 		size: number;
 		data: CursorRecordingData;
+	}
+>();
+const cursorPreviewDataCache = new Map<
+	string,
+	{
+		telemetryMtimeMs: number;
+		telemetrySize: number;
+		sampleIntervalMs: number;
+		data: CursorPreviewFile;
 	}
 >();
 
@@ -923,6 +949,7 @@ let cursorTelemetryLivePath: string | null = null;
 let cursorTelemetryLiveOffsetMs = 0;
 let cursorTelemetryLastFlushMs = 0;
 let cursorTelemetryWriteChain: Promise<void> = Promise.resolve();
+let cursorPreviewLivePath: string | null = null;
 let nativeWindowsCaptureProcess: ChildProcessWithoutNullStreams | null = null;
 let nativeWindowsCaptureOutput = "";
 let nativeWindowsCaptureTargetPath: string | null = null;
@@ -1092,15 +1119,197 @@ async function readCursorRecordingFile(targetVideoPath: string): Promise<CursorR
 	}
 }
 
+function normalizeCursorPreviewInterval(sampleIntervalMs?: number) {
+	return typeof sampleIntervalMs === "number" && Number.isFinite(sampleIntervalMs)
+		? Math.max(16, Math.round(sampleIntervalMs))
+		: DEFAULT_CURSOR_PREVIEW_INTERVAL_MS;
+}
+
+function downsampleCursorSamples(
+	samples: CursorRecordingSample[],
+	sampleIntervalMs: number,
+): CursorRecordingSample[] {
+	if (samples.length <= 2) {
+		return samples;
+	}
+
+	const downsampled: CursorRecordingSample[] = [];
+	let lastKeptTimeMs = Number.NEGATIVE_INFINITY;
+
+	for (const sample of samples) {
+		const keepForTime = sample.timeMs - lastKeptTimeMs >= sampleIntervalMs;
+		const keepForInteraction = sample.interactionType && sample.interactionType !== "move";
+		if (keepForTime || keepForInteraction) {
+			downsampled.push(sample);
+			lastKeptTimeMs = sample.timeMs;
+		}
+	}
+
+	const finalSample = samples[samples.length - 1];
+	if (downsampled[downsampled.length - 1] !== finalSample) {
+		downsampled.push(finalSample);
+	}
+
+	return downsampled;
+}
+
+function normalizePreviewSamples(samples: unknown): CursorRecordingSample[] {
+	return Array.isArray(samples)
+		? samples
+				.map((sample) => normalizeCursorSample(sample))
+				.filter((sample): sample is CursorRecordingSample => Boolean(sample))
+				.sort((a, b) => a.timeMs - b.timeMs)
+		: [];
+}
+
+function isValidCursorPreviewFile(
+	preview: unknown,
+	telemetrySourcePath: string,
+	telemetryStat: { size: number; mtimeMs: number },
+	sampleIntervalMs: number,
+): preview is CursorPreviewFile {
+	if (!preview || typeof preview !== "object") {
+		return false;
+	}
+
+	const candidate = preview as Partial<CursorPreviewFile>;
+	return (
+		candidate.schemaVersion === CURSOR_PREVIEW_SCHEMA_VERSION &&
+		candidate.source?.path === telemetrySourcePath &&
+		candidate.source.size === telemetryStat.size &&
+		candidate.source.mtimeMs === telemetryStat.mtimeMs &&
+		candidate.sampleIntervalMs === sampleIntervalMs &&
+		typeof candidate.version === "number" &&
+		(candidate.provider === "native" || candidate.provider === "none") &&
+		typeof candidate.originalSampleCount === "number" &&
+		Array.isArray(candidate.samples)
+	);
+}
+
+function getCursorPreviewSourcePath(telemetryPath: string): string {
+	const packageDir = getRecordingPackageDirForVideoPath(telemetryPath);
+	return packageDir ? path.relative(packageDir, telemetryPath) : telemetryPath;
+}
+
+async function readCursorPreviewFile(
+	targetVideoPath: string,
+	sampleIntervalMs?: number,
+): Promise<CursorPreviewFile> {
+	const telemetryPath = getCursorTelemetryPathForVideo(targetVideoPath);
+	const previewPath = getCursorPreviewPathForVideo(targetVideoPath);
+	const telemetrySourcePath = getCursorPreviewSourcePath(telemetryPath);
+	const intervalMs = normalizeCursorPreviewInterval(sampleIntervalMs);
+
+	try {
+		const startedAt = Date.now();
+		const stat = await fs.stat(telemetryPath);
+		const cached = cursorPreviewDataCache.get(previewPath);
+		if (
+			cached &&
+			cached.telemetryMtimeMs === stat.mtimeMs &&
+			cached.telemetrySize === stat.size &&
+			cached.sampleIntervalMs === intervalMs
+		) {
+			return cached.data;
+		}
+
+		try {
+			const parsed = JSON.parse(await fs.readFile(previewPath, "utf-8"));
+			if (isValidCursorPreviewFile(parsed, telemetrySourcePath, stat, intervalMs)) {
+				const data: CursorPreviewFile = {
+					...parsed,
+					samples: normalizePreviewSamples(parsed.samples),
+				};
+				cursorPreviewDataCache.set(previewPath, {
+					telemetryMtimeMs: stat.mtimeMs,
+					telemetrySize: stat.size,
+					sampleIntervalMs: intervalMs,
+					data,
+				});
+				console.info("[editor-open] cursor preview cache hit", {
+					previewPath,
+					telemetryPath,
+					samples: data.samples.length,
+					originalSamples: data.originalSampleCount,
+					durationMs: Date.now() - startedAt,
+				});
+				return data;
+			}
+		} catch (error) {
+			const nodeError = error as NodeJS.ErrnoException;
+			if (nodeError.code !== "ENOENT") {
+				console.warn("[editor-open] cursor preview cache ignored", {
+					previewPath,
+					error: String(error),
+				});
+			}
+		}
+
+		const recordingData = await readCursorRecordingFile(targetVideoPath);
+		const data: CursorPreviewFile = {
+			schemaVersion: CURSOR_PREVIEW_SCHEMA_VERSION,
+			source: {
+				path: telemetrySourcePath,
+				size: stat.size,
+				mtimeMs: stat.mtimeMs,
+			},
+			version: recordingData.version,
+			provider: recordingData.provider,
+			samples: downsampleCursorSamples(recordingData.samples, intervalMs),
+			originalSampleCount: recordingData.samples.length,
+			sampleIntervalMs: intervalMs,
+		};
+		cursorPreviewDataCache.set(previewPath, {
+			telemetryMtimeMs: stat.mtimeMs,
+			telemetrySize: stat.size,
+			sampleIntervalMs: intervalMs,
+			data,
+		});
+		await fs.writeFile(previewPath, JSON.stringify(data), "utf-8").catch((error) =>
+			console.warn("[editor-open] failed to write cursor preview cache", {
+				previewPath,
+				error: String(error),
+			}),
+		);
+		console.info("[editor-open] cursor preview prepared", {
+			previewPath,
+			telemetryPath,
+			samples: data.samples.length,
+			originalSamples: data.originalSampleCount,
+			durationMs: Date.now() - startedAt,
+		});
+		return data;
+	} catch (error) {
+		const nodeError = error as NodeJS.ErrnoException;
+		if (nodeError.code === "ENOENT") {
+			return {
+				schemaVersion: CURSOR_PREVIEW_SCHEMA_VERSION,
+				source: {
+					path: telemetrySourcePath,
+					size: 0,
+					mtimeMs: 0,
+				},
+				version: CURSOR_TELEMETRY_VERSION,
+				provider: "none",
+				samples: [],
+				originalSampleCount: 0,
+				sampleIntervalMs: intervalMs,
+			};
+		}
+		throw error;
+	}
+}
+
 async function readCursorTelemetryFile(targetVideoPath: string) {
 	try {
-		const recordingData = await readCursorRecordingFile(targetVideoPath);
+		const previewData = await readCursorPreviewFile(targetVideoPath);
 		return {
 			success: true,
-			samples: recordingData.samples.map((sample) => ({
+			samples: previewData.samples.map((sample) => ({
 				timeMs: sample.timeMs,
 				cx: sample.cx,
 				cy: sample.cy,
+				...(sample.interactionType ? { interactionType: sample.interactionType } : {}),
 			})),
 		};
 	} catch (error) {
@@ -1406,6 +1615,39 @@ function buildCursorTelemetrySnapshot(
 	};
 }
 
+function getCursorPreviewPathForTelemetryPath(telemetryPath: string): string {
+	if (getRecordingPackageDirForVideoPath(telemetryPath)) {
+		return getCursorPreviewPathForVideo(telemetryPath);
+	}
+	return telemetryPath.endsWith(".cursor.json")
+		? telemetryPath.slice(0, -".cursor.json".length) + ".cursor-preview.json"
+		: `${telemetryPath}.preview.json`;
+}
+
+function buildCursorPreviewSnapshot(
+	data: CursorRecordingData,
+	sourcePath: string,
+	sourceStat: { size: number; mtimeMs: number },
+	offsetMs = cursorTelemetryLiveOffsetMs,
+	sampleIntervalMs = DEFAULT_CURSOR_PREVIEW_INTERVAL_MS,
+): CursorPreviewFile {
+	const telemetry = buildCursorTelemetrySnapshot(data, offsetMs);
+	const intervalMs = normalizeCursorPreviewInterval(sampleIntervalMs);
+	return {
+		schemaVersion: CURSOR_PREVIEW_SCHEMA_VERSION,
+		source: {
+			path: getCursorPreviewSourcePath(sourcePath),
+			size: sourceStat.size,
+			mtimeMs: sourceStat.mtimeMs,
+		},
+		version: telemetry.version,
+		provider: telemetry.provider,
+		samples: downsampleCursorSamples(telemetry.samples, intervalMs),
+		originalSampleCount: telemetry.samples.length,
+		sampleIntervalMs: intervalMs,
+	};
+}
+
 function queueCursorTelemetryWrite(data: CursorRecordingData, force = false) {
 	if (!cursorTelemetryLivePath) {
 		return cursorTelemetryWriteChain;
@@ -1421,7 +1663,14 @@ function queueCursorTelemetryWrite(data: CursorRecordingData, force = false) {
 	const content = JSON.stringify(buildCursorTelemetrySnapshot(data), null, 2);
 	cursorTelemetryWriteChain = cursorTelemetryWriteChain
 		.catch(() => undefined)
-		.then(() => fs.writeFile(targetPath, content, "utf-8"))
+		.then(async () => {
+			await fs.writeFile(targetPath, content, "utf-8");
+			if (cursorPreviewLivePath) {
+				const stat = await fs.stat(targetPath);
+				const preview = buildCursorPreviewSnapshot(data, targetPath, stat);
+				await fs.writeFile(cursorPreviewLivePath, JSON.stringify(preview), "utf-8");
+			}
+		})
 		.catch((error) => {
 			console.error("Failed to write live cursor telemetry:", error);
 		});
@@ -1430,6 +1679,7 @@ function queueCursorTelemetryWrite(data: CursorRecordingData, force = false) {
 
 async function beginLiveCursorTelemetry(telemetryPath: string) {
 	cursorTelemetryLivePath = telemetryPath;
+	cursorPreviewLivePath = getCursorPreviewPathForTelemetryPath(telemetryPath);
 	cursorTelemetryLiveOffsetMs = 0;
 	cursorTelemetryLastFlushMs = 0;
 	await queueCursorTelemetryWrite(
@@ -1445,6 +1695,7 @@ async function endLiveCursorTelemetry(finalData?: CursorRecordingData | null) {
 		await cursorTelemetryWriteChain.catch(() => undefined);
 	}
 	cursorTelemetryLivePath = null;
+	cursorPreviewLivePath = null;
 	cursorTelemetryLiveOffsetMs = 0;
 	cursorTelemetryLastFlushMs = 0;
 }
@@ -1453,6 +1704,16 @@ async function writePendingCursorTelemetry(videoPath: string) {
 	const telemetryPath = getCursorTelemetryPathForVideo(videoPath);
 	if (pendingCursorRecordingData && pendingCursorRecordingData.samples.length > 0) {
 		await fs.writeFile(telemetryPath, JSON.stringify(pendingCursorRecordingData, null, 2), "utf-8");
+		const stat = await fs.stat(telemetryPath);
+		const preview = buildCursorPreviewSnapshot(pendingCursorRecordingData, telemetryPath, stat);
+		await fs
+			.writeFile(getCursorPreviewPathForVideo(videoPath), JSON.stringify(preview), "utf-8")
+			.catch((error) =>
+				console.warn("Failed to write final cursor preview:", {
+					telemetryPath,
+					error: String(error),
+				}),
+			);
 	}
 	await endLiveCursorTelemetry(null);
 	pendingCursorRecordingData = null;
@@ -4261,6 +4522,7 @@ export function registerIpcHandlers(
 		resolveVideoPath: (videoPath?: string | null) =>
 			normalizeVideoSourcePath(videoPath ?? currentVideoPath),
 		loadCursorRecordingData: readCursorRecordingFile,
+		loadCursorPreviewData: readCursorPreviewFile,
 		loadCursorTelemetry: readCursorTelemetryFile,
 	});
 }

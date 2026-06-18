@@ -29,8 +29,8 @@ Build a durable macOS/Windows LikelySnap recorder/editor that can record long vi
 Push the package model from "recording works" to "long recordings remain editable", using the architecture in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`:
 
 - Make editor-open interactive before waveform, cursor, auto zoom, thumbnails, and proxy generation finish.
-- Keep the newly implemented staged editor-open path intact: cursor preview data, main-process cursor cache, idle auto zoom, idle waveform preparation, and first-screen timing logs.
-- Add package-local media/cursor caches so cold app launches do not need to parse/index from scratch.
+- Keep the newly implemented staged editor-open path intact: package-local `cursor-preview.json`, preview cursor bridge data, main-process cursor cache, idle auto zoom, idle waveform preparation, and first-screen timing logs.
+- Add package-local media caches and deeper cursor chunk indexes so cold app launches do not need to parse/index from scratch.
 - Avoid whole-file media reads and packet scans in first-screen editor open.
 - Add the remaining timing instrumentation for video metadata readiness and future proxy/cache jobs.
 - Record with microphone, webcam, and editable cursor enabled.
@@ -45,7 +45,8 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Produce the Windows x64 portable zip on a Windows x64 build machine with `npm run build:win:portable`; this macOS Apple Silicon machine cannot produce the final Windows zip because the WGC helper binary is missing and electron-builder's Wine resource step cannot execute.
 - Confirm the existing 4.4 GB `webcam.webm` package opens the main video without freezing by skipping the unsafe webcam sidecar.
 - Confirm the known ~17 minute package stays interactive with waveform on by default and uses the ranged/cached waveform path.
-- Confirm the Windows one-hour package opens interactively after the first architecture pass: preview cursor samples should load instead of full cursor recording data, waveform should prepare in idle time, and auto zoom should not block the editor.
+- Confirm the Windows one-hour package opens interactively after the cursor-preview pass: `cursor-preview.json` should load instead of full `cursor.json`, waveform should prepare in idle time, and auto zoom should not block the editor.
+- Treat the layout panel as intentionally disabled when no webcam sidecar exists; this is not a Windows layout bug unless a recording includes webcam media and `webcamVideoPath` is still missing.
 - Confirm the standalone settings window opens from both the launch HUD gear and editor top-bar gear, then persists and applies recording/project/cache directories, cache cleanup, quality, FPS, editable cursor, microphone, system audio, and webcam defaults.
 - Confirm the OBS-style recording controls persist and apply: Standard/High/Ultra preset routes, the separate Custom route, source/1080p/1440p/4K/custom resolution, preset/custom FPS, and custom Mbps capped at `60`. On macOS, verify source mode records backing pixels and explicit modes record requested dimensions. On Windows, verify FPS and bitrate apply while resolution remains WGC source-size until the GPU scaling pass is implemented.
 - Validate FFmpeg MP4 export on longer real projects: renderer compositing feeds frames, FFmpeg handles hardware-first encoding, audio muxing, and temp-file/streaming output.

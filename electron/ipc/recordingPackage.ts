@@ -11,6 +11,7 @@ export const RECORDING_PACKAGE_SCREEN_VIDEO = "screen.mp4";
 export const RECORDING_PACKAGE_WEBCAM_VIDEO = "webcam.mp4";
 export const RECORDING_PACKAGE_LEGACY_WEBCAM_VIDEO = "webcam.webm";
 export const RECORDING_PACKAGE_CURSOR_TELEMETRY = "cursor.json";
+export const RECORDING_PACKAGE_CURSOR_PREVIEW = "cursor-preview.json";
 export const RECORDING_PACKAGE_SCHEMA_VERSION = 1;
 
 const ALLOWED_PACKAGE_CHILDREN = new Set([
@@ -19,6 +20,7 @@ const ALLOWED_PACKAGE_CHILDREN = new Set([
 	RECORDING_PACKAGE_WEBCAM_VIDEO,
 	RECORDING_PACKAGE_LEGACY_WEBCAM_VIDEO,
 	RECORDING_PACKAGE_CURSOR_TELEMETRY,
+	RECORDING_PACKAGE_CURSOR_PREVIEW,
 ]);
 
 export type RecordingPackageStatus =
@@ -52,6 +54,7 @@ export type RecordingPackagePaths = {
 	screenVideoPath: string;
 	webcamVideoPath: string;
 	cursorTelemetryPath: string;
+	cursorPreviewPath: string;
 };
 
 function normalizeNonNegativeNumber(value: unknown): number | undefined {
@@ -116,6 +119,7 @@ export function getRecordingPackagePaths(
 		screenVideoPath: path.join(packageDir, RECORDING_PACKAGE_SCREEN_VIDEO),
 		webcamVideoPath: path.join(packageDir, RECORDING_PACKAGE_WEBCAM_VIDEO),
 		cursorTelemetryPath: path.join(packageDir, RECORDING_PACKAGE_CURSOR_TELEMETRY),
+		cursorPreviewPath: path.join(packageDir, RECORDING_PACKAGE_CURSOR_PREVIEW),
 	};
 }
 
@@ -170,6 +174,13 @@ export function getCursorTelemetryPathForVideo(videoPath: string): string {
 	return packageDir
 		? path.join(packageDir, RECORDING_PACKAGE_CURSOR_TELEMETRY)
 		: `${videoPath}.cursor.json`;
+}
+
+export function getCursorPreviewPathForVideo(videoPath: string): string {
+	const packageDir = getRecordingPackageDirForVideoPath(videoPath);
+	return packageDir
+		? path.join(packageDir, RECORDING_PACKAGE_CURSOR_PREVIEW)
+		: `${videoPath}.cursor-preview.json`;
 }
 
 export function getRecordingManifestPathForVideo(videoPath: string, legacySuffix: string): string {
