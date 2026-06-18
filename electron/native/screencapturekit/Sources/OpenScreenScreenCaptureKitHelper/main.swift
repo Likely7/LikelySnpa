@@ -480,10 +480,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		)
 
 		let writer = try AVAssetWriter(outputURL: outputUrl, fileType: .mp4)
-		let bitrate = request.video.bitrate ?? defaultBitrate(
+		let bitrate = clampVideoBitrate(request.video.bitrate ?? defaultBitrate(
 			width: outputWidth,
 			height: outputHeight
-		)
+		))
 		selectedVideoBitrate = bitrate
 		let settings: [String: Any] = [
 			AVVideoCodecKey: AVVideoCodecType.h264,
@@ -882,6 +882,10 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			base = 5_000_000
 		}
 		return base
+	}
+
+	private func clampVideoBitrate(_ bitrate: Int) -> Int {
+		min(60_000_000, max(1_000_000, bitrate))
 	}
 
 	private static func scaleFactor(for displayId: CGDirectDisplayID) -> Int {

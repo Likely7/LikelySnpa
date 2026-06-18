@@ -330,7 +330,7 @@ bool parseConfig(const std::string& json, CaptureConfig& config) {
     config.fps = std::clamp(findInt(json, "fps", 60), 1, 120);
     config.width = findInt(json, "videoWidth", findInt(json, "width", 0));
     config.height = findInt(json, "videoHeight", findInt(json, "height", 0));
-    config.bitrate = std::clamp(findInt(json, "videoBitrate", findInt(json, "bitrate", 0)), 0, 300'000'000);
+    config.bitrate = std::clamp(findInt(json, "videoBitrate", findInt(json, "bitrate", 0)), 0, 60'000'000);
     config.bounds.x = findInt(json, "displayX", 0);
     config.bounds.y = findInt(json, "displayY", 0);
     config.bounds.width = findInt(json, "displayW", 0);

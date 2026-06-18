@@ -1,6 +1,6 @@
 import type { CursorCaptureMode } from "./recordingSession";
 
-export type RecordingQuality = "standard" | "high" | "ultra";
+export type RecordingQuality = "standard" | "high" | "ultra" | "custom";
 export type RecordingResolutionMode = "source" | "1080p" | "1440p" | "4k" | "custom";
 export type RecordingFrameRateMode = "preset" | "custom";
 export type RecordingBitrateMode = "preset" | "custom";
@@ -29,6 +29,7 @@ export const RECORDING_QUALITY_LABELS: Record<RecordingQuality, string> = {
 	standard: "Standard",
 	high: "High",
 	ultra: "Ultra",
+	custom: "自定义",
 };
 
 export function cursorCaptureModeFromSetting(defaultEditableCursor: boolean): CursorCaptureMode {

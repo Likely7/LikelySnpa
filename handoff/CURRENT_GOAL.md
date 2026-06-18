@@ -22,7 +22,7 @@ Build a durable macOS/Windows LikelySnap recorder/editor that can record long vi
 16. Edited MP4 export must use an FFmpeg-backed temp-file/streaming output path before LikelySnap claims multi-hour export support. This is now implemented as the primary MP4 path, but still needs longer real-machine export validation.
 17. Windows export should not be CPU-only by accident. The product now has an explicit FFmpeg hardware-first strategy with software fallback, and still needs UI/diagnostics that report the actual encoder mode used.
 18. The editor must move toward a mainstream NLE architecture: instant timeline open, asynchronous media preparation, package/cache indexes, waveform/proxy/background jobs, and original-media export.
-19. Recording quality must be explicit and inspectable, not hidden behind fixed 4K assumptions. Presets are `Standard = 1080p/30/5Mbps`, `High = source/30/8Mbps`, and `Ultra = source/60/15Mbps`, with user overrides for resolution, FPS, and bitrate.
+19. Recording quality must be explicit and inspectable, not hidden behind fixed 4K assumptions. Presets are `Standard = 1080p/30/5Mbps`, `High = source/60/8Mbps`, and `Ultra = source/60/15Mbps`; manual resolution/FPS/bitrate controls are only active on the separate Custom route, with custom bitrate capped at `60 Mbps`.
 
 ## Current Priority
 
@@ -47,7 +47,7 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Confirm the known ~17 minute package stays interactive with waveform on by default and uses the ranged/cached waveform path.
 - Confirm the Windows one-hour package opens interactively after the first architecture pass: preview cursor samples should load instead of full cursor recording data, waveform should prepare in idle time, and auto zoom should not block the editor.
 - Confirm the standalone settings window opens from both the launch HUD gear and editor top-bar gear, then persists and applies recording/project/cache directories, cache cleanup, quality, FPS, editable cursor, microphone, system audio, and webcam defaults.
-- Confirm the OBS-style recording controls persist and apply: quality preset, source/1080p/1440p/4K/custom resolution, preset/custom FPS, and preset/custom Mbps. On macOS, verify source mode records backing pixels and explicit modes record requested dimensions. On Windows, verify FPS and bitrate apply while resolution remains WGC source-size until the GPU scaling pass is implemented.
+- Confirm the OBS-style recording controls persist and apply: Standard/High/Ultra preset routes, the separate Custom route, source/1080p/1440p/4K/custom resolution, preset/custom FPS, and custom Mbps capped at `60`. On macOS, verify source mode records backing pixels and explicit modes record requested dimensions. On Windows, verify FPS and bitrate apply while resolution remains WGC source-size until the GPU scaling pass is implemented.
 - Validate FFmpeg MP4 export on longer real projects: renderer compositing feeds frames, FFmpeg handles hardware-first encoding, audio muxing, and temp-file/streaming output.
 - Keep the legacy WebCodecs MP4 exporter only as a compatibility fallback; do not reintroduce Blob-based final MP4 saves as the main path.
 - Keep source-aware FPS on the export track: current MP4 export is fixed at 60 FPS, so long 30 FPS recordings can do unnecessary work.

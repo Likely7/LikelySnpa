@@ -33,6 +33,39 @@ const PRESET_BITRATE_MBPS: Record<RecordingQuality, number> = {
 	standard: 5,
 	high: 8,
 	ultra: 15,
+	custom: DEFAULT_CUSTOM_BITRATE_MBPS,
+};
+const PRESET_VIDEO_PROFILES: Record<
+	Exclude<RecordingQuality, "custom">,
+	{
+		resolutionMode: RecordingResolutionMode;
+		fps: 30 | 60;
+		bitrateMbps: number;
+		width: number;
+		height: number;
+	}
+> = {
+	standard: {
+		resolutionMode: "1080p",
+		fps: 30,
+		bitrateMbps: 5,
+		width: 1920,
+		height: 1080,
+	},
+	high: {
+		resolutionMode: "source",
+		fps: 60,
+		bitrateMbps: 8,
+		width: TARGET_WIDTH,
+		height: TARGET_HEIGHT,
+	},
+	ultra: {
+		resolutionMode: "source",
+		fps: 60,
+		bitrateMbps: 15,
+		width: TARGET_WIDTH,
+		height: TARGET_HEIGHT,
+	},
 };
 const RESOLUTION_PRESETS: Record<
 	Exclude<RecordingResolutionMode, "source" | "custom">,
@@ -114,13 +147,24 @@ function recordingPackageFileName(recordingId: number, childName: string) {
 
 function createRecordingVideoProfile(settings?: AppSettings | null): RecordingVideoProfile {
 	const quality = settings?.recordingQuality ?? "high";
+	if (quality !== "custom") {
+		const preset = PRESET_VIDEO_PROFILES[quality];
+		return {
+			quality,
+			fps: preset.fps,
+			width: preset.width,
+			height: preset.height,
+			bitrate: preset.bitrateMbps * BITS_PER_MEGABIT,
+			resolutionMode: preset.resolutionMode,
+		};
+	}
+
 	const fps =
 		settings?.recordingFrameRateMode === "custom"
 			? Math.round(settings.recordingCustomFrameRate)
 			: (settings?.defaultFrameRate ?? TARGET_FRAME_RATE);
 	const safeFps = Math.min(120, Math.max(1, Number.isFinite(fps) ? fps : TARGET_FRAME_RATE));
-	const resolutionMode =
-		settings?.recordingResolutionMode ?? (quality === "standard" ? "1080p" : "source");
+	const resolutionMode = settings?.recordingResolutionMode ?? "source";
 	const presetResolution =
 		resolutionMode === "source"
 			? { width: TARGET_WIDTH, height: TARGET_HEIGHT }
@@ -135,7 +179,7 @@ function createRecordingVideoProfile(settings?: AppSettings | null): RecordingVi
 			? settings.recordingCustomBitrateMbps
 			: PRESET_BITRATE_MBPS[quality];
 	const safeBitrateMbps = Math.min(
-		300,
+		60,
 		Math.max(1, Number.isFinite(bitrateMbps) ? bitrateMbps : DEFAULT_CUSTOM_BITRATE_MBPS),
 	);
 

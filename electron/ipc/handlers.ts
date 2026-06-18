@@ -89,7 +89,7 @@ const nativeMacCaptureEvents = new EventEmitter();
 let activeRecordingsDir = getDefaultRecordingsDir();
 const ffmpegFrameExportService = new FfmpegService();
 
-type RecordingQuality = "standard" | "high" | "ultra";
+type RecordingQuality = "standard" | "high" | "ultra" | "custom";
 type RecordingResolutionMode = "source" | "1080p" | "1440p" | "4k" | "custom";
 type RecordingFrameRateMode = "preset" | "custom";
 type RecordingBitrateMode = "preset" | "custom";
@@ -139,7 +139,9 @@ function getDefaultCacheDir() {
 }
 
 function normalizeQuality(value: unknown): RecordingQuality {
-	return value === "standard" || value === "high" || value === "ultra" ? value : "high";
+	return value === "standard" || value === "high" || value === "ultra" || value === "custom"
+		? value
+		: "high";
 }
 
 function normalizeResolutionMode(value: unknown): RecordingResolutionMode {
@@ -234,7 +236,7 @@ async function loadAppSettings(): Promise<AppSettings> {
 		defaultFrameRate: normalizeFrameRate(raw.defaultFrameRate),
 		recordingCustomFrameRate: normalizeBoundedNumber(raw.recordingCustomFrameRate, 30, 1, 120),
 		recordingBitrateMode: normalizeBitrateMode(raw.recordingBitrateMode),
-		recordingCustomBitrateMbps: normalizeBoundedDecimal(raw.recordingCustomBitrateMbps, 12, 1, 300),
+		recordingCustomBitrateMbps: normalizeBoundedDecimal(raw.recordingCustomBitrateMbps, 12, 1, 60),
 		defaultEditableCursor: normalizeBoolean(raw.defaultEditableCursor, true),
 		defaultMicrophoneEnabled: normalizeBoolean(raw.defaultMicrophoneEnabled, false),
 		defaultSystemAudioEnabled: normalizeBoolean(raw.defaultSystemAudioEnabled, false),
@@ -286,7 +288,7 @@ async function saveAppSettings(partial: Partial<AppSettings>): Promise<AppSettin
 			partial.recordingCustomBitrateMbps ?? current.recordingCustomBitrateMbps,
 			current.recordingCustomBitrateMbps,
 			1,
-			300,
+			60,
 		),
 		defaultEditableCursor: normalizeBoolean(
 			partial.defaultEditableCursor,

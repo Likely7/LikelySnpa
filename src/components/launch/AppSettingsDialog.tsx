@@ -10,7 +10,7 @@ import {
 	Volume2,
 	Webcam,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
 import type {
 	AppSettings,
 	RecordingFrameRatePreset,
@@ -29,8 +29,9 @@ interface AppSettingsDialogProps {
 
 const qualityDescriptions: Record<RecordingQuality, string> = {
 	standard: "1080p / 30 FPS / 5 Mbps",
-	high: "源分辨率 / 30 FPS / 8 Mbps",
+	high: "源分辨率 / 60 FPS / 8 Mbps",
 	ultra: "源分辨率 / 60 FPS / 15 Mbps",
+	custom: "手动设置分辨率 / FPS / Mbps",
 };
 
 const qualityPresets: Record<RecordingQuality, Partial<AppSettings>> = {
@@ -45,7 +46,7 @@ const qualityPresets: Record<RecordingQuality, Partial<AppSettings>> = {
 		recordingQuality: "high",
 		recordingResolutionMode: "source",
 		recordingFrameRateMode: "preset",
-		defaultFrameRate: 30,
+		defaultFrameRate: 60,
 		recordingBitrateMode: "preset",
 	},
 	ultra: {
@@ -55,12 +56,13 @@ const qualityPresets: Record<RecordingQuality, Partial<AppSettings>> = {
 		defaultFrameRate: 60,
 		recordingBitrateMode: "preset",
 	},
-};
-
-const presetBitrateLabels: Record<RecordingQuality, string> = {
-	standard: "5",
-	high: "8",
-	ultra: "15",
+	custom: {
+		recordingQuality: "custom",
+		recordingResolutionMode: "source",
+		recordingFrameRateMode: "preset",
+		defaultFrameRate: 60,
+		recordingBitrateMode: "custom",
+	},
 };
 
 const resolutionOptions: Array<{ value: RecordingResolutionMode; label: string; hint: string }> = [
@@ -72,6 +74,10 @@ const resolutionOptions: Array<{ value: RecordingResolutionMode; label: string; 
 ];
 
 const frameRatePresets: RecordingFrameRatePreset[] = [24, 30, 60];
+
+function classNames(...values: Array<string | false | null | undefined>) {
+	return values.filter(Boolean).join(" ");
+}
 
 function formatBytes(bytes: number | undefined) {
 	if (!bytes || bytes <= 0) return "0 B";
@@ -322,7 +328,10 @@ export function AppSettingsDialog({
 					: "flex max-h-[calc(100vh-32px)] w-[min(720px,calc(100vw-32px))] flex-col overflow-hidden rounded-xl border border-white/10 bg-[#08090c]/95 shadow-2xl shadow-black/55"
 			}
 		>
-			<div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+			<div
+				className="flex items-center justify-between border-b border-white/10 px-4 py-3"
+				style={{ WebkitAppRegion: "drag" } as CSSProperties}
+			>
 				<div className="flex items-center gap-2">
 					<div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#C24B72]/35 bg-[#C24B72]/12 text-[#F2A8C2]">
 						<Settings size={16} />
@@ -338,6 +347,7 @@ export function AppSettingsDialog({
 						onClose();
 					}}
 					className="rounded-md px-2 py-1 text-xs text-white/55 transition hover:bg-white/10 hover:text-white"
+					style={{ WebkitAppRegion: "no-drag" } as CSSProperties}
 				>
 					关闭
 				</button>
@@ -381,8 +391,8 @@ export function AppSettingsDialog({
 								<Video size={14} className="text-[#F2A8C2]" />
 								录制默认值
 							</div>
-							<div className="grid grid-cols-3 gap-2">
-								{(["standard", "high", "ultra"] as RecordingQuality[]).map((quality) => (
+							<div className="grid grid-cols-4 gap-2">
+								{(["standard", "high", "ultra", "custom"] as RecordingQuality[]).map((quality) => (
 									<button
 										key={quality}
 										type="button"
@@ -403,173 +413,183 @@ export function AppSettingsDialog({
 									</button>
 								))}
 							</div>
-							<div className="grid gap-2 rounded-md border border-white/10 bg-white/[0.025] p-3">
-								<div className="flex items-center gap-2 text-[11px] font-semibold text-white/72">
-									<Monitor size={13} className="text-[#F2A8C2]" />
-									分辨率
-								</div>
-								<div className="grid grid-cols-5 gap-1.5">
-									{resolutionOptions.map((option) => (
-										<button
-											key={option.value}
-											type="button"
-											disabled={disabled}
-											onClick={() => void savePartial({ recordingResolutionMode: option.value })}
-											title={option.hint}
-											className={`h-[46px] rounded-md border px-2 text-left transition ${
-												settings.recordingResolutionMode === option.value
-													? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
-													: "border-white/10 bg-black/20 text-white/60 hover:border-[#C24B72]/35"
-											}`}
+
+							{(() => {
+								const customMode = settings.recordingQuality === "custom";
+								const advancedDisabled = disabled || !customMode;
+								return (
+									<>
+										<div
+											className={classNames(
+												"grid gap-2 rounded-md border p-3 transition",
+												customMode
+													? "border-white/10 bg-white/[0.025]"
+													: "border-white/[0.06] bg-white/[0.015] opacity-45",
+											)}
 										>
-											<div className="text-[10px] font-semibold">{option.label}</div>
-											<div className="truncate text-[8px] text-white/35">{option.hint}</div>
-										</button>
-									))}
-								</div>
-								{settings.recordingResolutionMode === "custom" ? (
-									<div className="grid grid-cols-2 gap-2">
-										<NumberInput
-											label="宽度"
-											value={settings.recordingCustomWidth}
-											min={320}
-											max={7680}
-											disabled={disabled}
-											onChange={(value) => void savePartial({ recordingCustomWidth: value })}
-										/>
-										<NumberInput
-											label="高度"
-											value={settings.recordingCustomHeight}
-											min={240}
-											max={4320}
-											disabled={disabled}
-											onChange={(value) => void savePartial({ recordingCustomHeight: value })}
-										/>
-									</div>
-								) : null}
-								<div className="text-[9px] leading-snug text-white/35">
-									macOS 原生录制支持源分辨率和目标分辨率；Windows 原生录制当前保持 WGC
-									源尺寸，码率和帧率会按这里执行。
-								</div>
-							</div>
-							<div className="grid gap-2 rounded-md border border-white/10 bg-white/[0.025] p-3">
-								<div className="flex items-center gap-2 text-[11px] font-semibold text-white/72">
-									<SlidersHorizontal size={13} className="text-[#F2A8C2]" />
-									帧率与码率
-								</div>
-								<div className="flex flex-wrap gap-2">
-									{frameRatePresets.map((fps) => (
-										<button
-											key={fps}
-											type="button"
-											disabled={disabled}
-											onClick={() =>
-												void savePartial({
-													recordingFrameRateMode: "preset",
-													defaultFrameRate: fps,
-												})
-											}
-											className={`h-8 rounded-md border px-3 text-[11px] font-semibold transition ${
-												settings.recordingFrameRateMode === "preset" &&
-												settings.defaultFrameRate === fps
-													? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
-													: "border-white/10 bg-black/20 text-white/65 hover:border-[#C24B72]/35"
-											}`}
-										>
-											{fps} FPS
-										</button>
-									))}
-									<button
-										type="button"
-										disabled={disabled}
-										onClick={() => void savePartial({ recordingFrameRateMode: "custom" })}
-										className={`h-8 rounded-md border px-3 text-[11px] font-semibold transition ${
-											settings.recordingFrameRateMode === "custom"
-												? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
-												: "border-white/10 bg-black/20 text-white/65 hover:border-[#C24B72]/35"
-										}`}
-									>
-										自定义
-									</button>
-								</div>
-								{settings.recordingFrameRateMode === "custom" ? (
-									<NumberInput
-										label="自定义帧率"
-										value={settings.recordingCustomFrameRate}
-										min={1}
-										max={120}
-										suffix="FPS"
-										disabled={disabled}
-										onChange={(value) => void savePartial({ recordingCustomFrameRate: value })}
-									/>
-								) : null}
-								<div className="grid gap-2">
-									<div className="flex items-center justify-between gap-2">
-										<div className="text-[10px] font-medium text-white/50">码率</div>
-										<div className="text-[10px] text-white/38">
-											预设 {presetBitrateLabels[settings.recordingQuality]} Mbps
+											<div className="flex items-center justify-between gap-3">
+												<div className="flex items-center gap-2 text-[11px] font-semibold text-white/72">
+													<Monitor size={13} className="text-[#F2A8C2]" />
+													分辨率
+												</div>
+												{customMode ? null : (
+													<div className="text-[9px] text-white/35">选择「自定义」后可修改</div>
+												)}
+											</div>
+											<div className="grid grid-cols-5 gap-1.5">
+												{resolutionOptions.map((option) => (
+													<button
+														key={option.value}
+														type="button"
+														disabled={advancedDisabled}
+														onClick={() =>
+															void savePartial({ recordingResolutionMode: option.value })
+														}
+														title={option.hint}
+														className={`h-[46px] rounded-md border px-2 text-left transition disabled:pointer-events-none ${
+															settings.recordingResolutionMode === option.value
+																? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
+																: "border-white/10 bg-black/20 text-white/60 hover:border-[#C24B72]/35"
+														}`}
+													>
+														<div className="text-[10px] font-semibold">{option.label}</div>
+														<div className="truncate text-[8px] text-white/35">{option.hint}</div>
+													</button>
+												))}
+											</div>
+											{customMode && settings.recordingResolutionMode === "custom" ? (
+												<div className="grid grid-cols-2 gap-2">
+													<NumberInput
+														label="宽度"
+														value={settings.recordingCustomWidth}
+														min={320}
+														max={7680}
+														disabled={advancedDisabled}
+														onChange={(value) => void savePartial({ recordingCustomWidth: value })}
+													/>
+													<NumberInput
+														label="高度"
+														value={settings.recordingCustomHeight}
+														min={240}
+														max={4320}
+														disabled={advancedDisabled}
+														onChange={(value) => void savePartial({ recordingCustomHeight: value })}
+													/>
+												</div>
+											) : null}
+											<div className="text-[9px] leading-snug text-white/35">
+												macOS 原生录制支持源分辨率和目标分辨率；Windows 原生录制当前保持 WGC
+												源尺寸，码率和帧率会按这里执行。
+											</div>
 										</div>
-									</div>
-									<div className="flex gap-2">
-										<button
-											type="button"
-											disabled={disabled}
-											onClick={() => void savePartial({ recordingBitrateMode: "preset" })}
-											className={`h-8 rounded-md border px-3 text-[11px] font-semibold transition ${
-												settings.recordingBitrateMode === "preset"
-													? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
-													: "border-white/10 bg-black/20 text-white/65 hover:border-[#C24B72]/35"
-											}`}
+
+										<div
+											className={classNames(
+												"grid gap-2 rounded-md border p-3 transition",
+												customMode
+													? "border-white/10 bg-white/[0.025]"
+													: "border-white/[0.06] bg-white/[0.015] opacity-45",
+											)}
 										>
-											使用预设
-										</button>
-										<button
-											type="button"
-											disabled={disabled}
-											onClick={() => void savePartial({ recordingBitrateMode: "custom" })}
-											className={`h-8 rounded-md border px-3 text-[11px] font-semibold transition ${
-												settings.recordingBitrateMode === "custom"
-													? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
-													: "border-white/10 bg-black/20 text-white/65 hover:border-[#C24B72]/35"
-											}`}
-										>
-											自定义
-										</button>
-									</div>
-									{settings.recordingBitrateMode === "custom" ? (
-										<div className="grid grid-cols-[1fr_96px] items-end gap-3">
-											<label className="grid gap-1">
-												<span className="text-[10px] font-medium text-white/50">自定义码率</span>
-												<input
-													type="range"
+											<div className="flex items-center justify-between gap-3">
+												<div className="flex items-center gap-2 text-[11px] font-semibold text-white/72">
+													<SlidersHorizontal size={13} className="text-[#F2A8C2]" />
+													帧率与码率
+												</div>
+												{customMode ? null : (
+													<div className="text-[9px] text-white/35">当前使用所选预设</div>
+												)}
+											</div>
+											<div className="flex flex-wrap gap-2">
+												{frameRatePresets.map((fps) => (
+													<button
+														key={fps}
+														type="button"
+														disabled={advancedDisabled}
+														onClick={() =>
+															void savePartial({
+																recordingFrameRateMode: "preset",
+																defaultFrameRate: fps,
+															})
+														}
+														className={`h-8 rounded-md border px-3 text-[11px] font-semibold transition disabled:pointer-events-none ${
+															settings.recordingFrameRateMode === "preset" &&
+															settings.defaultFrameRate === fps
+																? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
+																: "border-white/10 bg-black/20 text-white/65 hover:border-[#C24B72]/35"
+														}`}
+													>
+														{fps} FPS
+													</button>
+												))}
+												<button
+													type="button"
+													disabled={advancedDisabled}
+													onClick={() => void savePartial({ recordingFrameRateMode: "custom" })}
+													className={`h-8 rounded-md border px-3 text-[11px] font-semibold transition disabled:pointer-events-none ${
+														settings.recordingFrameRateMode === "custom"
+															? "border-[#C24B72]/55 bg-[#C24B72]/16 text-white"
+															: "border-white/10 bg-black/20 text-white/65 hover:border-[#C24B72]/35"
+													}`}
+												>
+													自定义
+												</button>
+											</div>
+											{customMode && settings.recordingFrameRateMode === "custom" ? (
+												<NumberInput
+													label="自定义帧率"
+													value={settings.recordingCustomFrameRate}
 													min={1}
-													max={300}
-													step={0.5}
-													value={settings.recordingCustomBitrateMbps}
-													disabled={disabled}
-													onChange={(event) =>
-														void savePartial({
-															recordingCustomBitrateMbps: Number(event.currentTarget.value),
-														})
+													max={120}
+													suffix="FPS"
+													disabled={advancedDisabled}
+													onChange={(value) =>
+														void savePartial({ recordingCustomFrameRate: value })
 													}
-													className="h-8 accent-[#C24B72]"
 												/>
-											</label>
-											<NumberInput
-												label="Mbps"
-												value={settings.recordingCustomBitrateMbps}
-												min={1}
-												max={300}
-												step={0.5}
-												disabled={disabled}
-												onChange={(value) =>
-													void savePartial({ recordingCustomBitrateMbps: value })
-												}
-											/>
+											) : null}
+											<div className="grid gap-2">
+												<div className="flex items-center justify-between gap-2">
+													<div className="text-[10px] font-medium text-white/50">码率</div>
+													<div className="text-[10px] text-white/38">最高 60 Mbps</div>
+												</div>
+												<div className="grid grid-cols-[1fr_96px] items-end gap-3">
+													<label className="grid gap-1">
+														<span className="text-[10px] font-medium text-white/50">
+															自定义码率
+														</span>
+														<input
+															type="range"
+															min={1}
+															max={60}
+															step={0.5}
+															value={settings.recordingCustomBitrateMbps}
+															disabled={advancedDisabled}
+															onChange={(event) =>
+																void savePartial({
+																	recordingCustomBitrateMbps: Number(event.currentTarget.value),
+																})
+															}
+															className="h-8 w-full cursor-pointer appearance-none rounded-full bg-transparent accent-[#C24B72] disabled:cursor-default [&::-moz-range-progress]:h-1.5 [&::-moz-range-progress]:rounded-full [&::-moz-range-progress]:bg-[#C24B72] [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-[#F2A8C2] [&::-moz-range-track]:h-1.5 [&::-moz-range-track]:rounded-full [&::-moz-range-track]:bg-white/10 [&::-webkit-slider-runnable-track]:h-1.5 [&::-webkit-slider-runnable-track]:rounded-full [&::-webkit-slider-runnable-track]:bg-white/10 [&::-webkit-slider-thumb]:mt-[-5px] [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#F2A8C2]"
+														/>
+													</label>
+													<NumberInput
+														label="Mbps"
+														value={settings.recordingCustomBitrateMbps}
+														min={1}
+														max={60}
+														step={0.5}
+														disabled={advancedDisabled}
+														onChange={(value) =>
+															void savePartial({ recordingCustomBitrateMbps: value })
+														}
+													/>
+												</div>
+											</div>
 										</div>
-									) : null}
-								</div>
-							</div>
+									</>
+								);
+							})()}
 							<ToggleRow
 								label="默认启用 editable cursor"
 								description="新录制默认生成可编辑鼠标轨迹"

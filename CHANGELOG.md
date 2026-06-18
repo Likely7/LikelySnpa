@@ -9,7 +9,7 @@ This baseline is based on OpenScreen 1.5.0 and has been rebuilt as LikelySnap.
 - `.likelysnap` recording packages with `screen.mp4`, optional `webcam.mp4`, `cursor.json`, and `manifest.json`.
 - User-selectable recording, project, and cache directories through a standalone settings window.
 - Persistent recording defaults for quality, frame rate, editable cursor, microphone, system audio, and webcam.
-- OBS-style recording controls for resolution, FPS, and bitrate: Standard `1080p / 30 FPS / 5 Mbps`, High `source / 30 FPS / 8 Mbps`, Ultra `source / 60 FPS / 15 Mbps`, plus custom resolution/FPS/Mbps overrides.
+- OBS-style recording controls with four clear routes: Standard `1080p / 30 FPS / 5 Mbps`, High `source / 60 FPS / 8 Mbps`, Ultra `source / 60 FPS / 15 Mbps`, and Custom for manually editing resolution/FPS/Mbps up to 60 Mbps.
 - macOS ScreenCaptureKit native recording helper and Windows x64 WGC helper integration.
 - Native MP4 webcam sidecars on macOS and Windows native recording paths.
 - Cursor preview loading, cursor parse caching, idle auto zoom generation, and idle waveform preparation for long recordings.
@@ -28,7 +28,7 @@ This baseline is based on OpenScreen 1.5.0 and has been rebuilt as LikelySnap.
 ### Fixed
 
 - Fixed blurry/washed macOS native source recordings by using the display mode backing-pixel dimensions for ScreenCaptureKit output instead of the scaled logical display size, writing BT.709 H.264 color metadata, and computing macOS native recording bitrate from the actual output dimensions/FPS instead of a fixed 4K assumption.
-- Fixed over-large native recording defaults by lowering preset bitrates to 5/8/15 Mbps and passing those values explicitly to the native recorders.
+- Fixed over-large native recording defaults by lowering preset bitrates to 5/8/15 Mbps, capping custom recording bitrate at 60 Mbps, and passing those values explicitly to the native recorders.
 - Restored cursor rendering and cursor settings after the staged editor-open optimization hid full cursor assets from preview data.
 - Preserved full cursor data for export while keeping editor open fast.
 - Avoided Windows native stop/finalize paths that loaded the main screen MP4 into JavaScript memory.

@@ -21,8 +21,8 @@
 6. Validate killing the app mid-recording leaves recoverable package artifacts.
 7. Validate native Windows x64 webcam sidecar recording as bounded `webcam.mp4` on Windows hardware, including the persisted `webcamStartOffsetMs` manifest field.
 8. Validate the known ~17 minute package `/Users/macbook/Movies/LikelySnap/recording-1781685552950.likelysnap` opens interactively with waveform on by default and confirm generated peaks are cached for subsequent opens.
-9. Validate the standalone settings window end to end from both entry points: launch HUD gear and editor top-bar gear. Confirm recording/project/cache directory pickers, cache size/clear, OBS-style quality/resolution/FPS/bitrate settings, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
-10. Validate macOS native recordings from the settings UI for all preset profiles: Standard should request `1080p / 30 FPS / 5 Mbps`, High should request source backing pixels / `30 FPS / 8 Mbps`, and Ultra should request source backing pixels / `60 FPS / 15 Mbps`.
+9. Validate the standalone settings window end to end from both entry points: launch HUD gear and editor top-bar gear. Confirm recording/project/cache directory pickers, cache size/clear, OBS-style Standard/High/Ultra/Custom routes, and default editable cursor/mic/system audio/webcam toggles persist and affect the next recording.
+10. Validate macOS native recordings from the settings UI for all preset profiles: Standard should request `1080p / 30 FPS / 5 Mbps`, High should request source backing pixels / `60 FPS / 8 Mbps`, Ultra should request source backing pixels / `60 FPS / 15 Mbps`, and Custom should honor manual resolution/FPS/Mbps with bitrate capped at `60 Mbps`.
 11. Validate Windows native recordings on Windows x64 after the helper rebuild: FPS and bitrate should match the settings, while encoded width/height should remain the WGC source size until GPU scaling is implemented.
 
 ## P1
