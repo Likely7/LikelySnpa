@@ -1,8 +1,6 @@
-![LikelySnap promo](./promo/github-15s/LikelySnap-github-promo.gif)
+![LikelySnap promo](./promo/github-15s/poster.png)
 
 # LikelySnap
-
-[观看高清 MP4](./promo/github-15s/LikelySnap-github-promo.mp4)
 
 不是换皮，是底层重做。LikelySnap 基于 OpenScreen 1.5.0 改造而来，目标很简单：让长录制也能安心录、正常打开、继续编辑、顺利导出。
 
