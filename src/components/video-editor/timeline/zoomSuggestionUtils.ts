@@ -3,13 +3,17 @@ import type { CursorTelemetryPoint, ZoomFocus } from "../types";
 export const MIN_DWELL_DURATION_MS = 450;
 export const MAX_DWELL_DURATION_MS = 2600;
 export const DWELL_MOVE_THRESHOLD = 0.02;
-export const CLICK_SUGGESTION_STRENGTH_MS = MAX_DWELL_DURATION_MS + 1;
 export const MIN_DRAG_FOLLOW_DURATION_MS = 250;
 export const MIN_AUTO_ZOOM_DURATION_MS = 1200;
-export const MAX_AUTO_ZOOM_DURATION_MS = 30_000;
+export const MAX_AUTO_ZOOM_DURATION_MS = 6_000;
 export const AUTO_ZOOM_CONTEXT_PADDING_MS = 600;
 export const DWELL_MERGE_GAP_MS = 800;
 export const DWELL_MERGE_DISTANCE = 0.04;
+export const CLICK_STAY_WINDOW_MS = 850;
+export const CLICK_STAY_DISTANCE = 0.045;
+export const CLICK_LEAVE_DISTANCE = 0.12;
+export const CLICK_LEAVE_WINDOW_MS = 650;
+export const MIN_CLICK_INTENT_SCORE = 900;
 /** Minimum spacing between two accepted suggestion centres. */
 export const SUGGESTION_SPACING_MS = 1800;
 
@@ -18,7 +22,8 @@ export interface ZoomDwellCandidate {
 	focus: ZoomFocus;
 	strength: number;
 	span: { start: number; end: number };
-	kind: "dwell" | "click";
+	kind: "dwell" | "click" | "press";
+	focusMode?: "smart" | "manual";
 }
 
 function isClickInteractionType(interactionType: CursorTelemetryPoint["interactionType"]) {
@@ -101,35 +106,15 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 	pushRunIfDwell(runStart, samples.length);
 
 	const mergedDwellCandidates = mergeAdjacentDwellCandidates(dwellCandidates);
+	const interactionCandidates = detectInteractionCandidates(samples, mergedDwellCandidates);
 
-	for (const sample of samples) {
-		if (!isClickInteractionType(sample.interactionType)) {
-			continue;
-		}
-		if (
-			mergedDwellCandidates.some(
-				(candidate) => sample.timeMs >= candidate.span.start && sample.timeMs <= candidate.span.end,
-			)
-		) {
-			continue;
-		}
-
-		mergedDwellCandidates.push({
-			centerTimeMs: Math.round(sample.timeMs),
-			focus: { cx: sample.cx, cy: sample.cy },
-			strength: CLICK_SUGGESTION_STRENGTH_MS,
-			span: { start: sample.timeMs, end: sample.timeMs },
-			kind: "click",
-		});
-	}
-
-	return mergedDwellCandidates;
+	return [...mergedDwellCandidates, ...interactionCandidates];
 }
 
 export interface AutoZoomSuggestion {
 	span: { start: number; end: number };
 	focus: ZoomFocus;
-	focusMode?: "auto" | "manual";
+	focusMode?: "smart" | "manual";
 }
 
 /**
@@ -194,11 +179,126 @@ export function buildAutoZoomSuggestions(options: {
 		suggestions.push({
 			span,
 			focus: candidate.focus,
-			focusMode: hasPressedCursorDuringSpan(normalizedSamples, span) ? "auto" : "manual",
+			focusMode:
+				candidate.focusMode ??
+				(hasPressedCursorDuringSpan(normalizedSamples, span) ? "smart" : "manual"),
 		});
 	}
 
-	return suggestions;
+	return suggestions.sort((a, b) => a.span.start - b.span.start);
+}
+
+function detectInteractionCandidates(
+	samples: CursorTelemetryPoint[],
+	dwellCandidates: ZoomDwellCandidate[],
+): ZoomDwellCandidate[] {
+	const candidates: ZoomDwellCandidate[] = [];
+	for (let index = 0; index < samples.length; index += 1) {
+		const sample = samples[index];
+		if (!isClickInteractionType(sample.interactionType)) {
+			continue;
+		}
+
+		const releaseIndex = findMouseUpIndex(samples, index);
+		const release = releaseIndex >= 0 ? samples[releaseIndex] : null;
+		const pressDuration = release ? release.timeMs - sample.timeMs : 0;
+		const isPress = pressDuration >= MIN_DRAG_FOLLOW_DURATION_MS;
+		const repeated = hasNearbyClick(samples, index);
+		const stayScore = computeClickStayScore(samples, index);
+		const leavePenalty = computeClickLeavePenalty(samples, index);
+		const overlappingDwell = dwellCandidates.find(
+			(candidate) => sample.timeMs >= candidate.span.start && sample.timeMs <= candidate.span.end,
+		);
+
+		if (overlappingDwell) {
+			overlappingDwell.strength += Math.max(300, stayScore * 0.5) + (isPress ? 900 : 0);
+			if (isPress || repeated) {
+				overlappingDwell.focusMode = "smart";
+			}
+			overlappingDwell.focus = isPress ? sample : overlappingDwell.focus;
+			continue;
+		}
+
+		const base =
+			sample.interactionType === "double-click" ? 2600 : repeated ? 2300 : isPress ? 2400 : 1200;
+		const score = base + stayScore - leavePenalty;
+		if (score < MIN_CLICK_INTENT_SCORE) {
+			continue;
+		}
+
+		const end = release ? release.timeMs : sample.timeMs;
+		candidates.push({
+			centerTimeMs: Math.round(isPress ? (sample.timeMs + end) / 2 : sample.timeMs),
+			focus: { cx: sample.cx, cy: sample.cy },
+			strength: score,
+			span: { start: sample.timeMs, end },
+			kind: isPress ? "press" : "click",
+			focusMode: isPress || repeated ? "smart" : "manual",
+		});
+	}
+	return candidates;
+}
+
+function findMouseUpIndex(samples: CursorTelemetryPoint[], clickIndex: number): number {
+	for (let index = clickIndex + 1; index < samples.length; index += 1) {
+		const sample = samples[index];
+		if (sample.timeMs - samples[clickIndex].timeMs > 3000) {
+			return -1;
+		}
+		if (sample.interactionType === "mouseup") {
+			return index;
+		}
+		if (isClickInteractionType(sample.interactionType)) {
+			return -1;
+		}
+	}
+	return -1;
+}
+
+function hasNearbyClick(samples: CursorTelemetryPoint[], clickIndex: number): boolean {
+	const click = samples[clickIndex];
+	return samples.some((sample, index) => {
+		if (index === clickIndex || !isClickInteractionType(sample.interactionType)) return false;
+		if (Math.abs(sample.timeMs - click.timeMs) > 900) return false;
+		return Math.hypot(sample.cx - click.cx, sample.cy - click.cy) <= CLICK_STAY_DISTANCE;
+	});
+}
+
+function computeClickStayScore(samples: CursorTelemetryPoint[], clickIndex: number): number {
+	const click = samples[clickIndex];
+	const until = click.timeMs + CLICK_STAY_WINDOW_MS;
+	let latestNearby = click.timeMs;
+	let nearbyCount = 0;
+
+	for (let index = clickIndex + 1; index < samples.length; index += 1) {
+		const sample = samples[index];
+		if (sample.timeMs > until) break;
+		const distance = Math.hypot(sample.cx - click.cx, sample.cy - click.cy);
+		if (distance <= CLICK_STAY_DISTANCE) {
+			latestNearby = sample.timeMs;
+			nearbyCount += 1;
+		}
+	}
+
+	const stayMs = latestNearby - click.timeMs;
+	return Math.min(1100, stayMs * 1.1 + nearbyCount * 45);
+}
+
+function computeClickLeavePenalty(samples: CursorTelemetryPoint[], clickIndex: number): number {
+	const click = samples[clickIndex];
+	const until = click.timeMs + CLICK_LEAVE_WINDOW_MS;
+
+	for (let index = clickIndex + 1; index < samples.length; index += 1) {
+		const sample = samples[index];
+		if (sample.timeMs > until) break;
+		const distance = Math.hypot(sample.cx - click.cx, sample.cy - click.cy);
+		if (distance >= CLICK_LEAVE_DISTANCE) {
+			const speed = distance / Math.max(1, sample.timeMs - click.timeMs);
+			return 900 + Math.min(800, speed * 120_000);
+		}
+	}
+
+	return 0;
 }
 
 function mergeAdjacentDwellCandidates(candidates: ZoomDwellCandidate[]): ZoomDwellCandidate[] {
@@ -267,7 +367,9 @@ function buildSuggestionSpan(
 	const desiredDuration =
 		candidate.kind === "dwell"
 			? clampDuration(rawDuration + AUTO_ZOOM_CONTEXT_PADDING_MS * 2, totalMs)
-			: defaultDuration;
+			: candidate.kind === "press"
+				? clampDuration(rawDuration + AUTO_ZOOM_CONTEXT_PADDING_MS * 2, totalMs)
+				: defaultDuration;
 	const centeredStart = Math.round(candidate.centerTimeMs - desiredDuration / 2);
 	const start = Math.max(0, Math.min(centeredStart, totalMs - desiredDuration));
 	return { start, end: start + desiredDuration };

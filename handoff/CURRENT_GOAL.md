@@ -74,3 +74,5 @@ The next implementation pass starts from the stable rollback baseline and target
 - Smart Follow Mouse uses a scale-aware safe area. At higher custom zoom scales, the visible area is smaller, so the cursor boundary threshold is tighter and the camera begins easing before the cursor is cropped.
 - Always Follow Mouse is not a hard cursor lock. It should use slower damped motion with lead/lag, soft start, and soft settle so the view does not shake.
 - Auto Zoom generation should move from raw dwell duration to intent scoring: click with local stay, repeated click, press/drag, and meaningful dwell are strong; click-and-immediately-leave is weak.
+
+Implementation status: code is now implemented and verified at type/test/build level. It still needs user-facing macOS recording/editor retest for product feel, especially Smart Follow boundary behavior at different custom zoom scales.

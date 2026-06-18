@@ -26,8 +26,14 @@ import {
 import {
 	AUTO_FOLLOW_PARAMS,
 	DEFAULT_FOCUS,
+	SMART_FOLLOW_PARAMS,
 } from "@/components/video-editor/videoPlayback/constants";
-import { advanceFollowFocus } from "@/components/video-editor/videoPlayback/cursorFollowUtils";
+import {
+	advanceFollowFocus,
+	advanceSmartFollowFocus,
+	interpolateCursorAt,
+	resolveSmartFollowTarget,
+} from "@/components/video-editor/videoPlayback/cursorFollowUtils";
 import { clampFocusToScale } from "@/components/video-editor/videoPlayback/focusUtils";
 import { findDominantRegion } from "@/components/video-editor/videoPlayback/zoomRegionUtils";
 import {
@@ -160,6 +166,7 @@ export class FrameRenderer {
 	private motionBlurState: MotionBlurState = createMotionBlurState();
 	private nativeCursorMotionBlurState = createNativeCursorMotionBlurState();
 	private smoothedAutoFocus: { cx: number; cy: number } | null = null;
+	private followFocusKey: string | null = null;
 	private prevAnimationTimeMs: number | null = null;
 	private zoomSpringState = createZoomSpringState();
 	private isLinux = false;
@@ -792,17 +799,38 @@ export class FrameRenderer {
 			targetFocus = regionFocus;
 			targetProgress = strength;
 
-			// Stable camera follow for Follow Mouse mode. This mirrors preview so exports do
-			// not switch between tightly locked zoom-in motion and smoother full-zoom motion.
-			if (region.focusMode === "auto" && !transition) {
+			// Mirror preview follow modes: Always Follow chases the cursor with damping;
+			// Smart Follow only pans when the cursor approaches the scale-aware zoom edge.
+			if ((region.focusMode === "auto" || region.focusMode === "smart") && !transition) {
+				const mode = region.focusMode;
 				const raw = targetFocus;
+				const followKey = `${region.id}:${mode}`;
+				if (this.followFocusKey !== followKey) {
+					this.followFocusKey = followKey;
+					this.smoothedAutoFocus = raw;
+				}
 				const dtMs = this.prevAnimationTimeMs != null ? timeMs - this.prevAnimationTimeMs : 0;
 				const prev = this.smoothedAutoFocus ?? raw;
-				const smoothed = advanceFollowFocus(prev, raw, dtMs, AUTO_FOLLOW_PARAMS);
+				const cursorFocus =
+					mode === "smart" ? interpolateCursorAt(this.config.cursorTelemetry ?? [], timeMs) : null;
+				const smoothed =
+					mode === "smart" && cursorFocus
+						? dtMs > 0
+							? advanceSmartFollowFocus(
+									prev,
+									raw,
+									cursorFocus,
+									zoomScale,
+									dtMs,
+									SMART_FOLLOW_PARAMS,
+								)
+							: resolveSmartFollowTarget(raw, cursorFocus, zoomScale, SMART_FOLLOW_PARAMS)
+						: advanceFollowFocus(prev, raw, dtMs, AUTO_FOLLOW_PARAMS);
 				this.smoothedAutoFocus = smoothed;
 				targetFocus = smoothed;
-			} else if (region.focusMode !== "auto") {
+			} else if (region.focusMode !== "auto" && region.focusMode !== "smart") {
 				this.smoothedAutoFocus = null;
+				this.followFocusKey = null;
 			}
 			if (transition) {
 				const startTransform = computeZoomTransform({

@@ -8,8 +8,9 @@
 		"focusMode": {
 			"title": "Follow Mouse",
 			"manual": "Off",
-			"auto": "On",
-			"autoDescription": "The camera follows the recorded mouse position",
+			"smart": "Smart",
+			"auto": "Always",
+			"autoDescription": "Smart follows near the zoom edge; Always follows continuously.",
 			"lockedDisclaimer": "Controlled by the global Follow Mouse toggle in the timeline. Turn it off to set this per zoom."
 		},
 		"threeD": {

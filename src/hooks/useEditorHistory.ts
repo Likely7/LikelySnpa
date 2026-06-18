@@ -28,7 +28,9 @@ export interface EditorState {
 	zoomRegions: ZoomRegion[];
 	/** Magic-wand auto-zoom toggle. When on, fresh recordings get suggested zooms. */
 	autoZoomEnabled: boolean;
-	/** Global Follow Mouse toggle: when on, all zooms follow the recorded cursor. */
+	/** Global Smart Follow Mouse toggle: default follow behavior for generated zooms. */
+	smartFocusAll: boolean;
+	/** Global Always Follow Mouse toggle: when on, all zooms continuously follow the recorded cursor. */
 	autoFocusAll: boolean;
 	trimRegions: TrimRegion[];
 	speedRegions: SpeedRegion[];
@@ -53,6 +55,7 @@ export interface EditorState {
 export const INITIAL_EDITOR_STATE: EditorState = {
 	zoomRegions: [],
 	autoZoomEnabled: true,
+	smartFocusAll: true,
 	autoFocusAll: false,
 	trimRegions: [],
 	speedRegions: [],

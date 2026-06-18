@@ -33,9 +33,11 @@ import {
 	MAX_BLUR_BLOCK_SIZE,
 	MAX_BLUR_INTENSITY,
 	MAX_PLAYBACK_SPEED,
+	MAX_ZOOM_SCALE,
 	MIN_BLUR_BLOCK_SIZE,
 	MIN_BLUR_INTENSITY,
 	MIN_PLAYBACK_SPEED,
+	MIN_ZOOM_SCALE,
 	type SpeedRegion,
 	type TrimRegion,
 	type WebcamLayoutPreset,
@@ -75,6 +77,7 @@ export interface ProjectEditorState {
 	cropRegion: CropRegion;
 	zoomRegions: ZoomRegion[];
 	autoZoomEnabled: boolean;
+	smartFocusAll: boolean;
 	autoFocusAll: boolean;
 	trimRegions: TrimRegion[];
 	speedRegions: SpeedRegion[];
@@ -255,6 +258,9 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 						region.rotationPreset === "right"
 							? region.rotationPreset
 							: undefined;
+					const customScale = isFiniteNumber(region.customScale)
+						? clamp(region.customScale, MIN_ZOOM_SCALE, MAX_ZOOM_SCALE)
+						: undefined;
 					return {
 						id: region.id,
 						startMs,
@@ -264,8 +270,12 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 							cx: clamp(isFiniteNumber(region.focus?.cx) ? region.focus.cx : 0.5, 0, 1),
 							cy: clamp(isFiniteNumber(region.focus?.cy) ? region.focus.cy : 0.5, 0, 1),
 						},
-						focusMode: region.focusMode === "auto" ? "auto" : "manual",
+						focusMode:
+							region.focusMode === "auto" || region.focusMode === "smart"
+								? region.focusMode
+								: "manual",
 						source: region.source === "auto" ? "auto" : "manual",
+						...(customScale != null ? { customScale } : {}),
 						...(validPreset ? { rotationPreset: validPreset } : {}),
 					};
 				})
@@ -444,6 +454,11 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 	const cropY = clamp(rawCropY, 0, 1);
 	const cropWidth = clamp(rawCropWidth, 0.01, 1 - cropX);
 	const cropHeight = clamp(rawCropHeight, 0.01, 1 - cropY);
+	const normalizedAutoFocusAll =
+		typeof editor.autoFocusAll === "boolean" ? editor.autoFocusAll : false;
+	const normalizedSmartFocusAll =
+		!normalizedAutoFocusAll &&
+		(typeof editor.smartFocusAll === "boolean" ? editor.smartFocusAll : true);
 
 	return {
 		cursorTheme: normalizeCursorThemeId(editor.cursorTheme),
@@ -487,7 +502,8 @@ export function normalizeProjectEditor(editor: Partial<ProjectEditorState>): Pro
 		// Default on for legacy projects so re-opens match the new default. The
 		// on-load auto-suggest pass is gated separately, so this won't add zooms.
 		autoZoomEnabled: typeof editor.autoZoomEnabled === "boolean" ? editor.autoZoomEnabled : true,
-		autoFocusAll: typeof editor.autoFocusAll === "boolean" ? editor.autoFocusAll : false,
+		smartFocusAll: normalizedSmartFocusAll,
+		autoFocusAll: normalizedAutoFocusAll,
 		trimRegions: normalizedTrimRegions,
 		speedRegions: normalizedSpeedRegions,
 		annotationRegions: normalizedAnnotationRegions,

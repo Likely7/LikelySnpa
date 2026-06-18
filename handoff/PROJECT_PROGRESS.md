@@ -79,6 +79,9 @@
 75. Clarified the long-video architecture status: the project has implemented the first NLE-style staged-open pass, but it has not implemented true preview proxy media yet. There is no generated `proxy-screen.mp4` / `proxy-webcam.mp4`, no proxy playback switch, and no package-local `cache/media-info.json` pipeline yet.
 76. Compared LikelySnap Auto Zoom selection with OpenScreen v1.5.0/current upstream and Screen Studio public behavior. OpenScreen is simple dwell-based selection; Screen Studio publicly emphasizes click-position-driven auto zoom; LikelySnap's current mixed dwell/click/long-span model can choose odd spots because it combines multiple philosophies without a clear intent score.
 77. Planned the durable Auto Zoom/Follow Mouse refinement: per-zoom `Off`, `Smart Follow Mouse`, `Always Follow Mouse`; Smart Follow default on globally; global Smart Follow and global Always Follow mutually exclusive; Smart Follow safe area derived from actual/custom zoom scale; Always Follow slowed and eased to prevent tight camera shake.
+78. Implemented the three-state zoom follow model. `focusMode` now supports `manual`, `smart`, and `auto`; selected zoom settings show `Off`, `Smart`, and `Always`; the timeline has separate Smart Follow and Always Follow global buttons; the global buttons are mutually exclusive; existing `focusMode: auto` projects remain Always Follow.
+79. Implemented scale-aware Smart Follow Mouse in shared playback/export code. Smart Follow keeps the camera anchored while the cursor stays inside the zoom-scale-derived safe area, then eases the camera only when the cursor approaches the visible zoom boundary. Always Follow now uses slower damped motion so the cursor can lead and the picture catches up instead of shaking tightly.
+80. Rebalanced Auto Zoom candidate selection into an intent-scored model: click-and-stay, double click, repeated click, press/drag, and meaningful dwell are favored; click-and-immediately-leave is down-ranked; long dwell zoom duration is capped; accepted suggestions are sorted back into timeline order.
 
 ## Implemented This Pass
 
@@ -117,6 +120,8 @@
 - `src/components/video-editor/timeline/zoomSuggestionUtils.test.ts`
 - `src/components/video-editor/videoPlayback/cursorFollowUtils.ts`
 - `src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts`
+- `src/components/video-editor/videoPlayback/constants.ts`
+- `src/lib/exporter/frameRenderer.ts`
 - `src/components/video-editor/SettingsPanel.tsx`
 - `scripts/generate-icons.mjs`
 - `icons/source/logo.png`
@@ -265,3 +270,27 @@ Continue validation and hardening from the current staged editor-open + FFmpeg e
   - `npx tsc --noEmit`
   - `npx biome check src/lib/appSettings.ts src/hooks/useScreenRecorder.ts src/components/launch/AppSettingsDialog.tsx electron/ipc/handlers.ts electron/native/wgc-capture/src/main.cpp`
   - `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` with existing warnings only.
+
+## 2026-06-19 Smart Follow Mouse / Auto Zoom Intent Pass
+
+- Created checkpoint `95c5269 docs: plan smart mouse follow zoom` before code changes.
+- Implemented three per-zoom follow modes:
+  - `manual` = Off / 禁用
+  - `smart` = Smart Follow Mouse / 智能
+  - `auto` = Always Follow Mouse / 始终
+- Added a global Smart Follow Mouse timeline button. It defaults on for new editor state and is mutually exclusive with the existing global Always Follow Mouse button.
+- Kept per-zoom override in the selected Zoom settings panel, so users can change any individual segment to Off, Smart, or Always regardless of the global batch/default control.
+- Implemented scale-aware Smart Follow Mouse in preview and export through shared cursor-follow utilities. The safe area derives from the actual effective zoom scale, including custom scale.
+- Slowed Always Follow Mouse and added stronger damping/dead-zone behavior so the cursor leads slightly and the camera catches up instead of tightly shaking.
+- Reworked Auto Zoom scoring:
+  - click-and-stay, repeated click, double click, press/drag, and meaningful dwell score higher;
+  - click-and-immediately-leave is down-ranked and can produce no suggestion;
+  - held mouse-button spans default to Smart Follow Mouse instead of Always Follow Mouse;
+  - long dwell generated duration is capped to avoid huge default zoom spans;
+  - final suggestions are sorted in timeline order after scoring/selection.
+- Preserved preview/export consistency by updating both `VideoPlayback` and `FrameRenderer`.
+- Verification passed:
+  - `./node_modules/.bin/tsc --noEmit --pretty false`
+  - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/editorDefaults.test.ts`
+  - `npx biome check src/components/video-editor/SettingsPanel.tsx src/components/video-editor/VideoEditor.tsx src/components/video-editor/VideoPlayback.tsx src/components/video-editor/projectPersistence.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/timeline/TimelineEditor.tsx src/components/video-editor/timeline/zoomSuggestionUtils.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/constants.ts src/components/video-editor/videoPlayback/cursorFollowUtils.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/lib/exporter/frameRenderer.ts src/hooks/useEditorHistory.ts src/i18n/locales/en/settings.json src/i18n/locales/en/timeline.json src/i18n/locales/zh-CN/settings.json src/i18n/locales/zh-CN/timeline.json`
+  - `npm run build-vite`

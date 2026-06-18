@@ -1,4 +1,5 @@
 import type { CursorTelemetryPoint, ZoomFocus } from "../types";
+import { getFocusBoundsForScale } from "./focusUtils";
 
 /** Binary-search the sorted telemetry and lerp the cursor position at the given playback time. */
 export function interpolateCursorAt(
@@ -59,6 +60,15 @@ export interface FollowParams {
 	maxSpeedPerSecond?: number;
 }
 
+export interface SmartFollowParams extends FollowParams {
+	/** Fraction of the visible zoom window that should remain quiet before the camera pans. */
+	safeAreaRatio: number;
+	/** Minimum normalized safety margin per axis so high zoom levels still get usable lead room. */
+	minSafeMargin: number;
+	/** Maximum normalized safety margin per axis so low zoom levels do not overreact. */
+	maxSafeMargin: number;
+}
+
 /**
  * Advance the auto-follow focus from `prev` toward target `raw` over `dtMs` of content time. The
  * distance-adaptive factor is reframed against `referenceMs` so convergence is content-time based and
@@ -107,6 +117,62 @@ export function advanceFollowFocus(
 		cx: prev.cx + nextDx * ratio,
 		cy: prev.cy + nextDy * ratio,
 	};
+}
+
+export function resolveSmartFollowTarget(
+	anchor: ZoomFocus,
+	cursor: ZoomFocus,
+	zoomScale: number,
+	params: Pick<SmartFollowParams, "safeAreaRatio" | "minSafeMargin" | "maxSafeMargin">,
+): ZoomFocus {
+	const bounds = getFocusBoundsForScale(zoomScale);
+	const visibleHalfX = Math.max(0, 0.5 / Math.max(1, zoomScale));
+	const visibleHalfY = Math.max(0, 0.5 / Math.max(1, zoomScale));
+	const safeHalfX = Math.max(
+		params.minSafeMargin,
+		Math.min(params.maxSafeMargin, visibleHalfX * params.safeAreaRatio),
+	);
+	const safeHalfY = Math.max(
+		params.minSafeMargin,
+		Math.min(params.maxSafeMargin, visibleHalfY * params.safeAreaRatio),
+	);
+
+	const minCursorX = anchor.cx - safeHalfX;
+	const maxCursorX = anchor.cx + safeHalfX;
+	const minCursorY = anchor.cy - safeHalfY;
+	const maxCursorY = anchor.cy + safeHalfY;
+
+	let targetX = anchor.cx;
+	let targetY = anchor.cy;
+
+	if (cursor.cx < minCursorX) {
+		targetX = cursor.cx + safeHalfX;
+	} else if (cursor.cx > maxCursorX) {
+		targetX = cursor.cx - safeHalfX;
+	}
+
+	if (cursor.cy < minCursorY) {
+		targetY = cursor.cy + safeHalfY;
+	} else if (cursor.cy > maxCursorY) {
+		targetY = cursor.cy - safeHalfY;
+	}
+
+	return {
+		cx: Math.max(bounds.minX, Math.min(bounds.maxX, targetX)),
+		cy: Math.max(bounds.minY, Math.min(bounds.maxY, targetY)),
+	};
+}
+
+export function advanceSmartFollowFocus(
+	prev: ZoomFocus,
+	anchor: ZoomFocus,
+	cursor: ZoomFocus,
+	zoomScale: number,
+	dtMs: number,
+	params: SmartFollowParams,
+): ZoomFocus {
+	const target = resolveSmartFollowTarget(anchor, cursor, zoomScale, params);
+	return advanceFollowFocus(prev, target, dtMs, params);
 }
 
 /**

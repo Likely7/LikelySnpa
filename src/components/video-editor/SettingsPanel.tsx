@@ -945,8 +945,8 @@ export function SettingsPanel({
 										<span className="text-[11px] font-medium text-slate-400">
 											{t("zoom.focusMode.title")}
 										</span>
-										<div className="grid w-32 grid-cols-2 gap-0.5 rounded-lg border border-white/[0.06] bg-white/[0.035] p-0.5">
-											{(["manual", "auto"] as const).map((mode) => {
+										<div className="grid w-48 grid-cols-3 gap-0.5 rounded-lg border border-white/[0.06] bg-white/[0.035] p-0.5">
+											{(["manual", "smart", "auto"] as const).map((mode) => {
 												const isActive = selectedZoomFocusMode === mode;
 												return (
 													<Button

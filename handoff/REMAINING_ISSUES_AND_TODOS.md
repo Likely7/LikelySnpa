@@ -12,7 +12,7 @@
 8. Implement the real preview-proxy pipeline for very long/high-resolution recordings. This is not done yet: generate `proxy-screen.mp4` / `proxy-webcam.mp4` in a package/global cache, record proxy health in metadata, switch editor playback to proxies when ready, and keep export on original media.
 9. Add a background job manager for media preparation so media info, waveform, thumbnails, cursor indexes, auto zoom suggestions, and proxy generation are coordinated instead of being separate ad hoc effects.
 10. Before another Windows one-hour optimization, add hard timing checkpoints for manifest read, file stat, session preparation, video metadata readiness, first React paint, cursor preview load, waveform start/cache/generation, auto zoom start/finish, and proxy generation.
-11. Complete the Auto Zoom / Follow Mouse model upgrade: three per-zoom modes (`Off`, `Smart Follow Mouse`, `Always Follow Mouse`), mutually exclusive global Smart/Always controls, scale-aware smart safe areas, slower eased always-follow motion, and intent-scored candidate selection.
+11. Validate the implemented Auto Zoom / Follow Mouse model on real recordings: three per-zoom modes (`Off`, `Smart Follow Mouse`, `Always Follow Mouse`), mutually exclusive global Smart/Always controls, scale-aware smart safe areas, slower eased always-follow motion, and intent-scored candidate selection.
 
 ## Existing P0 Validation
 

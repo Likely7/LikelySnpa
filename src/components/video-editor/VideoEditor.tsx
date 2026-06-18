@@ -220,6 +220,7 @@ export default function VideoEditor() {
 	const {
 		zoomRegions,
 		autoZoomEnabled,
+		smartFocusAll,
 		autoFocusAll,
 		trimRegions,
 		speedRegions,
@@ -450,6 +451,7 @@ export default function VideoEditor() {
 				cropRegion: normalizedEditor.cropRegion,
 				zoomRegions: normalizedEditor.zoomRegions,
 				autoZoomEnabled: normalizedEditor.autoZoomEnabled,
+				smartFocusAll: normalizedEditor.smartFocusAll,
 				autoFocusAll: normalizedEditor.autoFocusAll,
 				trimRegions: normalizedEditor.trimRegions,
 				speedRegions: normalizedEditor.speedRegions,
@@ -530,6 +532,7 @@ export default function VideoEditor() {
 			cropRegion,
 			zoomRegions,
 			autoZoomEnabled,
+			smartFocusAll,
 			autoFocusAll,
 			trimRegions,
 			speedRegions,
@@ -561,6 +564,7 @@ export default function VideoEditor() {
 		cropRegion,
 		zoomRegions,
 		autoZoomEnabled,
+		smartFocusAll,
 		autoFocusAll,
 		trimRegions,
 		speedRegions,
@@ -721,6 +725,7 @@ export default function VideoEditor() {
 				cropRegion,
 				zoomRegions,
 				autoZoomEnabled,
+				smartFocusAll,
 				autoFocusAll,
 				trimRegions,
 				speedRegions,
@@ -786,6 +791,7 @@ export default function VideoEditor() {
 			cropRegion,
 			zoomRegions,
 			autoZoomEnabled,
+			smartFocusAll,
 			autoFocusAll,
 			trimRegions,
 			speedRegions,
@@ -1110,8 +1116,8 @@ export default function VideoEditor() {
 				depth: DEFAULT_ZOOM_DEPTH,
 				customScale: ZOOM_DEPTH_SCALES[DEFAULT_ZOOM_DEPTH],
 				focus: { cx: 0.5, cy: 0.5 },
-				// Global Follow Mouse on means new zooms follow the cursor too.
-				focusMode: autoFocusAll ? "auto" : undefined,
+				// Global follow defaults decide new zoom behavior without locking per-zoom edits.
+				focusMode: autoFocusAll ? "auto" : smartFocusAll ? "smart" : "manual",
 				source: "manual",
 			};
 			pushState((prev) => ({ zoomRegions: [...prev.zoomRegions, newRegion] }));
@@ -1121,7 +1127,7 @@ export default function VideoEditor() {
 			setSelectedAnnotationId(null);
 			setSelectedBlurId(null);
 		},
-		[pushState, autoFocusAll],
+		[pushState, autoFocusAll, smartFocusAll],
 	);
 
 	// Builds fresh "auto" zoom regions from cursor telemetry without overlapping
@@ -1142,11 +1148,15 @@ export default function VideoEditor() {
 				depth: DEFAULT_ZOOM_DEPTH,
 				customScale: ZOOM_DEPTH_SCALES[DEFAULT_ZOOM_DEPTH],
 				focus: clampFocusToDepth(suggestion.focus, DEFAULT_ZOOM_DEPTH),
-				focusMode: autoFocusAll ? "auto" : (suggestion.focusMode ?? "manual"),
+				focusMode: autoFocusAll
+					? "auto"
+					: smartFocusAll
+						? "smart"
+						: (suggestion.focusMode ?? "manual"),
 				source: "auto" as const,
 			}));
 		},
-		[cursorTelemetry, duration, autoFocusAll],
+		[cursorTelemetry, duration, autoFocusAll, smartFocusAll],
 	);
 
 	// Auto-suggest zooms once per fresh recording (no existing zooms, telemetry
@@ -1243,9 +1253,24 @@ export default function VideoEditor() {
 		(on: boolean) => {
 			pushState((prev) => ({
 				autoFocusAll: on,
+				smartFocusAll: on ? false : prev.smartFocusAll,
 				zoomRegions: prev.zoomRegions.map((region) => ({
 					...region,
 					focusMode: on ? "auto" : "manual",
+				})),
+			}));
+		},
+		[pushState],
+	);
+
+	const handleToggleSmartFocusAll = useCallback(
+		(on: boolean) => {
+			pushState((prev) => ({
+				smartFocusAll: on,
+				autoFocusAll: on ? false : prev.autoFocusAll,
+				zoomRegions: prev.zoomRegions.map((region) => ({
+					...region,
+					focusMode: on ? "smart" : "manual",
 				})),
 			}));
 		},
@@ -2999,6 +3024,8 @@ export default function VideoEditor() {
 									onZoomAdded={handleZoomAdded}
 									autoZoomEnabled={autoZoomEnabled}
 									onToggleAutoZoom={handleToggleAutoZoom}
+									smartFocusAll={smartFocusAll}
+									onToggleSmartFocusAll={handleToggleSmartFocusAll}
 									autoFocusAll={autoFocusAll}
 									onToggleAutoFocusAll={handleToggleAutoFocusAll}
 									onZoomSpanChange={handleZoomSpanChange}

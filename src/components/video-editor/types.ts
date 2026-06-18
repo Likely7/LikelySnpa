@@ -1,7 +1,7 @@
 import type { WebcamLayoutPreset } from "@/lib/compositeLayout";
 
 export type ZoomDepth = 1 | 2 | 3 | 4 | 5 | 6;
-export type ZoomFocusMode = "manual" | "auto";
+export type ZoomFocusMode = "manual" | "smart" | "auto";
 export type { WebcamLayoutPreset };
 /** Webcam size as a percentage of the canvas reference dimension (10-50). */
 export type WebcamSizePreset = number;

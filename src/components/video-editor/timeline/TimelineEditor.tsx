@@ -8,6 +8,7 @@ import {
 	Maximize2,
 	MessageSquare,
 	Plus,
+	Radar,
 	ScanEye,
 	Scissors,
 	WandSparkles,
@@ -60,6 +61,9 @@ interface TimelineEditorProps {
 	autoZoomEnabled?: boolean;
 	onToggleAutoZoom?: (enabled: boolean) => void;
 	/** Global Follow Mouse toggle state + handler. */
+	smartFocusAll?: boolean;
+	onToggleSmartFocusAll?: (on: boolean) => void;
+	/** Global Always Follow Mouse toggle state + handler. */
 	autoFocusAll?: boolean;
 	onToggleAutoFocusAll?: (on: boolean) => void;
 	onZoomSpanChange: (id: string, span: Span) => void;
@@ -1015,8 +1019,10 @@ export default function TimelineEditor({
 	zoomRegions,
 	onZoomAdded,
 	autoZoomEnabled = true,
+	smartFocusAll = true,
 	onToggleAutoZoom,
 	autoFocusAll = false,
+	onToggleSmartFocusAll,
 	onToggleAutoFocusAll,
 	onZoomSpanChange,
 	onZoomDelete,
@@ -1547,7 +1553,7 @@ export default function TimelineEditor({
 			label: t("labels.zoomItem", { index: String(index + 1) }),
 			zoomDepth: region.depth,
 			zoomCustomScale: region.customScale,
-			isAutoFocus: region.focusMode === "auto",
+			isAutoFocus: region.focusMode === "auto" || region.focusMode === "smart",
 			variant: "zoom",
 		}));
 
@@ -1695,6 +1701,19 @@ export default function TimelineEditor({
 						title={autoZoomEnabled ? t("buttons.autoZoomOn") : t("buttons.autoZoomOff")}
 					>
 						<WandSparkles className="w-4 h-4" />
+					</Button>
+					<Button
+						onClick={() => onToggleSmartFocusAll?.(!smartFocusAll)}
+						variant="ghost"
+						size="icon"
+						aria-pressed={smartFocusAll}
+						className={cn(
+							"h-7 w-7 rounded-lg transition-all hover:bg-[#C24B72]/10 hover:text-[#C24B72]",
+							smartFocusAll ? "bg-[#C24B72]/15 text-[#C24B72]" : "text-slate-400",
+						)}
+						title={smartFocusAll ? t("buttons.smartFocusAllOn") : t("buttons.smartFocusAllOff")}
+					>
+						<Radar className="w-4 h-4" />
 					</Button>
 					<Button
 						onClick={() => onToggleAutoFocusAll?.(!autoFocusAll)}

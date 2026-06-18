@@ -18,7 +18,7 @@ describe("zoomSuggestionUtils", () => {
 		expect(candidates[0].strength).toBe(MAX_DWELL_DURATION_MS);
 	});
 
-	it("uses the real dwell span plus context padding for auto zoom duration", () => {
+	it("uses dwell span plus context padding but keeps generated zooms bounded", () => {
 		const suggestions = buildAutoZoomSuggestions({
 			cursorTelemetry: [
 				{ timeMs: 0, cx: 0.4, cy: 0.4 },
@@ -30,9 +30,7 @@ describe("zoomSuggestionUtils", () => {
 		});
 
 		expect(suggestions).toHaveLength(1);
-		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(
-			5_000 + AUTO_ZOOM_CONTEXT_PADDING_MS * 2,
-		);
+		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(6_000);
 		expect(suggestions[0].focusMode).toBe("manual");
 	});
 
@@ -74,7 +72,7 @@ describe("zoomSuggestionUtils", () => {
 		expect(suggestions[0].focusMode).toBe("manual");
 	});
 
-	it("marks auto zoom suggestions as cursor-follow when the mouse is held down", () => {
+	it("marks held mouse suggestions as smart cursor-follow", () => {
 		const suggestions = buildAutoZoomSuggestions({
 			cursorTelemetry: [
 				{ timeMs: 0, cx: 0.2, cy: 0.2 },
@@ -89,7 +87,23 @@ describe("zoomSuggestionUtils", () => {
 		});
 
 		expect(suggestions).toHaveLength(1);
-		expect(suggestions[0].focusMode).toBe("auto");
+		expect(suggestions[0].focusMode).toBe("smart");
+	});
+
+	it("down-ranks click-and-leave actions so accidental clicks do not create zooms", () => {
+		const suggestions = buildAutoZoomSuggestions({
+			cursorTelemetry: [
+				{ timeMs: 0, cx: 0.2, cy: 0.2 },
+				{ timeMs: 1000, cx: 0.7, cy: 0.3, interactionType: "click" },
+				{ timeMs: 1120, cx: 0.9, cy: 0.5 },
+				{ timeMs: 1400, cx: 0.92, cy: 0.52 },
+			],
+			totalMs: 5000,
+			existingRegions: [],
+			defaultDurationMs: 1200,
+		});
+
+		expect(suggestions).toHaveLength(0);
 	});
 
 	it("detects pressed cursor spans across click and mouseup events", () => {

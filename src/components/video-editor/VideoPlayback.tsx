@@ -68,8 +68,13 @@ import {
 	type ZoomFocus,
 	type ZoomRegion,
 } from "./types";
-import { AUTO_FOLLOW_PARAMS, DEFAULT_FOCUS } from "./videoPlayback/constants";
-import { advanceFollowFocus } from "./videoPlayback/cursorFollowUtils";
+import { AUTO_FOLLOW_PARAMS, DEFAULT_FOCUS, SMART_FOLLOW_PARAMS } from "./videoPlayback/constants";
+import {
+	advanceFollowFocus,
+	advanceSmartFollowFocus,
+	interpolateCursorAt,
+	resolveSmartFollowTarget,
+} from "./videoPlayback/cursorFollowUtils";
 import {
 	DEFAULT_CURSOR_CONFIG,
 	PixiCursorOverlay,
@@ -369,6 +374,7 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 		const videoReadyRafRef = useRef<number | null>(null);
 		const previewAudioTimerRef = useRef<number | null>(null);
 		const smoothedAutoFocusRef = useRef<ZoomFocus | null>(null);
+		const followFocusKeyRef = useRef<string | null>(null);
 		const durationResolutionTimeoutRef = useRef<number | null>(null);
 		const lastResolvedDurationRef = useRef<number | null>(null);
 		const isResolvingDurationRef = useRef(false);
@@ -1416,14 +1422,17 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 					targetFocus = regionFocus;
 					targetProgress = strength;
 
-					// Stable camera follow for Follow Mouse mode. Keep the same smoothing during
-					// zoom-in, full zoom, and zoom-out so generated regions do not alternate
-					// between floaty and tightly locked motion.
-					if (region.focusMode === "auto" && !transition) {
+					// Follow modes share the same content-time smoothing as export. Always Follow
+					// chases the cursor directly but slowly; Smart Follow holds the stored anchor
+					// until the cursor approaches the scale-aware zoom boundary.
+					if ((region.focusMode === "auto" || region.focusMode === "smart") && !transition) {
+						const mode = region.focusMode;
 						const raw = targetFocus;
-						// Follow the cursor in content time (frame-rate independent) so the camera pans
-						// at the same speed in preview and export. Snap to target when not actively
-						// playing (paused/seek/scrub), matching the zoom spring's snap.
+						const followKey = `${region.id}:${mode}`;
+						if (followFocusKeyRef.current !== followKey) {
+							followFocusKeyRef.current = followKey;
+							smoothedAutoFocusRef.current = raw;
+						}
 						const focusAnimating =
 							isPlayingRef.current && !isSeekingRef.current && !isScrubbingRef.current;
 						const focusDtMs =
@@ -1431,13 +1440,30 @@ const VideoPlayback = forwardRef<VideoPlaybackRef, VideoPlaybackProps>(
 								? 0
 								: currentTimeRef.current - prevZoomTimeMsRef.current;
 						const prev = smoothedAutoFocusRef.current ?? raw;
-						const smoothed = focusAnimating
-							? advanceFollowFocus(prev, raw, focusDtMs, AUTO_FOLLOW_PARAMS)
-							: raw;
+						const cursorFocus =
+							mode === "smart"
+								? interpolateCursorAt(cursorTelemetryRef.current, currentTimeRef.current)
+								: null;
+						const smoothed =
+							mode === "smart" && cursorFocus
+								? focusAnimating
+									? advanceSmartFollowFocus(
+											prev,
+											raw,
+											cursorFocus,
+											zoomScale,
+											focusDtMs,
+											SMART_FOLLOW_PARAMS,
+										)
+									: resolveSmartFollowTarget(raw, cursorFocus, zoomScale, SMART_FOLLOW_PARAMS)
+								: focusAnimating
+									? advanceFollowFocus(prev, raw, focusDtMs, AUTO_FOLLOW_PARAMS)
+									: raw;
 						smoothedAutoFocusRef.current = smoothed;
 						targetFocus = smoothed;
-					} else if (region.focusMode !== "auto") {
+					} else if (region.focusMode !== "auto" && region.focusMode !== "smart") {
 						smoothedAutoFocusRef.current = null;
+						followFocusKeyRef.current = null;
 					}
 
 					// Connected zoom transitions: pan between adjacent regions.

@@ -184,6 +184,40 @@ describe("projectPersistence media compatibility", () => {
 		);
 	});
 
+	it("normalizes zoom follow modes, custom scale, and global follow exclusivity", () => {
+		const editor = normalizeProjectEditor({
+			smartFocusAll: true,
+			autoFocusAll: true,
+			zoomRegions: [
+				{
+					id: "zoom-1",
+					startMs: 0,
+					endMs: 1000,
+					depth: 3,
+					customScale: 9,
+					focus: { cx: 0.5, cy: 0.5 },
+					focusMode: "smart",
+				},
+				{
+					id: "zoom-2",
+					startMs: 1100,
+					endMs: 2000,
+					depth: 3,
+					customScale: 0.2,
+					focus: { cx: 0.5, cy: 0.5 },
+					focusMode: "auto",
+				},
+			],
+		});
+
+		expect(editor.autoFocusAll).toBe(true);
+		expect(editor.smartFocusAll).toBe(false);
+		expect(editor.zoomRegions[0].focusMode).toBe("smart");
+		expect(editor.zoomRegions[0].customScale).toBe(5);
+		expect(editor.zoomRegions[1].focusMode).toBe("auto");
+		expect(editor.zoomRegions[1].customScale).toBe(1);
+	});
+
 	it("falls back from dual frame to picture in picture for portrait aspect ratios", () => {
 		expect(
 			normalizeProjectEditor({

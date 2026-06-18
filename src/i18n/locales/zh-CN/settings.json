@@ -7,8 +7,9 @@
 		"focusMode": {
 			"title": "跟随鼠标",
 			"manual": "禁用",
-			"auto": "开启",
-			"autoDescription": "画面会跟随录制时的鼠标位置"
+			"smart": "智能",
+			"auto": "始终",
+			"autoDescription": "智能模式只在鼠标接近缩放边界时跟随；始终模式会持续跟随鼠标。"
 		},
 		"threeD": {
 			"title": "3D 旋转",
