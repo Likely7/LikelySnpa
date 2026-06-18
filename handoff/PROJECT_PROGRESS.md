@@ -74,6 +74,7 @@
 70. Added `CHANGELOG.md` and synchronized README plus handoff docs with the current baseline: staged long-recording editor open, restored cursor UI/rendering, FFmpeg streaming MP4 export, and remaining validation work.
 71. Fixed macOS raw recording quality regression: ScreenCaptureKit display capture now uses display mode backing pixels instead of logical display size, H.264 output includes BT.709 color metadata, helper events/manifest diagnostics include actual width/height/FPS/bitrate/color data, macOS bitrate is computed in the helper from the actual output dimensions and quality multiplier, and the local dev helper binary was rebuilt.
 72. Added package-local `cursor-preview.json` as a movable preview index for cursor data. The main process now writes and validates it by package-relative source identity, the editor uses it instead of parsing full `cursor.json` on open, and package paths/tests now include it as a first-class package file.
+73. Reopened the macOS dev app against `recording-1781685552950.likelysnap` and confirmed the new cursor preview path in real logs: `[editor-open] cursor preview cache hit` completed in 13ms.
 
 ## Implemented This Pass
 

@@ -152,3 +152,4 @@
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local dev helper after the OBS-style recording settings work.
 - `npx tsc --noEmit` passes after the package-local `cursor-preview.json` editor-open fix.
 - `npx vitest run electron/ipc/recordingPackage.test.ts src/lib/cursor/nativeCursor.test.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts` passes after the package-local `cursor-preview.json` editor-open fix. The run still prints the known jsdom `HTMLCanvasElement.getContext()` warning, but all 23 tests pass.
+- Manual macOS reopen test after this fix hit `[editor-open] cursor preview cache hit` in 13ms for `cursor-preview.json`, confirming the preview index path is live on the current app.
