@@ -1,5 +1,11 @@
 # LikelySnap
 
+![LikelySnap promo](./promo/github-15s/LikelySnap-github-promo.gif)
+
+[观看高清 MP4](./promo/github-15s/LikelySnap-github-promo.mp4)
+
+不是换皮，是底层重做。LikelySnap 让长录制也能继续打开、编辑、缩放和导出。
+
 基于 OpenScreen 1.5.0 版本改造而来。
 
 LikelySnap 是一个面向长录制场景重新改造的桌面录屏与视频编辑工具。它保留了 OpenScreen 原有的录屏、编辑、缩放、摄像头叠加、鼠标效果、字幕与导出等基础能力，并重点重构了长录制、原生录制、项目包、摄像头 sidecar、鼠标轨迹、设置中心和编辑器加载性能。
