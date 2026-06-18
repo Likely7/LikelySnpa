@@ -4,7 +4,15 @@ import path from "node:path";
 import { chromium } from "playwright";
 
 const root = process.cwd();
-const promoDir = path.join(root, "promo", "github-10s");
+const promoName = process.argv[2] || "github-10s";
+const promoDurations = {
+	"github-10s": 10,
+	"github-15s": 15,
+};
+if (!Object.hasOwn(promoDurations, promoName)) {
+	throw new Error(`Unknown promo "${promoName}". Expected one of: ${Object.keys(promoDurations).join(", ")}`);
+}
+const promoDir = path.join(root, "promo", promoName);
 const html = path.join(promoDir, "index.html");
 const keyframesDir = path.join(promoDir, "keyframes");
 const framesDir = path.join(promoDir, ".frames");
@@ -17,7 +25,7 @@ const skillAssets = path.join(root, "..", ".agents", "skills", "huashu-design", 
 const width = 1920;
 const height = 1080;
 const fps = 30;
-const duration = 10;
+const duration = promoDurations[promoName];
 const totalFrames = fps * duration;
 const url = `file://${html}`;
 
@@ -64,10 +72,14 @@ const capture = async (time, outPath) => {
 	});
 };
 
-for (const time of [0.4, 1.4, 2.6, 3.8, 5.8, 7.8, 9.5]) {
+const keyframeTimes =
+	promoName === "github-15s" ? [0.6, 2.6, 4.6, 6.6, 9.4, 12.8, 14.4] : [0.4, 1.4, 2.6, 3.8, 5.8, 7.8, 9.5];
+const posterTime = promoName === "github-15s" ? 14.4 : 9.5;
+
+for (const time of keyframeTimes) {
 	await capture(time, path.join(keyframesDir, `t-${String(time).replace(".", "_")}.png`));
 }
-await capture(9.5, poster);
+await capture(posterTime, poster);
 
 for (let frame = 0; frame < totalFrames; frame += 1) {
 	const time = frame / fps;
@@ -132,12 +144,12 @@ if (Object.values(audioAssets).every((file) => fs.existsSync(file))) {
 			[
 				"[0:a]adelay=120|120,volume=0.48[a0]",
 				"[1:a]adelay=1500|1500,volume=0.55[a1]",
-				"[1:a]adelay=1880|1880,volume=0.45[a2]",
-				"[1:a]adelay=2260|2260,volume=0.45[a3]",
-				"[2:a]adelay=3300|3300,volume=0.38[a4]",
-				"[3:a]adelay=5600|5600,volume=0.48[a5]",
-				"[2:a]adelay=7600|7600,volume=0.36[a6]",
-				"[4:a]adelay=9020|9020,volume=0.42[a7]",
+				`[1:a]adelay=${promoName === "github-15s" ? 2900 : 1880}|${promoName === "github-15s" ? 2900 : 1880},volume=0.45[a2]`,
+				`[1:a]adelay=${promoName === "github-15s" ? 3560 : 2260}|${promoName === "github-15s" ? 3560 : 2260},volume=0.45[a3]`,
+				`[2:a]adelay=${promoName === "github-15s" ? 5320 : 3300}|${promoName === "github-15s" ? 5320 : 3300},volume=0.48[a4]`,
+				`[3:a]adelay=${promoName === "github-15s" ? 8600 : 5600}|${promoName === "github-15s" ? 8600 : 5600},volume=0.48[a5]`,
+				`[2:a]adelay=${promoName === "github-15s" ? 10100 : 7600}|${promoName === "github-15s" ? 10100 : 7600},volume=0.36[a6]`,
+				`[4:a]adelay=${promoName === "github-15s" ? 12800 : 9020}|${promoName === "github-15s" ? 12800 : 9020},volume=0.42[a7]`,
 				"[a0][a1][a2][a3][a4][a5][a6][a7]amix=inputs=8:duration=longest:normalize=0[mixed]",
 			].join(";"),
 			"-map",
@@ -159,7 +171,7 @@ if (Object.values(audioAssets).every((file) => fs.existsSync(file))) {
 			"-i",
 			audioAssets.bgm,
 			"-filter_complex",
-			`[2:a]atrim=0:${duration},afade=in:st=0:d=0.25,afade=out:st=8.6:d=1.4,lowpass=f=4000,volume=0.23[bgm];[1:a]highpass=f=800,volume=0.86[sfx];[bgm][sfx]amix=inputs=2:duration=first:normalize=0[a]`,
+			`[2:a]atrim=0:${duration},afade=in:st=0:d=0.25,afade=out:st=${duration - 1.4}:d=1.4,lowpass=f=4000,volume=0.23[bgm];[1:a]highpass=f=800,volume=0.86[sfx];[bgm][sfx]amix=inputs=2:duration=first:normalize=0[a]`,
 			"-map",
 			"0:v",
 			"-map",

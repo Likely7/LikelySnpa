@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>LikelySnap GitHub Promo v2</title>
+		<style>
+			:root {
+				--paper: #f7f4ee;
+				--ink: #101010;
+				--muted: #77736c;
+				--hair: rgba(16, 16, 16, 0.14);
+				--pink: #e83272;
+				--soft-pink: #ffe1ec;
+				--mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+				--sans: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				width: 100%;
+				height: 100%;
+				margin: 0;
+				overflow: hidden;
+				background: var(--paper);
+				color: var(--ink);
+				font-family: var(--sans);
+			}
+
+			body {
+				display: grid;
+				place-items: center;
+			}
+
+			.stage {
+				position: relative;
+				width: 1920px;
+				height: 1080px;
+				overflow: hidden;
+				background:
+					linear-gradient(90deg, transparent 0 119px, rgba(16, 16, 16, 0.045) 120px 121px, transparent 122px),
+					linear-gradient(180deg, transparent 0 119px, rgba(16, 16, 16, 0.035) 120px 121px, transparent 122px),
+					var(--paper);
+				background-size: 120px 120px;
+				transform-origin: center;
+			}
+
+			.stage::after {
+				position: absolute;
+				inset: 0;
+				content: "";
+				pointer-events: none;
+				background:
+					radial-gradient(circle at 18% 78%, rgba(232, 50, 114, 0.08), transparent 28%),
+					radial-gradient(circle at 86% 16%, rgba(16, 16, 16, 0.05), transparent 24%);
+			}
+
+			.topline {
+				position: absolute;
+				left: 72px;
+				right: 72px;
+				top: 54px;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				font-family: var(--mono);
+				font-size: 15px;
+				color: var(--muted);
+				letter-spacing: 0;
+				z-index: 20;
+				opacity: var(--top-opacity, 1);
+			}
+
+			.logo-dot {
+				display: inline-flex;
+				align-items: center;
+				gap: 12px;
+				color: var(--ink);
+				font-family: var(--sans);
+				font-weight: 760;
+				font-size: 20px;
+			}
+
+			.logo-dot img {
+				width: 34px;
+				height: 34px;
+				border-radius: 9px;
+				display: block;
+			}
+
+			.origin {
+				position: absolute;
+				left: 120px;
+				top: 180px;
+				width: 1080px;
+				z-index: 5;
+				opacity: var(--origin-opacity, 0);
+				transform: translateY(var(--origin-y, 40px));
+			}
+
+			.kicker {
+				font-family: var(--mono);
+				font-size: 20px;
+				color: var(--muted);
+				margin-bottom: 42px;
+			}
+
+			.origin h1 {
+				margin: 0;
+				max-width: 1050px;
+				font-size: 116px;
+				line-height: 0.92;
+				font-weight: 860;
+				letter-spacing: 0;
+			}
+
+			.origin h1 span {
+				color: var(--pink);
+			}
+
+			.origin .note {
+				margin-top: 42px;
+				font-size: 34px;
+				color: #4b4741;
+				font-weight: 620;
+			}
+
+			.problems {
+				position: absolute;
+				inset: 0;
+				z-index: 6;
+				opacity: var(--problems-opacity, 0);
+			}
+
+			.problem-line {
+				position: absolute;
+				left: 116px;
+				font-size: 104px;
+				line-height: 1;
+				font-weight: 870;
+				letter-spacing: 0;
+				transform: translateX(var(--x, 0)) translateY(var(--y, 0));
+				opacity: var(--o, 0);
+				white-space: nowrap;
+			}
+
+			.problem-line:nth-child(1) {
+				top: 224px;
+			}
+
+			.problem-line:nth-child(2) {
+				top: 390px;
+			}
+
+			.problem-line:nth-child(3) {
+				top: 556px;
+			}
+
+			.problem-line::after {
+				position: absolute;
+				left: -8px;
+				right: -10px;
+				top: 52%;
+				height: 9px;
+				content: "";
+				background: var(--pink);
+				transform-origin: left center;
+				transform: scaleX(var(--strike, 0));
+			}
+
+			.problem-meta {
+				position: absolute;
+				right: 116px;
+				top: 272px;
+				width: 460px;
+				font-family: var(--mono);
+				font-size: 19px;
+				line-height: 1.9;
+				color: var(--muted);
+				border-left: 1px solid var(--hair);
+				padding-left: 32px;
+				opacity: var(--meta-opacity, 0);
+				transform: translateX(var(--meta-x, 24px));
+			}
+
+			.rebuilt {
+				position: absolute;
+				inset: 0;
+				z-index: 8;
+				display: grid;
+				place-items: center;
+				opacity: var(--rebuilt-opacity, 0);
+			}
+
+			.rebuilt-word {
+				position: relative;
+				font-size: 226px;
+				line-height: 0.8;
+				font-weight: 900;
+				letter-spacing: 0;
+				transform: translateY(var(--rebuilt-y, 0)) scale(var(--rebuilt-scale, 1));
+				filter: blur(var(--rebuilt-blur, 0));
+			}
+
+			.rebuilt-word::before,
+			.rebuilt-word::after {
+				position: absolute;
+				content: "";
+				left: 50%;
+				width: 1800px;
+				height: 2px;
+				background: var(--ink);
+				transform: translateX(-50%) scaleX(var(--rebuilt-rule, 0));
+			}
+
+			.rebuilt-word::before {
+				top: -72px;
+			}
+
+			.rebuilt-word::after {
+				bottom: -76px;
+			}
+
+			.rebuilt-sub {
+				position: absolute;
+				left: 0;
+				right: 0;
+				top: 712px;
+				text-align: center;
+				font-size: 34px;
+				font-weight: 650;
+				color: #4d4943;
+				opacity: var(--rebuilt-sub-opacity, 0);
+				transform: translateY(var(--rebuilt-sub-y, 20px));
+			}
+
+			.architecture {
+				position: absolute;
+				inset: 0;
+				z-index: 9;
+				opacity: var(--arch-opacity, 0);
+			}
+
+			.arch-title {
+				position: absolute;
+				left: 120px;
+				top: 126px;
+				font-size: 58px;
+				line-height: 1;
+				font-weight: 850;
+				letter-spacing: 0;
+			}
+
+			.arch-title span {
+				color: var(--pink);
+			}
+
+			.stack {
+				position: absolute;
+				left: 120px;
+				top: 260px;
+				width: 1180px;
+			}
+
+			.block {
+				position: relative;
+				height: 112px;
+				margin-bottom: 22px;
+				border: 2px solid var(--ink);
+				background: rgba(247, 244, 238, 0.94);
+				display: grid;
+				grid-template-columns: 70px 1fr auto;
+				align-items: center;
+				padding: 0 34px;
+				box-shadow: 12px 12px 0 rgba(16, 16, 16, 0.08);
+				transform: translateX(var(--block-x, 160px)) translateY(var(--block-y, 0)) scale(var(--block-scale, 0.98));
+				opacity: var(--block-o, 0);
+			}
+
+			.block-index {
+				font-family: var(--mono);
+				font-size: 21px;
+				color: var(--pink);
+				font-weight: 800;
+			}
+
+			.block-main {
+				font-size: 44px;
+				font-weight: 840;
+				letter-spacing: 0;
+			}
+
+			.block-tag {
+				font-family: var(--mono);
+				font-size: 20px;
+				color: var(--muted);
+			}
+
+			.arch-side {
+				position: absolute;
+				right: 120px;
+				top: 302px;
+				width: 370px;
+				font-family: var(--mono);
+				color: #5d5951;
+				font-size: 20px;
+				line-height: 1.9;
+				opacity: var(--side-o, 0);
+				transform: translateX(var(--side-x, 24px));
+			}
+
+			.arch-side strong {
+				display: block;
+				color: var(--ink);
+				font-family: var(--sans);
+				font-size: 42px;
+				line-height: 1.05;
+				margin-bottom: 24px;
+			}
+
+			.payoff {
+				position: absolute;
+				inset: 0;
+				z-index: 12;
+				display: grid;
+				place-items: center;
+				text-align: center;
+				background: var(--paper);
+				opacity: var(--payoff-o, 0);
+				transform: scale(var(--payoff-scale, 1.02));
+			}
+
+			.payoff img {
+				width: 118px;
+				height: 118px;
+				border-radius: 28px;
+				margin-bottom: 34px;
+				box-shadow: 0 26px 80px rgba(16, 16, 16, 0.12);
+			}
+
+			.payoff h1 {
+				margin: 0;
+				font-size: 122px;
+				line-height: 0.9;
+				font-weight: 900;
+				letter-spacing: 0;
+			}
+
+			.payoff p {
+				margin: 32px 0 0;
+				font-size: 42px;
+				line-height: 1.15;
+				font-weight: 720;
+				color: #38342f;
+			}
+
+			.payoff .cta {
+				display: inline-flex;
+				margin-top: 42px;
+				padding: 15px 20px;
+				border: 1px solid var(--hair);
+				font-family: var(--mono);
+				font-size: 18px;
+				color: var(--muted);
+			}
+
+			.flash {
+				position: absolute;
+				inset: 0;
+				background: var(--ink);
+				z-index: 30;
+				opacity: var(--flash-o, 0);
+				pointer-events: none;
+			}
+
+			.watermark {
+				position: absolute;
+				right: 34px;
+				bottom: 30px;
+				z-index: 40;
+				font-family: var(--mono);
+				font-size: 12px;
+				letter-spacing: 0.12em;
+				color: rgba(16, 16, 16, 0.35);
+				opacity: var(--watermark-o, 1);
+			}
+		</style>
+	</head>
+	<body>
+		<div class="stage" id="stage">
+			<div class="topline" id="topline">
+				<div class="logo-dot"><img src="../../public/likelysnap.png" alt="" />LikelySnap</div>
+				<div>基于 OpenScreen 1.5.0 · 为长录制重做</div>
+			</div>
+
+			<section class="origin" id="origin">
+				<div class="kicker">BASED ON OPENSCREEN 1.5.0</div>
+				<h1>不是换皮。<br /><span>是底层重做。</span></h1>
+				<div class="note">为了让长录制真的能剪。</div>
+			</section>
+
+			<section class="problems" id="problems">
+				<div class="problem-line" id="p1">录久了，怕炸</div>
+				<div class="problem-line" id="p2">打开项目，干等</div>
+				<div class="problem-line" id="p3">导出视频，吃满机器</div>
+				<div class="problem-meta" id="problemMeta">
+					短录制还行。<br />
+					长录制才是真考验。<br />
+					所以我们把底层重做了一遍。
+				</div>
+			</section>
+
+			<section class="rebuilt" id="rebuilt">
+				<div>
+					<div class="rebuilt-word" id="rebuiltWord">底层重做</div>
+					<div class="rebuilt-sub" id="rebuiltSub">从录制、打开，到导出</div>
+				</div>
+			</section>
+
+			<section class="architecture" id="architecture">
+				<div class="arch-title">升级后，普通人只会感觉：</div>
+				<div class="stack">
+					<div class="block" id="b1">
+						<div class="block-index">01</div>
+						<div class="block-main">长录制不再直接炸</div>
+						<div class="block-tag">屏幕 · 麦克风 · 系统音 · 摄像头</div>
+					</div>
+					<div class="block" id="b2">
+						<div class="block-index">02</div>
+						<div class="block-main">打开项目还能剪</div>
+						<div class="block-tag">先能操作，再后台准备</div>
+					</div>
+					<div class="block" id="b3">
+						<div class="block-index">03</div>
+						<div class="block-main">声音 / 摄像头 / 鼠标对得上</div>
+						<div class="block-tag">Zoom 也知道鼠标在哪里</div>
+					</div>
+					<div class="block" id="b4">
+						<div class="block-index">04</div>
+						<div class="block-main">导出不再吃爆内存</div>
+						<div class="block-tag">边处理，边写文件</div>
+					</div>
+				</div>
+				<div class="arch-side" id="archSide">
+					<strong>这才是大升级。</strong>
+					不是换个名字，不是换个 Logo。LikelySnap 重做的是你录久了才会发现的那些底层问题。
+				</div>
+			</section>
+
+			<section class="payoff" id="payoff">
+				<div>
+					<img src="../../public/likelysnap.png" alt="" />
+					<h1>LikelySnap 1.0</h1>
+					<p>长录制，也能剪。</p>
+					<div class="cta">github.com/Likely7/LikelySnpa</div>
+				</div>
+			</section>
+
+			<div class="flash" id="flash"></div>
+			<div class="watermark" id="watermark">Created by Huashu-Design</div>
+		</div>
+
+		<script>
+			const DURATION = 15;
+			const stage = document.getElementById("stage");
+			const refs = {
+				topline: document.getElementById("topline"),
+				origin: document.getElementById("origin"),
+				problems: document.getElementById("problems"),
+				p1: document.getElementById("p1"),
+				p2: document.getElementById("p2"),
+				p3: document.getElementById("p3"),
+				problemMeta: document.getElementById("problemMeta"),
+				rebuilt: document.getElementById("rebuilt"),
+				rebuiltWord: document.getElementById("rebuiltWord"),
+				rebuiltSub: document.getElementById("rebuiltSub"),
+				architecture: document.getElementById("architecture"),
+				blocks: [1, 2, 3, 4].map((n) => document.getElementById(`b${n}`)),
+				archSide: document.getElementById("archSide"),
+				payoff: document.getElementById("payoff"),
+				flash: document.getElementById("flash"),
+				watermark: document.getElementById("watermark"),
+			};
+
+			const clamp = (v, min = 0, max = 1) => Math.min(max, Math.max(min, v));
+			const mix = (a, b, p) => a + (b - a) * p;
+			const between = (t, a, b) => clamp((t - a) / (b - a));
+			const expoOut = (p) => (p >= 1 ? 1 : 1 - Math.pow(2, -10 * clamp(p)));
+			const easeIn = (p) => clamp(p) * clamp(p);
+			const easeInOut = (p) => {
+				const x = clamp(p);
+				return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+			};
+			const overshoot = (p) => {
+				const x = clamp(p) - 1;
+				return 1 + 2.70158 * x * x * x + 1.70158 * x * x;
+			};
+
+			function set(el, values) {
+				for (const [key, value] of Object.entries(values)) {
+					el.style.setProperty(key, String(value));
+				}
+			}
+
+			function renderProblem(el, time, start, offset) {
+				const enter = expoOut(between(time, start, start + 0.45));
+				const strike = expoOut(between(time, start + 0.72, start + 1.0));
+				const exit = easeIn(between(time, 5.05, 5.42));
+				set(el, {
+					"--o": (enter * (1 - exit)).toFixed(3),
+					"--x": `${mix(-80, 0, enter) - exit * 120}px`,
+					"--y": `${offset + exit * -18}px`,
+					"--strike": strike.toFixed(3),
+				});
+			}
+
+			function render(t) {
+				const time = clamp(t, 0, DURATION);
+
+				const originIn = expoOut(between(time, 0.12, 0.88));
+				const originOut = easeIn(between(time, 2.05, 2.42));
+				set(refs.origin, {
+					"--origin-opacity": (originIn * (1 - originOut)).toFixed(3),
+					"--origin-y": `${mix(52, 0, originIn) - originOut * 54}px`,
+				});
+
+				const problemsIn = between(time, 2.12, 2.34);
+				const problemsOut = between(time, 5.05, 5.42);
+				set(refs.problems, {
+					"--problems-opacity": (problemsIn * (1 - problemsOut)).toFixed(3),
+				});
+				renderProblem(refs.p1, time, 2.28, 0);
+				renderProblem(refs.p2, time, 2.92, 0);
+				renderProblem(refs.p3, time, 3.56, 0);
+				const metaIn = expoOut(between(time, 3.78, 4.38));
+				set(refs.problemMeta, {
+					"--meta-opacity": (metaIn * (1 - problemsOut)).toFixed(3),
+					"--meta-x": `${mix(34, 0, metaIn)}px`,
+				});
+
+				const rebuiltIn = expoOut(between(time, 5.35, 5.98));
+				const rebuiltHold = 1 - easeIn(between(time, 8.02, 8.42));
+				const rebuiltBoom = overshoot(between(time, 5.35, 6.22));
+				set(refs.rebuilt, {
+					"--rebuilt-opacity": (rebuiltIn * rebuiltHold).toFixed(3),
+				});
+				set(refs.rebuiltWord, {
+					"--rebuilt-y": `${mix(90, 0, rebuiltBoom)}px`,
+					"--rebuilt-scale": mix(0.82, 1, rebuiltBoom).toFixed(3),
+					"--rebuilt-blur": `${mix(10, 0, rebuiltIn)}px`,
+					"--rebuilt-rule": expoOut(between(time, 5.82, 6.55)).toFixed(3),
+				});
+				const rebuiltSub = expoOut(between(time, 6.38, 6.95)) * (1 - easeIn(between(time, 8.0, 8.36)));
+				set(refs.rebuiltSub, {
+					"--rebuilt-sub-opacity": rebuiltSub.toFixed(3),
+					"--rebuilt-sub-y": `${mix(24, 0, rebuiltSub)}px`,
+				});
+
+				const archIn = expoOut(between(time, 8.2, 8.74));
+				const archOut = easeIn(between(time, 12.28, 12.88));
+				set(refs.architecture, {
+					"--arch-opacity": (archIn * (1 - archOut)).toFixed(3),
+				});
+				refs.blocks.forEach((block, index) => {
+					const start = 8.52 + index * 0.36;
+					const enter = overshoot(between(time, start, start + 0.62));
+					const leave = easeIn(between(time, 12.2 + index * 0.04, 12.78 + index * 0.04));
+					set(block, {
+						"--block-o": (clamp(enter) * (1 - leave)).toFixed(3),
+						"--block-x": `${mix(190, 0, enter) - leave * 80}px`,
+						"--block-y": `${mix(22, 0, enter) - leave * 16}px`,
+						"--block-scale": mix(0.965, 1, enter).toFixed(3),
+					});
+				});
+				const sideIn = expoOut(between(time, 10.15, 10.78));
+				set(refs.archSide, {
+					"--side-o": (sideIn * (1 - archOut)).toFixed(3),
+					"--side-x": `${mix(36, 0, sideIn)}px`,
+				});
+
+				const payoffIn = expoOut(between(time, 12.72, 13.38));
+				set(refs.payoff, {
+					"--payoff-o": payoffIn.toFixed(3),
+					"--payoff-scale": mix(1.035, 1, payoffIn).toFixed(3),
+				});
+
+				const flash1 = Math.max(0, 1 - Math.abs(time - 5.33) / 0.08);
+				const flash2 = Math.max(0, 1 - Math.abs(time - 12.68) / 0.08);
+				set(refs.flash, {
+					"--flash-o": (Math.max(flash1, flash2) * 0.9).toFixed(3),
+				});
+				set(refs.watermark, {
+					"--watermark-o": time > 13.2 ? 0.34 : 0.28,
+				});
+				set(refs.topline, {
+					"--top-opacity": (1 - payoffIn * 0.9).toFixed(3),
+				});
+			}
+
+			function fit() {
+				const scale = Math.min(window.innerWidth / 1920, window.innerHeight / 1080);
+				stage.style.transform = `scale(${scale})`;
+			}
+
+			let playing = false;
+			let time = 0;
+			let lastTick = null;
+			const frozen = new URLSearchParams(window.location.search).get("t");
+			if (frozen !== null) {
+				time = Number(frozen);
+			} else {
+				playing = !window.__seekRender;
+			}
+
+			window.__seek = (nextTime) => {
+				time = clamp(Number(nextTime) || 0, 0, DURATION);
+				render(time);
+			};
+
+			function tick(now) {
+				if (lastTick === null) {
+					lastTick = now;
+					render(time);
+					window.__ready = true;
+					requestAnimationFrame(tick);
+					return;
+				}
+				const dt = (now - lastTick) / 1000;
+				lastTick = now;
+				if (playing) {
+					time += dt;
+					if (time >= DURATION) {
+						time = window.__recording ? DURATION - 0.001 : 0;
+					}
+					render(time);
+				}
+				requestAnimationFrame(tick);
+			}
+
+			window.addEventListener("resize", fit);
+			document.fonts.ready.then(() => {
+				fit();
+				render(time);
+				requestAnimationFrame(tick);
+			});
+		</script>
+	</body>
+</html>
