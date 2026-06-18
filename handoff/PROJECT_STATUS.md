@@ -5,7 +5,7 @@
 - Local path: `/Users/macbook/Desktop/LikelySnap/openscreen`
 - GitHub remote: `https://github.com/Likely7/LikelySnpa.git`
 - Checked commit before local handoff docs: `71622a2`
-- Current package version: `1.0.0`
+- Current package version: `1.1.0`
 - Base version: OpenScreen `1.5.0`
 - License: MIT
 - Current product name: `LikelySnap`
@@ -77,6 +77,7 @@
 - If `manifest.json` is missing, package open/recovery can rebuild a recoverable manifest from package files.
 - macOS build metadata now registers `.likelysnap` as a document package type.
 - macOS ARM64 1.0.0 DMG was built with `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --arm64 --config.npmRebuild=false` and copied to `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.0.0-Installer.dmg`. It is ARM64-only, ad-hoc signed, and not notarized.
+- macOS ARM64 1.1.0 DMG was built with `CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac dmg --arm64 --config.npmRebuild=false` and copied to `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.1.0-Installer.dmg`. It is ARM64-only, ad-hoc signed, not notarized, and keeps bundled offline auto captions. The 1.1.0 DMG is about `304M`; the packaged `.app` is about `784M`.
 - Edited MP4 export now uses `FfmpegVideoExporter` from `src/components/video-editor/VideoEditor.tsx` as the primary MP4 path. The renderer still composites each frame, but final H.264/AAC encode, muxing, and output writing are handled by the main-process FFmpeg service.
 - The FFmpeg MP4 path streams RGBA frames over IPC into FFmpeg `stdin`, writes a temp `.mp4`, and renames it to the final export path after FFmpeg exits successfully. The primary MP4 path no longer creates a final full-export Blob before saving.
 - `@ffmpeg-installer/ffmpeg` is now a runtime dependency. `LIKELYSNAP_FFMPEG_PATH` or `FFMPEG_PATH` can override the bundled/system FFmpeg resolution.

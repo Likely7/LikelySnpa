@@ -1,6 +1,22 @@
 # Changelog
 
-## 1.0.0 - Current Development Baseline
+## 1.1.0 - ARM64 Package Cleanup Release
+
+This release keeps the long-recording architecture, FFmpeg MP4 export, and bundled offline auto captions while trimming the safest packaging weight.
+
+### Changed
+
+- Replaced the launch surface's remaining `react-icons` usage with the existing `lucide-react` icon set.
+- Removed unused public/demo assets that were copied into packaged renderer output.
+- Removed obsolete Nix packaging files from the current macOS/Windows mainline.
+- Removed unused production dependencies while keeping build-only typing and Tailwind animation support in development dependencies.
+
+### Preserved
+
+- Bundled offline auto captions remain included.
+- macOS ScreenCaptureKit recording, Windows x64 WGC recording, FFmpeg MP4 export, editable cursor, Follow Mouse zoom, webcam sidecars, and `.likelysnap` packages remain on the current architecture.
+
+## 1.0.0 - Development Baseline
 
 This baseline is based on OpenScreen 1.5.0 and has been rebuilt as LikelySnap.
 

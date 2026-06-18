@@ -131,6 +131,7 @@
 - Removed unused public/demo assets that were copied into `dist`/`app.asar`: `public/openscreen.png`, `public/preview3.png`, `public/preview4.png`, `public/sample.png`, `public/demo.png`, and `public/vite.svg`.
 - Removed old Nix packaging files (`flake.nix`, `flake.lock`, `nix/`) from the LikelySnap mainline because current deliverables are macOS/Windows packages.
 - Updated `scripts/generate-icons.mjs` so future icon generation only writes `public/likelysnap.png` plus platform icons.
+- Set the package/app version to `1.1.0` and built an ARM64-only macOS DMG after the first safe cleanup pass. Output: `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.1.0-Installer.dmg`. Verification: `lipo -archs` returns `arm64`; `Info.plist` reports `1.1.0`; packaged `.app` is about `784M`, down from the previous about `869M`, with bundled offline auto captions retained.
 - `src/components/video-editor/timeline/BackgroundWaveform.tsx`
 - `src/components/video-editor/timeline/TimelineEditor.tsx`
 - `src/components/launch/AppSettingsDialog.tsx`
