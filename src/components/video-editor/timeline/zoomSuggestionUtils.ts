@@ -3,6 +3,10 @@ import type { CursorTelemetryPoint, ZoomFocus } from "../types";
 export const MIN_DWELL_DURATION_MS = 1000;
 export const MAX_DWELL_DURATION_MS = 2600;
 export const DWELL_MOVE_THRESHOLD = 0.02;
+export const DWELL_REGION_RADIUS = 0.035;
+export const DWELL_REGION_GRACE_MS = 500;
+export const DWELL_MAX_SAMPLE_GAP_MS = 1200;
+export const MIN_DWELL_SAMPLE_COUNT = 3;
 export const MIN_DRAG_FOLLOW_DURATION_MS = 450;
 export const MIN_AUTO_ZOOM_DURATION_MS = 1200;
 export const MAX_AUTO_ZOOM_DURATION_MS = 6_000;
@@ -10,7 +14,7 @@ export const LONG_DWELL_DURATION_MS = 8_000;
 export const MAX_LONG_AUTO_ZOOM_DURATION_MS = 45_000;
 export const AUTO_ZOOM_CONTEXT_PADDING_MS = 600;
 export const DWELL_MERGE_GAP_MS = 800;
-export const AUTO_ZOOM_SUGGESTION_MERGE_GAP_MS = 3000;
+export const AUTO_ZOOM_SUGGESTION_MERGE_GAP_MS = 1500;
 export const DWELL_MERGE_DISTANCE = 0.04;
 export const CLICK_STAY_WINDOW_MS = 850;
 export const CLICK_STAY_DISTANCE = 0.045;
@@ -70,9 +74,13 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 
 	const dwellCandidates: ZoomDwellCandidate[] = [];
 	let runStart = 0;
+	let regionCenter = { cx: samples[0].cx, cy: samples[0].cy };
+	let regionSamples = 1;
+	let pendingOutsideStart: number | null = null;
+	let pendingOutsideIndex: number | null = null;
 
 	const pushRunIfDwell = (startIndex: number, endIndexExclusive: number) => {
-		if (endIndexExclusive - startIndex < 2) {
+		if (endIndexExclusive - startIndex < MIN_DWELL_SAMPLE_COUNT) {
 			return;
 		}
 
@@ -101,16 +109,47 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 	};
 
 	for (let index = 1; index < samples.length; index += 1) {
-		const prev = samples[index - 1];
-		const curr = samples[index];
-		const distance = Math.hypot(curr.cx - prev.cx, curr.cy - prev.cy);
-
-		if (distance > DWELL_MOVE_THRESHOLD) {
-			pushRunIfDwell(runStart, index);
+		if (samples[index].timeMs - samples[index - 1].timeMs > DWELL_MAX_SAMPLE_GAP_MS) {
+			pushRunIfDwell(runStart, pendingOutsideIndex ?? index);
 			runStart = index;
+			regionCenter = { cx: samples[runStart].cx, cy: samples[runStart].cy };
+			regionSamples = 1;
+			pendingOutsideStart = null;
+			pendingOutsideIndex = null;
+			continue;
+		}
+
+		const curr = samples[index];
+		const distanceFromRegion = Math.hypot(curr.cx - regionCenter.cx, curr.cy - regionCenter.cy);
+
+		if (distanceFromRegion <= DWELL_REGION_RADIUS) {
+			pendingOutsideStart = null;
+			pendingOutsideIndex = null;
+			regionSamples += 1;
+			regionCenter = {
+				cx: regionCenter.cx + (curr.cx - regionCenter.cx) / regionSamples,
+				cy: regionCenter.cy + (curr.cy - regionCenter.cy) / regionSamples,
+			};
+			continue;
+		}
+
+		if (pendingOutsideStart === null) {
+			pendingOutsideStart = curr.timeMs;
+			pendingOutsideIndex = index;
+			continue;
+		}
+
+		if (curr.timeMs - pendingOutsideStart > DWELL_REGION_GRACE_MS) {
+			const endIndex = pendingOutsideIndex ?? index;
+			pushRunIfDwell(runStart, endIndex);
+			runStart = endIndex;
+			regionCenter = { cx: samples[runStart].cx, cy: samples[runStart].cy };
+			regionSamples = 1;
+			pendingOutsideStart = null;
+			pendingOutsideIndex = null;
 		}
 	}
-	pushRunIfDwell(runStart, samples.length);
+	pushRunIfDwell(runStart, pendingOutsideIndex ?? samples.length);
 
 	const mergedDwellCandidates = mergeAdjacentDwellCandidates(dwellCandidates);
 	const interactionCandidates = detectInteractionCandidates(samples, mergedDwellCandidates);
@@ -459,6 +498,10 @@ function buildSuggestionSpan(
 			: candidate.kind === "press"
 				? clampDuration(rawDuration + AUTO_ZOOM_CONTEXT_PADDING_MS * 2, totalMs)
 				: defaultDuration;
+	if (candidate.kind === "long-dwell") {
+		const start = Math.max(0, candidate.span.start - AUTO_ZOOM_CONTEXT_PADDING_MS);
+		return { start, end: Math.min(totalMs, start + desiredDuration) };
+	}
 	const centeredStart = Math.round(candidate.centerTimeMs - desiredDuration / 2);
 	const start = Math.max(0, Math.min(centeredStart, totalMs - desiredDuration));
 	return { start, end: start + desiredDuration };

@@ -59,7 +59,8 @@
 - Cursor telemetry is separate from video bytes and is required for auto zoom and Follow Mouse zoom.
 - Auto zoom suggestions now separate span selection from camera-follow behavior with three per-zoom modes: `Off`, `Smart Follow Mouse`, and `Always Follow Mouse`.
 - Smart Follow Mouse is implemented as the default generated-zoom/global behavior: stable while the cursor remains inside a scale-aware safe area, eased follow only near the visible zoom boundary. Always Follow Mouse remains available but now uses slower damped motion instead of tightly locking to every cursor sample.
-- Auto zoom suggestion duration and candidate selection are rebalanced against upstream OpenScreen and Screen Studio behavior: isolated single clicks no longer trigger zooms by themselves, repeated click/double-click/press/drag/dwell intent matters, click-and-immediately-leave actions are rejected, accepted suggestions are returned in timeline order, long same-area dwell creates a bounded long explanation zoom instead of repeated short jumps, short hover zooms now confirm after a `1000ms` window, and nearby zoom suggestions within `3000ms` can merge into one stable span.
+- Auto zoom suggestion duration and candidate selection are rebalanced against upstream OpenScreen and Screen Studio behavior: isolated single clicks no longer trigger zooms by themselves, repeated click/double-click/press/drag/dwell intent matters, click-and-immediately-leave actions are rejected, accepted suggestions are returned in timeline order, long same-area dwell creates a bounded long explanation zoom instead of repeated short jumps, short hover zooms now confirm after a `1000ms` window, nearby zoom suggestions within `1500ms` can merge into one stable span, and dwell detection now uses a small-region model so normal hand jitter inside a tight explanation area still counts as one dwell.
+- Long-dwell auto zoom spans are now anchored to the beginning of the detected dwell plus context padding instead of being centered around the dwell midpoint. This prevents long explanations from appearing to start only after the `8000ms` long-dwell threshold has elapsed.
 - Follow Mouse remains stored internally as `focusMode` for project compatibility, but user-facing UI and docs call it Follow Mouse / 跟随鼠标. Existing `focusMode: auto` projects should continue to open as Always Follow Mouse unless explicitly migrated by user action.
 - macOS native window recordings now use ScreenCaptureKit-reported window capture bounds for editable cursor normalization, avoiding display-bounds offset in Follow Mouse zoom.
 - User retest after this fix reported the Follow Mouse behavior is close enough to continue; treat Follow Mouse zoom as implemented unless a new concrete offset sample appears.
@@ -171,6 +172,11 @@
 - `npx tsc --noEmit` passes after the macOS native webcam finalize fix.
 - `npm test -- electron/ipc/recordingPackage.test.ts electron/ipc/recordingStream.test.ts src/lib/nativeMacRecording.test.ts src/lib/nativeWindowsRecording.test.ts` passes after the macOS native webcam finalize fix.
 - `npm run build-vite` passes after the macOS native webcam finalize fix.
+- Auto Zoom dwell-region refinement verification:
+  - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts` passes with 14 tests.
+  - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts` passes with 20 tests.
+  - `npx tsc --noEmit` passes.
+  - `npm run build-vite` passes.
 - `npx tsc --noEmit` passes after the package-local `cursor-preview.json` editor-open fix.
 - `npx vitest run electron/ipc/recordingPackage.test.ts src/lib/cursor/nativeCursor.test.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts` passes after the package-local `cursor-preview.json` editor-open fix. The run still prints the known jsdom `HTMLCanvasElement.getContext()` warning, but all 23 tests pass.
 - Manual macOS reopen test after this fix hit `[editor-open] cursor preview cache hit` in 13ms for `cursor-preview.json`, confirming the preview index path is live on the current app.

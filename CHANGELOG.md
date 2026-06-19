@@ -5,6 +5,7 @@
 ### Fixed
 
 - Stabilized macOS native webcam MP4 sidecar recording by finalizing webcam before the native stop result and appending camera frames through `AVAssetWriterInputPixelBufferAdaptor`. A short real-device retest produced a valid package-local `webcam.mp4` with no `.sb-*` side-band files.
+- Refined Auto Zoom dwell detection: nearby generated zooms now merge only within `1500ms`, long explanation zooms start at dwell onset, and natural small-area mouse movement still counts as one dwell instead of requiring the cursor to be perfectly still.
 
 ## 1.1.0 - ARM64 Package Cleanup Release
 

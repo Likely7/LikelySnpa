@@ -88,10 +88,11 @@
   - Repeated clicks and double-clicks still create short intentional zooms.
   - Press/drag detection still requires at least `450ms` of held-button overlap so slow normal clicks are less likely to become Smart Follow zooms.
   - Stable same-area cursor dwell longer than `8s` creates a long explanation zoom span based on the actual dwell duration plus context padding, capped at `45s`.
-  - Nearby auto zoom suggestions within `3000ms` are merged into one longer span so the follow-follow camera motion can carry the scene through the gap instead of popping out and back in.
+  - Nearby auto zoom suggestions within `1500ms` are merged into one longer span so the follow-follow camera motion can carry through very short gaps without over-merging separate explanation points.
   - This specifically covers article/script narration where the cursor rests on a paragraph for tens of seconds; the generated zoom should stay stable instead of jumping in and out every fixed short duration.
 82. Fixed the macOS native webcam stop/finalize race that could leave `webcam.mp4` at 0 bytes with AVAssetWriter `.sb-*` side-band files. The ScreenCaptureKit helper now stops/finalizes webcam before emitting `recording-stopped`, reports `webcamPath` only when the webcam writer completed with samples, bytes, and a readable video track, and preserves failed side-band artifacts for diagnostics instead of deleting them.
 83. Fixed the remaining macOS native webcam writer instability by changing webcam frame writing from retimed camera sample-buffer appends to `AVAssetWriterInputPixelBufferAdaptor` pixel-buffer appends. The user retested with `/Users/macbook/Movies/LikelySnap/recording-2026-06-19-20-24-41-248.likelysnap`: package has a valid `webcam.mp4` (`49,666,110` bytes), `manifest.json` includes `media.webcamVideoPath`, `ffprobe` reads H.264 1280x720 / ~196.99s / 5893 frames, and no `.sb-*` side-band files are present.
+84. Refined Auto Zoom dwell detection after Windows testing feedback: final suggestion merge gap is now `1500ms`; dwell detection uses a small-region model (`0.035` normalized radius, `500ms` grace, `1200ms` max sample gap, minimum 3 samples) so normal hand jitter inside a tight explanation area still counts as one dwell; long-dwell generated spans now anchor to the dwell start plus context padding instead of centering and appearing late.
 
 ## Implemented This Pass
 
@@ -316,12 +317,14 @@ Continue validation and hardening from the current staged editor-open + FFmpeg e
   - removed ordinary single-click standalone suggestions;
   - added a separate long-dwell candidate so a 30 second article explanation can become one stable long zoom instead of one short auto zoom;
   - short hover zooms now wait for a `1000ms` confirmation window before appearing;
-  - nearby suggestions within `3000ms` merge into one longer span so narration can carry through the gap instead of popping in and out.
+  - nearby suggestions within `1500ms` merge into one longer span so narration can carry through short gaps without over-merging unrelated explanation points.
+  - dwell detection now uses a small-region model rather than requiring the cursor to be perfectly still, and long-dwell spans start at the dwell onset plus context padding instead of being centered around the dwell midpoint.
 - Preserved preview/export consistency by updating both `VideoPlayback` and `FrameRenderer`.
 - Verification passed:
   - `./node_modules/.bin/tsc --noEmit --pretty false`
   - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/editorDefaults.test.ts`
   - `npx biome check src/components/video-editor/SettingsPanel.tsx src/components/video-editor/VideoEditor.tsx src/components/video-editor/VideoPlayback.tsx src/components/video-editor/projectPersistence.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/timeline/TimelineEditor.tsx src/components/video-editor/timeline/zoomSuggestionUtils.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/constants.ts src/components/video-editor/videoPlayback/cursorFollowUtils.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/lib/exporter/frameRenderer.ts src/hooks/useEditorHistory.ts src/i18n/locales/en/settings.json src/i18n/locales/en/timeline.json src/i18n/locales/zh-CN/settings.json src/i18n/locales/zh-CN/timeline.json`
+  - latest dwell-region follow-up: `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts`, `npx tsc --noEmit`, and `npm run build-vite` pass.
   - `npm run build-vite`
 - Additional follow-up verification passed:
   - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts`
