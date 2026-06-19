@@ -13,6 +13,7 @@
       "ext": "likelysnap",
       "name": "LikelySnap Recording",
       "description": "LikelySnap recording package or project",
+      "icon": "icons/icons/mac/icon.icns",
       "role": "Editor",
       "isPackage": true
     }
@@ -52,6 +53,10 @@
     {
       "from": "caption-assets",
       "to": "caption-assets"
+    },
+    {
+      "from": "public/likelysnap.png",
+      "to": "likelysnap.png"
     }
   ],
 

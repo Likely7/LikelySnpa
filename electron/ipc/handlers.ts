@@ -259,6 +259,84 @@ async function loadAppSettings(): Promise<AppSettings> {
 	};
 }
 
+async function commandExists(command: string): Promise<boolean> {
+	try {
+		await fs.access(command, fsConstants.X_OK);
+		return true;
+	} catch {
+		return false;
+	}
+}
+
+async function runCommand(command: string, args: string[]): Promise<void> {
+	await new Promise<void>((resolve, reject) => {
+		const child = spawn(command, args, { stdio: "ignore" });
+		child.once("error", reject);
+		child.once("exit", (code) => {
+			if (code === 0) {
+				resolve();
+				return;
+			}
+			reject(new Error(`${command} exited with code ${code}`));
+		});
+	});
+}
+
+async function applyMacRecordingPackageIcon(packageDir: string): Promise<void> {
+	if (process.platform !== "darwin") {
+		return;
+	}
+
+	const iconSourcePath = await findMacRecordingPackageIconSource();
+	if (!iconSourcePath) {
+		console.warn("[recording-package] icon source missing");
+		return;
+	}
+
+	const iconFilePath = path.join(packageDir, "Icon\r");
+	const sipsAvailable = await commandExists("/usr/bin/sips");
+	const setFileAvailable = await commandExists("/usr/bin/SetFile");
+	if (!sipsAvailable || !setFileAvailable) {
+		console.warn("[recording-package] macOS icon tools unavailable", {
+			sipsAvailable,
+			setFileAvailable,
+		});
+		return;
+	}
+
+	await runCommand("/usr/bin/sips", ["-i", iconSourcePath, "--out", iconFilePath]);
+	await runCommand("/usr/bin/SetFile", ["-a", "V", iconFilePath]);
+	await runCommand("/usr/bin/SetFile", ["-a", "C", packageDir]);
+}
+
+async function findMacRecordingPackageIconSource(): Promise<string | null> {
+	const appRoot = process.env.APP_ROOT ?? path.join(__dirname, "..");
+	const candidates = [
+		path.join(process.resourcesPath, "likelysnap.png"),
+		path.join(appRoot, "public", "likelysnap.png"),
+		path.join(appRoot, "dist", "likelysnap.png"),
+		path.join(appRoot, "icons", "icons", "png", "1024x1024.png"),
+	];
+
+	for (const candidate of candidates) {
+		const stats = await fs.stat(candidate).catch(() => null);
+		if (stats?.isFile()) {
+			return candidate;
+		}
+	}
+
+	return null;
+}
+
+async function ensureRecordingPackageDirectory(packageDir: string): Promise<void> {
+	await fs.mkdir(packageDir, { recursive: true });
+	try {
+		await applyMacRecordingPackageIcon(packageDir);
+	} catch (error) {
+		console.warn("[recording-package] failed to apply package icon:", error);
+	}
+}
+
 async function saveAppSettings(partial: Partial<AppSettings>): Promise<AppSettings> {
 	const current = await loadAppSettings();
 	const next: AppSettings = {
@@ -2744,7 +2822,7 @@ export function registerIpcHandlers(
 					outputPath,
 				});
 
-				await fs.mkdir(packagePaths.packageDir, { recursive: true });
+				await ensureRecordingPackageDirectory(packagePaths.packageDir);
 				await writeRecordingSessionManifest(
 					{
 						screenVideoPath: outputPath,
@@ -2921,7 +2999,7 @@ export function registerIpcHandlers(
 				outputPath,
 			});
 
-			await fs.mkdir(packagePaths.packageDir, { recursive: true });
+			await ensureRecordingPackageDirectory(packagePaths.packageDir);
 			await writeRecordingSessionManifest(
 				{
 					screenVideoPath: outputPath,
@@ -3650,7 +3728,7 @@ export function registerIpcHandlers(
 					await getWritableRecordingsDir(),
 					normalizedRecordingId,
 				);
-				await fs.mkdir(packagePaths.packageDir, { recursive: true });
+				await ensureRecordingPackageDirectory(packagePaths.packageDir);
 				await writeRecordingSessionManifest(
 					{
 						screenVideoPath: packagePaths.screenVideoPath,

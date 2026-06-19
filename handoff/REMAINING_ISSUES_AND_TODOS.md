@@ -56,7 +56,7 @@
 ## Validation Checklist
 
 1. Record 20 minutes on macOS and stop successfully.
-2. Confirm selected recording directory shows one `recording-<id>.likelysnap` package.
+2. Confirm selected recording directory shows one timestamped `recording-YYYY-MM-DD-HH-mm-ss-SSS.likelysnap` package with the LikelySnap Finder icon.
 3. Confirm package contains `screen.mp4`, optional native `webcam.mp4`, `cursor.json`, and `manifest.json`.
 4. Confirm raw source file plays in Finder/QuickTime with audio in sync.
 5. Confirm editor auto zoom suggestions still appear from cursor telemetry.

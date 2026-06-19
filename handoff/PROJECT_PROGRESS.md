@@ -83,12 +83,12 @@
 79. Implemented scale-aware Smart Follow Mouse in shared playback/export code. Smart Follow keeps the camera anchored while the cursor stays inside the zoom-scale-derived safe area, then eases the camera only when the cursor approaches the visible zoom boundary. Always Follow now uses slower damped motion so the cursor can lead and the picture catches up instead of shaking tightly.
 80. Rebalanced Auto Zoom candidate selection into an intent-scored model: double click, repeated click, press/drag, and meaningful dwell are favored; isolated single click is no longer a standalone trigger; click-and-immediately-leave is rejected; long dwell zoom duration is bounded; accepted suggestions are sorted back into timeline order.
 81. Tightened the Auto Zoom selector after real product-feel testing:
-  - `450ms` means `0.45s`, not `4.5s`.
+  - `1000ms` is now the short dwell confirmation window, so hover-based Zooms are confirmed later while still starting from the real dwell onset.
   - Ordinary single clicks are ignored because they catch too many app-close/button-click actions.
   - Repeated clicks and double-clicks still create short intentional zooms.
-  - Press/drag detection now requires at least `450ms` of held-button overlap so slow normal clicks are less likely to become Smart Follow zooms.
+  - Press/drag detection still requires at least `450ms` of held-button overlap so slow normal clicks are less likely to become Smart Follow zooms.
   - Stable same-area cursor dwell longer than `8s` creates a long explanation zoom span based on the actual dwell duration plus context padding, capped at `45s`.
-  - Dwell runs are bounded by a same-area radius guard, so slow cursor drift across a page is split/rejected instead of becoming one false long explanation zoom.
+  - Nearby auto zoom suggestions within `3000ms` are merged into one longer span so the follow-follow camera motion can carry the scene through the gap instead of popping out and back in.
   - This specifically covers article/script narration where the cursor rests on a paragraph for tens of seconds; the generated zoom should stay stable instead of jumping in and out every fixed short duration.
 
 ## Implemented This Pass
@@ -301,7 +301,8 @@ Continue validation and hardening from the current staged editor-open + FFmpeg e
   - raised held-button detection from `250ms` to `450ms`;
   - removed ordinary single-click standalone suggestions;
   - added a separate long-dwell candidate so a 30 second article explanation can become one stable long zoom instead of one short auto zoom;
-  - added a same-area dwell radius guard so slow cursor drift does not masquerade as long narration.
+  - short hover zooms now wait for a `1000ms` confirmation window before appearing;
+  - nearby suggestions within `3000ms` merge into one longer span so narration can carry through the gap instead of popping in and out.
 - Preserved preview/export consistency by updating both `VideoPlayback` and `FrameRenderer`.
 - Verification passed:
   - `./node_modules/.bin/tsc --noEmit --pretty false`

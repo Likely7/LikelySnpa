@@ -13,20 +13,29 @@ import {
 
 describe("recording package paths", () => {
 	it("builds canonical package paths for a recording id", () => {
-		const paths = getRecordingPackagePaths("/recordings", 123);
+		const paths = getRecordingPackagePaths(
+			"/recordings",
+			new Date(2026, 5, 19, 12, 34, 56, 789).getTime(),
+		);
 
-		expect(paths.packageDir).toBe(path.join("/recordings", "recording-123.likelysnap"));
+		expect(paths.packageDir).toBe(
+			path.join("/recordings", "recording-2026-06-19-12-34-56-789.likelysnap"),
+		);
 		expect(paths.screenVideoPath).toBe(
-			path.join("/recordings", "recording-123.likelysnap", "screen.mp4"),
+			path.join("/recordings", "recording-2026-06-19-12-34-56-789.likelysnap", "screen.mp4"),
 		);
 		expect(paths.webcamVideoPath).toBe(
-			path.join("/recordings", "recording-123.likelysnap", "webcam.mp4"),
+			path.join("/recordings", "recording-2026-06-19-12-34-56-789.likelysnap", "webcam.mp4"),
 		);
 		expect(paths.cursorTelemetryPath).toBe(
-			path.join("/recordings", "recording-123.likelysnap", "cursor.json"),
+			path.join("/recordings", "recording-2026-06-19-12-34-56-789.likelysnap", "cursor.json"),
 		);
 		expect(paths.cursorPreviewPath).toBe(
-			path.join("/recordings", "recording-123.likelysnap", "cursor-preview.json"),
+			path.join(
+				"/recordings",
+				"recording-2026-06-19-12-34-56-789.likelysnap",
+				"cursor-preview.json",
+			),
 		);
 	});
 

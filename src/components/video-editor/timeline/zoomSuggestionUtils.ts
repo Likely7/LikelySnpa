@@ -1,9 +1,8 @@
 import type { CursorTelemetryPoint, ZoomFocus } from "../types";
 
-export const MIN_DWELL_DURATION_MS = 450;
+export const MIN_DWELL_DURATION_MS = 1000;
 export const MAX_DWELL_DURATION_MS = 2600;
 export const DWELL_MOVE_THRESHOLD = 0.02;
-export const DWELL_AREA_THRESHOLD = 0.055;
 export const MIN_DRAG_FOLLOW_DURATION_MS = 450;
 export const MIN_AUTO_ZOOM_DURATION_MS = 1200;
 export const MAX_AUTO_ZOOM_DURATION_MS = 6_000;
@@ -11,6 +10,7 @@ export const LONG_DWELL_DURATION_MS = 8_000;
 export const MAX_LONG_AUTO_ZOOM_DURATION_MS = 45_000;
 export const AUTO_ZOOM_CONTEXT_PADDING_MS = 600;
 export const DWELL_MERGE_GAP_MS = 800;
+export const AUTO_ZOOM_SUGGESTION_MERGE_GAP_MS = 3000;
 export const DWELL_MERGE_DISTANCE = 0.04;
 export const CLICK_STAY_WINDOW_MS = 850;
 export const CLICK_STAY_DISTANCE = 0.045;
@@ -70,7 +70,6 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 
 	const dwellCandidates: ZoomDwellCandidate[] = [];
 	let runStart = 0;
-	let runAnchor = samples[0];
 
 	const pushRunIfDwell = (startIndex: number, endIndexExclusive: number) => {
 		if (endIndexExclusive - startIndex < 2) {
@@ -105,12 +104,10 @@ export function detectZoomDwellCandidates(samples: CursorTelemetryPoint[]): Zoom
 		const prev = samples[index - 1];
 		const curr = samples[index];
 		const distance = Math.hypot(curr.cx - prev.cx, curr.cy - prev.cy);
-		const distanceFromAnchor = Math.hypot(curr.cx - runAnchor.cx, curr.cy - runAnchor.cy);
 
-		if (distance > DWELL_MOVE_THRESHOLD || distanceFromAnchor > DWELL_AREA_THRESHOLD) {
+		if (distance > DWELL_MOVE_THRESHOLD) {
 			pushRunIfDwell(runStart, index);
 			runStart = index;
-			runAnchor = curr;
 		}
 	}
 	pushRunIfDwell(runStart, samples.length);
@@ -195,7 +192,71 @@ export function buildAutoZoomSuggestions(options: {
 		});
 	}
 
-	return suggestions.sort((a, b) => a.span.start - b.span.start);
+	const existingReservedSpans = existingRegions.map((region) => ({
+		start: region.startMs,
+		end: region.endMs,
+	}));
+	const mergedSuggestions = mergeNearbySuggestions(suggestions, existingReservedSpans, totalMs);
+
+	return mergedSuggestions.sort((a, b) => a.span.start - b.span.start);
+}
+
+function mergeNearbySuggestions(
+	suggestions: AutoZoomSuggestion[],
+	reservedSpans: { start: number; end: number }[],
+	totalMs: number,
+): AutoZoomSuggestion[] {
+	if (suggestions.length < 2) {
+		return suggestions;
+	}
+
+	const merged: AutoZoomSuggestion[] = [];
+
+	for (const suggestion of [...suggestions].sort((a, b) => a.span.start - b.span.start)) {
+		const previous = merged.at(-1);
+		if (!previous) {
+			merged.push(suggestion);
+			continue;
+		}
+
+		const gap = suggestion.span.start - previous.span.end;
+		if (gap > AUTO_ZOOM_SUGGESTION_MERGE_GAP_MS) {
+			merged.push(suggestion);
+			continue;
+		}
+
+		const mergedSpan = {
+			start: Math.max(0, Math.min(previous.span.start, totalMs)),
+			end: Math.max(previous.span.end, suggestion.span.end),
+		};
+		const overlapsReserved = reservedSpans.some(
+			(span) => mergedSpan.end > span.start && mergedSpan.start < span.end,
+		);
+		if (overlapsReserved) {
+			merged.push(suggestion);
+			continue;
+		}
+
+		const previousDuration = Math.max(1, previous.span.end - previous.span.start);
+		const suggestionDuration = Math.max(1, suggestion.span.end - suggestion.span.start);
+		const totalDuration = previousDuration + suggestionDuration;
+		const mergedFocus = {
+			cx:
+				(previous.focus.cx * previousDuration + suggestion.focus.cx * suggestionDuration) /
+				totalDuration,
+			cy:
+				(previous.focus.cy * previousDuration + suggestion.focus.cy * suggestionDuration) /
+				totalDuration,
+		};
+		merged[merged.length - 1] = {
+			span: mergedSpan,
+			focus: mergedFocus,
+			focusMode:
+				previous.focusMode === "smart" || suggestion.focusMode === "smart" ? "smart" : "manual",
+		};
+	}
+
+	return merged;
 }
 
 function detectInteractionCandidates(

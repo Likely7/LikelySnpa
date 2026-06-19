@@ -7,7 +7,7 @@ Implementation status: package model is implemented in code and now needs real m
 New recordings are grouped into one Finder-friendly recording package:
 
 ```text
-recording-<id>.likelysnap/
+recording-YYYY-MM-DD-HH-mm-ss-SSS.likelysnap/
   manifest.json
   screen.mp4
   webcam.mp4
@@ -131,7 +131,8 @@ Still pending:
 
 ## Acceptance Criteria
 
-- A new recording creates exactly one visible `recording-<id>.likelysnap` package in the recording directory.
+- A new recording creates exactly one visible `recording-YYYY-MM-DD-HH-mm-ss-SSS.likelysnap` package in the recording directory.
+- New macOS packages receive a Finder custom icon from `public/likelysnap.png` so the package itself shows the LikelySnap icon even when LaunchServices document-icon caching is stale.
 - During active recording, package contents are present and growing/updating.
 - Opening the package loads screen, safe webcam sidecar, cursor telemetry, and webcam offset.
 - Opening the package uses `cursor-preview.json` for cursor preview/auto zoom when valid, while full `cursor.json` remains available for export.

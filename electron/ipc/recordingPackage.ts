@@ -1,11 +1,14 @@
 import path from "node:path";
+import {
+	getRecordingPackageName,
+	RECORDING_PACKAGE_EXTENSION,
+} from "../../src/lib/recordingPackageNaming";
 import type { CursorCaptureMode, RecordingSession } from "../../src/lib/recordingSession";
 import {
 	normalizeCursorCaptureMode,
 	normalizeRecordingSession,
 } from "../../src/lib/recordingSession";
 
-export const RECORDING_PACKAGE_EXTENSION = ".likelysnap";
 export const RECORDING_PACKAGE_MANIFEST = "manifest.json";
 export const RECORDING_PACKAGE_SCREEN_VIDEO = "screen.mp4";
 export const RECORDING_PACKAGE_WEBCAM_VIDEO = "webcam.mp4";
@@ -109,10 +112,7 @@ export function getRecordingPackagePaths(
 	recordingDir: string,
 	recordingId: number,
 ): RecordingPackagePaths {
-	const packageDir = path.join(
-		recordingDir,
-		`recording-${recordingId}${RECORDING_PACKAGE_EXTENSION}`,
-	);
+	const packageDir = path.join(recordingDir, getRecordingPackageName(recordingId));
 	return {
 		packageDir,
 		manifestPath: path.join(packageDir, RECORDING_PACKAGE_MANIFEST),

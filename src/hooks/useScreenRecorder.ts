@@ -17,6 +17,7 @@ import {
 	type NativeWindowsRecordingRequest,
 	parseWindowHandleFromSourceId,
 } from "@/lib/nativeWindowsRecording";
+import { getRecordingPackageChildPath } from "@/lib/recordingPackageNaming";
 import type { CursorCaptureMode } from "@/lib/recordingSession";
 import { requestCameraAccess } from "@/lib/requestCameraAccess";
 import { createRecorderHandle, type RecorderHandle } from "./recorderHandle";
@@ -80,8 +81,6 @@ const CODEC_ALIGNMENT = 2;
 
 const BITS_PER_MEGABIT = 1_000_000;
 const CHROME_MEDIA_SOURCE = "desktop";
-const RECORDING_FILE_PREFIX = "recording-";
-const RECORDING_PACKAGE_EXTENSION = ".likelysnap";
 const RECORDING_PACKAGE_SCREEN_VIDEO = "screen.mp4";
 const RECORDING_PACKAGE_FALLBACK_WEBCAM_VIDEO = "webcam.webm";
 
@@ -140,10 +139,6 @@ type NativeMacRecordingHandle = {
 	paused: boolean;
 	captureStartedAtMs: number;
 };
-
-function recordingPackageFileName(recordingId: number, childName: string) {
-	return `${RECORDING_FILE_PREFIX}${recordingId}${RECORDING_PACKAGE_EXTENSION}/${childName}`;
-}
 
 function createRecordingVideoProfile(settings?: AppSettings | null): RecordingVideoProfile {
 	const quality = settings?.recordingQuality ?? "high";
@@ -471,11 +466,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						return;
 					}
 
-					const screenFileName = recordingPackageFileName(
+					const screenFileName = getRecordingPackageChildPath(
 						activeRecordingId,
 						RECORDING_PACKAGE_SCREEN_VIDEO,
 					);
-					const webcamFileName = recordingPackageFileName(
+					const webcamFileName = getRecordingPackageChildPath(
 						activeRecordingId,
 						RECORDING_PACKAGE_FALLBACK_WEBCAM_VIDEO,
 					);
@@ -1363,7 +1358,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						? { audioBitsPerSecond: systemAudioTrack ? AUDIO_BITRATE_SYSTEM : AUDIO_BITRATE_VOICE }
 						: {}),
 				},
-				recordingPackageFileName(activeRecordingId, RECORDING_PACKAGE_SCREEN_VIDEO),
+				getRecordingPackageChildPath(activeRecordingId, RECORDING_PACKAGE_SCREEN_VIDEO),
 			);
 			screenRecorder.current.recorder.addEventListener(
 				"error",
@@ -1380,7 +1375,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 						mimeType,
 						videoBitsPerSecond: Math.min(videoBitsPerSecond, WEBCAM_FALLBACK_VIDEO_BITRATE),
 					},
-					recordingPackageFileName(activeRecordingId, RECORDING_PACKAGE_FALLBACK_WEBCAM_VIDEO),
+					getRecordingPackageChildPath(activeRecordingId, RECORDING_PACKAGE_FALLBACK_WEBCAM_VIDEO),
 				);
 			}
 

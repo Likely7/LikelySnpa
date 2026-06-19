@@ -54,7 +54,7 @@ The key contract is:
 
 Current implementation:
 
-- New native recordings are grouped into one user-visible `recording-<id>.likelysnap/` package directory in the selected recording directory.
+- New native recordings are grouped into one user-visible timestamped package directory such as `recording-2026-06-19-20-34-56-789.likelysnap/` in the selected recording directory.
 - Package files are `screen.mp4`, optional native `webcam.mp4`, `cursor.json`, and `manifest.json`.
 - macOS `screen.mp4` is continuously written by the ScreenCaptureKit helper.
 - macOS native webcam sidecars are written by the ScreenCaptureKit helper via `AVCaptureSession + AVAssetWriter` as package-local `webcam.mp4`.

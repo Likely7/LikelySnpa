@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
 	AUTO_ZOOM_CONTEXT_PADDING_MS,
+	AUTO_ZOOM_SUGGESTION_MERGE_GAP_MS,
 	buildAutoZoomSuggestions,
 	detectZoomDwellCandidates,
 	hasPressedCursorDuringSpan,
 	LONG_DWELL_DURATION_MS,
 	MAX_DWELL_DURATION_MS,
+	MIN_DWELL_DURATION_MS,
 } from "./zoomSuggestionUtils";
 
 describe("zoomSuggestionUtils", () => {
@@ -35,58 +37,52 @@ describe("zoomSuggestionUtils", () => {
 		expect(suggestions[0].focusMode).toBe("manual");
 	});
 
-	it("keeps long stable explanation dwells long enough for narrated sections", () => {
+	it("waits for the longer dwell confirmation window before creating a short zoom", () => {
 		const suggestions = buildAutoZoomSuggestions({
 			cursorTelemetry: [
 				{ timeMs: 0, cx: 0.2, cy: 0.2 },
-				{ timeMs: 10_000, cx: 0.42, cy: 0.42 },
-				{ timeMs: 40_000, cx: 0.425, cy: 0.425 },
-				{ timeMs: 50_000, cx: 0.7, cy: 0.7 },
+				{ timeMs: 500, cx: 0.205, cy: 0.205 },
+				{ timeMs: 900, cx: 0.21, cy: 0.21 },
+				{ timeMs: 1200, cx: 0.22, cy: 0.22 },
 			],
-			totalMs: 60_000,
+			totalMs: 3_000,
 			existingRegions: [],
 			defaultDurationMs: 1000,
 		});
 
 		expect(suggestions).toHaveLength(1);
-		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(31_200);
-		expect(suggestions[0].span.start).toBe(9_400);
-		expect(suggestions[0].span.end).toBe(40_600);
-		expect(suggestions[0].span.end - suggestions[0].span.start).toBeGreaterThan(
-			LONG_DWELL_DURATION_MS,
-		);
+		expect(suggestions[0].span.start).toBe(0);
+		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(2400);
+		expect(MIN_DWELL_DURATION_MS).toBe(1000);
 	});
 
-	it("does not treat slow cursor drift across a large area as one long explanation dwell", () => {
+	it("still recognizes long stable explanations and keeps them long", () => {
 		const suggestions = buildAutoZoomSuggestions({
 			cursorTelemetry: [
 				{ timeMs: 0, cx: 0.2, cy: 0.2 },
-				{ timeMs: 2_000, cx: 0.21, cy: 0.21 },
-				{ timeMs: 4_000, cx: 0.22, cy: 0.22 },
-				{ timeMs: 6_000, cx: 0.23, cy: 0.23 },
-				{ timeMs: 8_000, cx: 0.24, cy: 0.24 },
-				{ timeMs: 10_000, cx: 0.25, cy: 0.25 },
-				{ timeMs: 12_000, cx: 0.26, cy: 0.26 },
+				{ timeMs: 10_000, cx: 0.205, cy: 0.205 },
+				{ timeMs: 25_000, cx: 0.21, cy: 0.21 },
+				{ timeMs: 35_000, cx: 0.212, cy: 0.211 },
 			],
-			totalMs: 20_000,
+			totalMs: 40_000,
 			existingRegions: [],
 			defaultDurationMs: 1000,
 		});
 
-		expect(suggestions).toHaveLength(2);
-		expect(
-			suggestions.every((suggestion) => suggestion.span.end - suggestion.span.start <= 6_000),
-		).toBe(true);
+		expect(suggestions).toHaveLength(1);
+		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(36_200);
+		expect(suggestions[0].span.end - suggestions[0].span.start).toBeGreaterThan(
+			LONG_DWELL_DURATION_MS,
+		);
 	});
 
 	it("merges nearby dwell runs in the same area so long explanations do not jump", () => {
 		const suggestions = buildAutoZoomSuggestions({
 			cursorTelemetry: [
 				{ timeMs: 0, cx: 0.4, cy: 0.4 },
-				{ timeMs: 1_000, cx: 0.405, cy: 0.405 },
-				{ timeMs: 1_200, cx: 0.45, cy: 0.45 },
-				{ timeMs: 1_700, cx: 0.41, cy: 0.41 },
-				{ timeMs: 4_000, cx: 0.412, cy: 0.412 },
+				{ timeMs: 1_200, cx: 0.405, cy: 0.405 },
+				{ timeMs: 4_100, cx: 0.41, cy: 0.41 },
+				{ timeMs: 5_300, cx: 0.412, cy: 0.412 },
 			],
 			totalMs: 8_000,
 			existingRegions: [],
@@ -94,8 +90,25 @@ describe("zoomSuggestionUtils", () => {
 		});
 
 		expect(suggestions).toHaveLength(1);
-		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(
-			4_000 + AUTO_ZOOM_CONTEXT_PADDING_MS * 2,
+		expect(suggestions[0].span.end - suggestions[0].span.start).toBe(6_000);
+	});
+
+	it("merges nearby zoom suggestions when the gap stays under three seconds", () => {
+		const suggestions = buildAutoZoomSuggestions({
+			cursorTelemetry: [
+				{ timeMs: 0, cx: 0.2, cy: 0.2 },
+				{ timeMs: 1_200, cx: 0.205, cy: 0.205 },
+				{ timeMs: 4_000, cx: 0.21, cy: 0.21 },
+				{ timeMs: 5_300, cx: 0.212, cy: 0.212 },
+			],
+			totalMs: 10_000,
+			existingRegions: [],
+			defaultDurationMs: 1000,
+		});
+
+		expect(suggestions).toHaveLength(1);
+		expect(suggestions[0].span.end - suggestions[0].span.start).toBeGreaterThan(
+			AUTO_ZOOM_SUGGESTION_MERGE_GAP_MS,
 		);
 	});
 
