@@ -81,7 +81,15 @@
 77. Planned the durable Auto Zoom/Follow Mouse refinement: per-zoom `Off`, `Smart Follow Mouse`, `Always Follow Mouse`; Smart Follow default on globally; global Smart Follow and global Always Follow mutually exclusive; Smart Follow safe area derived from actual/custom zoom scale; Always Follow slowed and eased to prevent tight camera shake.
 78. Implemented the three-state zoom follow model. `focusMode` now supports `manual`, `smart`, and `auto`; selected zoom settings show `Off`, `Smart`, and `Always`; the timeline has separate Smart Follow and Always Follow global buttons; the global buttons are mutually exclusive; existing `focusMode: auto` projects remain Always Follow.
 79. Implemented scale-aware Smart Follow Mouse in shared playback/export code. Smart Follow keeps the camera anchored while the cursor stays inside the zoom-scale-derived safe area, then eases the camera only when the cursor approaches the visible zoom boundary. Always Follow now uses slower damped motion so the cursor can lead and the picture catches up instead of shaking tightly.
-80. Rebalanced Auto Zoom candidate selection into an intent-scored model: click-and-stay, double click, repeated click, press/drag, and meaningful dwell are favored; click-and-immediately-leave is down-ranked; long dwell zoom duration is capped; accepted suggestions are sorted back into timeline order.
+80. Rebalanced Auto Zoom candidate selection into an intent-scored model: double click, repeated click, press/drag, and meaningful dwell are favored; isolated single click is no longer a standalone trigger; click-and-immediately-leave is rejected; long dwell zoom duration is bounded; accepted suggestions are sorted back into timeline order.
+81. Tightened the Auto Zoom selector after real product-feel testing:
+  - `450ms` means `0.45s`, not `4.5s`.
+  - Ordinary single clicks are ignored because they catch too many app-close/button-click actions.
+  - Repeated clicks and double-clicks still create short intentional zooms.
+  - Press/drag detection now requires at least `450ms` of held-button overlap so slow normal clicks are less likely to become Smart Follow zooms.
+  - Stable same-area cursor dwell longer than `8s` creates a long explanation zoom span based on the actual dwell duration plus context padding, capped at `45s`.
+  - Dwell runs are bounded by a same-area radius guard, so slow cursor drift across a page is split/rejected instead of becoming one false long explanation zoom.
+  - This specifically covers article/script narration where the cursor rests on a paragraph for tens of seconds; the generated zoom should stay stable instead of jumping in and out every fixed short duration.
 
 ## Implemented This Pass
 
@@ -283,14 +291,26 @@ Continue validation and hardening from the current staged editor-open + FFmpeg e
 - Implemented scale-aware Smart Follow Mouse in preview and export through shared cursor-follow utilities. The safe area derives from the actual effective zoom scale, including custom scale.
 - Slowed Always Follow Mouse and added stronger damping/dead-zone behavior so the cursor leads slightly and the camera catches up instead of tightly shaking.
 - Reworked Auto Zoom scoring:
-  - click-and-stay, repeated click, double click, press/drag, and meaningful dwell score higher;
-  - click-and-immediately-leave is down-ranked and can produce no suggestion;
+  - isolated single click is ignored because it is too noisy for UI-control recordings;
+  - repeated click, double click, press/drag, and meaningful dwell score higher;
+  - click-and-immediately-leave produces no suggestion;
   - held mouse-button spans default to Smart Follow Mouse instead of Always Follow Mouse;
-  - long dwell generated duration is capped to avoid huge default zoom spans;
+  - long same-area dwell uses its real explanation span plus padding, capped at 45 seconds to avoid runaway default zoom spans;
   - final suggestions are sorted in timeline order after scoring/selection.
+- Follow-up refinement after user testing:
+  - raised held-button detection from `250ms` to `450ms`;
+  - removed ordinary single-click standalone suggestions;
+  - added a separate long-dwell candidate so a 30 second article explanation can become one stable long zoom instead of one short auto zoom;
+  - added a same-area dwell radius guard so slow cursor drift does not masquerade as long narration.
 - Preserved preview/export consistency by updating both `VideoPlayback` and `FrameRenderer`.
 - Verification passed:
   - `./node_modules/.bin/tsc --noEmit --pretty false`
   - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/editorDefaults.test.ts`
   - `npx biome check src/components/video-editor/SettingsPanel.tsx src/components/video-editor/VideoEditor.tsx src/components/video-editor/VideoPlayback.tsx src/components/video-editor/projectPersistence.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/timeline/TimelineEditor.tsx src/components/video-editor/timeline/zoomSuggestionUtils.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/constants.ts src/components/video-editor/videoPlayback/cursorFollowUtils.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/lib/exporter/frameRenderer.ts src/hooks/useEditorHistory.ts src/i18n/locales/en/settings.json src/i18n/locales/en/timeline.json src/i18n/locales/zh-CN/settings.json src/i18n/locales/zh-CN/timeline.json`
+  - `npm run build-vite`
+- Additional follow-up verification passed:
+  - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts`
+  - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/editorDefaults.test.ts`
+  - `./node_modules/.bin/tsc --noEmit --pretty false`
+  - `npx biome check src/components/video-editor/timeline/zoomSuggestionUtils.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts`
   - `npm run build-vite`

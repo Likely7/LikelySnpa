@@ -12,7 +12,7 @@
 8. Implement the real preview-proxy pipeline for very long/high-resolution recordings. This is not done yet: generate `proxy-screen.mp4` / `proxy-webcam.mp4` in a package/global cache, record proxy health in metadata, switch editor playback to proxies when ready, and keep export on original media.
 9. Add a background job manager for media preparation so media info, waveform, thumbnails, cursor indexes, auto zoom suggestions, and proxy generation are coordinated instead of being separate ad hoc effects.
 10. Before another Windows one-hour optimization, add hard timing checkpoints for manifest read, file stat, session preparation, video metadata readiness, first React paint, cursor preview load, waveform start/cache/generation, auto zoom start/finish, and proxy generation.
-11. Validate the implemented Auto Zoom / Follow Mouse model on real recordings: three per-zoom modes (`Off`, `Smart Follow Mouse`, `Always Follow Mouse`), mutually exclusive global Smart/Always controls, scale-aware smart safe areas, slower eased always-follow motion, and intent-scored candidate selection.
+11. Validate the implemented Auto Zoom / Follow Mouse model on real recordings: three per-zoom modes (`Off`, `Smart Follow Mouse`, `Always Follow Mouse`), mutually exclusive global Smart/Always controls, scale-aware smart safe areas, slower eased always-follow motion, ignored isolated single clicks, retained repeated-click/double-click/press/drag suggestions, and long stable same-area explanation zooms.
 
 ## Existing P0 Validation
 
@@ -36,7 +36,7 @@
 3. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
 4. Add broader automated tests for custom recording directories and interrupted package recovery.
 5. Add real macOS long-recording validation evidence.
-6. Validate the refined auto zoom and Follow Mouse model on real recordings: accidental click-and-leave actions should not create distracting zooms, meaningful click/press/drag/dwell actions should create explainable zooms, Smart Follow should only pan near scale-aware boundaries, Always Follow should feel slower/eased, and each selected zoom should override the global defaults.
+6. Validate the refined auto zoom and Follow Mouse model on real recordings: ordinary single-click UI actions should not create distracting zooms, repeated-click/double-click/press/drag/dwell actions should create explainable zooms, long article/script dwells should stay zoomed for the narrated section, Smart Follow should only pan near scale-aware boundaries, Always Follow should feel slower/eased, and each selected zoom should override the global defaults.
 7. Add append/chunked cursor telemetry storage for multi-hour recordings. The current editor uses package-local `cursor-preview.json`, but recording still keeps and rewrites full cursor snapshots.
 8. Add sidecar/proxy diagnostics for file size, duration, codec, and skipped webcam state.
 9. Add Windows CI or documented manual verification for `npm run build:native:win`, `npm run build:win:portable`, and `npm run test:wgc-full:win`.
@@ -62,8 +62,8 @@
 5. Confirm editor auto zoom suggestions still appear from cursor telemetry.
 6. Confirm selected zoom settings can switch a single zoom between `Off`, `Smart Follow Mouse`, and `Always Follow Mouse` even when a global follow button has been used.
 7. Confirm the global Smart Follow Mouse and global Always Follow Mouse buttons are mutually exclusive.
-8. Confirm long same-area explanations do not become huge unstable zoom spans or repeated short jumps.
-9. Confirm held mouse-button/drag spans default their suggested zoom to Smart Follow Mouse, while accidental click-and-leave actions are down-ranked.
+8. Confirm long same-area explanations become one stable bounded long zoom instead of repeated short jumps.
+9. Confirm held mouse-button/drag spans default their suggested zoom to Smart Follow Mouse, while ordinary single clicks and click-and-leave UI actions do not create auto zooms.
 10. Confirm export MP4 remains in sync.
 11. Kill the app mid-recording and verify the package is recoverable.
 12. Open an old package with `webcam.webm`; if the sidecar is oversized, confirm the app warns and still opens the main video.

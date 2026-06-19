@@ -58,7 +58,7 @@
 - Cursor telemetry is separate from video bytes and is required for auto zoom and Follow Mouse zoom.
 - Auto zoom suggestions now separate span selection from camera-follow behavior with three per-zoom modes: `Off`, `Smart Follow Mouse`, and `Always Follow Mouse`.
 - Smart Follow Mouse is implemented as the default generated-zoom/global behavior: stable while the cursor remains inside a scale-aware safe area, eased follow only near the visible zoom boundary. Always Follow Mouse remains available but now uses slower damped motion instead of tightly locking to every cursor sample.
-- Auto zoom suggestion duration and candidate selection are rebalanced against upstream OpenScreen and Screen Studio behavior: click/press/drag intent matters, accidental click-and-leave actions are down-ranked, accepted suggestions are returned in timeline order, and long dwell no longer automatically creates huge zoom spans.
+- Auto zoom suggestion duration and candidate selection are rebalanced against upstream OpenScreen and Screen Studio behavior: isolated single clicks no longer trigger zooms by themselves, repeated click/double-click/press/drag/dwell intent matters, click-and-immediately-leave actions are rejected, accepted suggestions are returned in timeline order, long same-area dwell creates a bounded long explanation zoom instead of repeated short jumps, and slow cursor drift is guarded so it does not become a false long dwell.
 - Follow Mouse remains stored internally as `focusMode` for project compatibility, but user-facing UI and docs call it Follow Mouse / 跟随鼠标. Existing `focusMode: auto` projects should continue to open as Always Follow Mouse unless explicitly migrated by user action.
 - macOS native window recordings now use ScreenCaptureKit-reported window capture bounds for editable cursor normalization, avoiding display-bounds offset in Follow Mouse zoom.
 - User retest after this fix reported the Follow Mouse behavior is close enough to continue; treat Follow Mouse zoom as implemented unless a new concrete offset sample appears.
@@ -152,6 +152,12 @@
 - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/editorDefaults.test.ts` passes with 37 tests after the Smart Follow Mouse / Auto Zoom intent-scoring implementation.
 - `npx biome check ...` passes on the touched editor/follow/i18n files after the Smart Follow Mouse / Auto Zoom intent-scoring implementation.
 - `npm run build-vite` passes after the Smart Follow Mouse / Auto Zoom intent-scoring implementation.
+- Follow-up Auto Zoom selector verification after removing isolated single-click triggers and adding long explanation dwell:
+  - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts` passes with 11 tests.
+  - `npm test -- src/components/video-editor/timeline/zoomSuggestionUtils.test.ts src/components/video-editor/videoPlayback/cursorFollowUtils.test.ts src/components/video-editor/videoPlayback/zoomRegionUtils.test.ts src/components/video-editor/projectPersistence.test.ts src/components/video-editor/editorDefaults.test.ts` passes with 41 tests.
+  - `./node_modules/.bin/tsc --noEmit --pretty false` passes.
+  - `npx biome check src/components/video-editor/timeline/zoomSuggestionUtils.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts` passes.
+  - `npm run build-vite` passes.
 - Direct helper validation on the user's built-in Retina display: before the Retina fix, raw `screen.mp4` was `1710x1112`; after the fix, raw source-mode `screen.mp4` is `3420x2224` with BT.709 metadata. After the OBS-style settings work, direct helper validation confirmed source recording accepts explicit `8,000,000` bps, while explicit 1080p records `1920x1080 @ 30fps` with requested `5,000,000` bps. High is now defined as source resolution / `60 FPS` / `8 Mbps`.
 - `npx tsc --noEmit` passes after the OBS-style recording settings work.
 - `npx biome check src/lib/appSettings.ts src/hooks/useScreenRecorder.ts src/components/launch/AppSettingsDialog.tsx src/lib/nativeMacRecording.ts src/lib/nativeWindowsRecording.ts electron/ipc/handlers.ts` passes after the OBS-style recording settings work.
