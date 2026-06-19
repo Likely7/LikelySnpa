@@ -44,6 +44,7 @@ export interface FfmpegFrameExportFinishResult {
 export interface FfmpegFrameExportWriteResult {
 	success: boolean;
 	error?: string;
+	log?: string[];
 }
 
 export interface FfmpegFrameExportCancelResult {

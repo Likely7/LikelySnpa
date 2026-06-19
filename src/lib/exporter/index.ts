@@ -4,7 +4,10 @@ export { calculateOutputDimensions, GifExporter } from "./gifExporter";
 export {
 	calculateEffectiveSourceDimensions,
 	calculateMp4ExportSettings,
+	MP4_EXPORT_BITRATE_LIMITS,
+	MP4_EXPORT_DIMENSION_LIMITS,
 	type Mp4ExportSettings,
+	normalizeCustomMp4ExportSettings,
 } from "./mp4ExportSettings";
 export { VideoMuxer } from "./muxer";
 export { StreamingVideoDecoder } from "./streamingDecoder";
@@ -18,6 +21,8 @@ export type {
 	GifExportConfig,
 	GifFrameRate,
 	GifSizePreset,
+	Mp4ExportConfig,
+	Mp4ExportMode,
 	VideoFrameData,
 } from "./types";
 export {

@@ -1,14 +1,39 @@
-import { Download, Loader2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { Download, Film, Loader2, SlidersHorizontal, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { useScopedT } from "@/contexts/I18nContext";
-import type { ExportProgress } from "@/lib/exporter";
+import {
+	type ExportProgress,
+	type ExportQuality,
+	type ExportSettings,
+	MP4_EXPORT_BITRATE_LIMITS,
+	type Mp4ExportConfig,
+	type Mp4ExportMode,
+	type Mp4ExportSettings,
+	normalizeCustomMp4ExportSettings,
+} from "@/lib/exporter";
+
+const MP4_PRESET_ORDER: ExportQuality[] = ["medium", "good", "source"];
+
+function bitrateToMbps(bitrate: number) {
+	return Math.round((bitrate / 1_000_000) * 10) / 10;
+}
+
+function numberDraft(value: number) {
+	return String(Math.round(value));
+}
 
 interface ExportDialogProps {
 	isOpen: boolean;
 	onClose: () => void;
+	initialSettings: ExportSettings | null;
+	mp4Presets?: Record<ExportQuality, Mp4ExportSettings>;
+	sourceLabel?: string;
+	onStartExport: (settings: ExportSettings) => void;
 	progress: ExportProgress | null;
 	isExporting: boolean;
+	isCancelling?: boolean;
 	error: string | null;
 	onCancel?: () => void;
 	exportFormat?: "mp4" | "gif";
@@ -19,8 +44,13 @@ interface ExportDialogProps {
 export function ExportDialog({
 	isOpen,
 	onClose,
+	initialSettings,
+	mp4Presets,
+	sourceLabel,
+	onStartExport,
 	progress,
 	isExporting,
+	isCancelling = false,
 	error,
 	onCancel,
 	exportFormat = "mp4",
@@ -29,6 +59,18 @@ export function ExportDialog({
 }: ExportDialogProps) {
 	const t = useScopedT("dialogs");
 	const [showSuccess, setShowSuccess] = useState(false);
+	const [mp4Mode, setMp4Mode] = useState<Mp4ExportMode>("good");
+	const [customWidth, setCustomWidth] = useState("");
+	const [customHeight, setCustomHeight] = useState("");
+	const [customBitrateMbps, setCustomBitrateMbps] = useState("");
+
+	const defaultMp4Settings = useMemo(() => {
+		const mode =
+			initialSettings?.mp4Config?.mode && initialSettings.mp4Config.mode !== "custom"
+				? initialSettings.mp4Config.mode
+				: initialSettings?.quality || "good";
+		return mp4Presets?.[mode];
+	}, [initialSettings, mp4Presets]);
 
 	useEffect(() => {
 		if (isExporting) {
@@ -44,6 +86,18 @@ export function ExportDialog({
 	}, [isOpen, isExporting, progress]);
 
 	useEffect(() => {
+		if (!isOpen || isExporting) return;
+		const initialMp4 = initialSettings?.mp4Config;
+		const initialMode = initialMp4?.mode || initialSettings?.quality || "good";
+		const preset = initialMode === "custom" ? defaultMp4Settings : mp4Presets?.[initialMode];
+		const customBase = initialMp4 || preset || defaultMp4Settings;
+		setMp4Mode(initialMode);
+		setCustomWidth(customBase ? numberDraft(customBase.width) : "");
+		setCustomHeight(customBase ? numberDraft(customBase.height) : "");
+		setCustomBitrateMbps(customBase ? String(bitrateToMbps(customBase.bitrate)) : "");
+	}, [defaultMp4Settings, initialSettings, isExporting, isOpen, mp4Presets]);
+
+	useEffect(() => {
 		if (!isExporting && progress && progress.percentage >= 100 && !error) {
 			setShowSuccess(true);
 			const timer = setTimeout(() => {
@@ -57,6 +111,17 @@ export function ExportDialog({
 	if (!isOpen) return null;
 
 	const formatLabel = exportFormat === "gif" ? "GIF" : "Video";
+	const isSettingsMode = !isExporting && !progress && !showSuccess;
+	const selectedPreset = mp4Mode !== "custom" ? mp4Presets?.[mp4Mode] : undefined;
+	const normalizedCustomMp4 = normalizeCustomMp4ExportSettings({
+		width: Number(customWidth) || defaultMp4Settings?.width || 1920,
+		height: Number(customHeight) || defaultMp4Settings?.height || 1080,
+		bitrate:
+			(Number(customBitrateMbps) || bitrateToMbps(defaultMp4Settings?.bitrate || 8_000_000)) *
+			1_000_000,
+	});
+	const selectedMp4Settings = selectedPreset || normalizedCustomMp4;
+	const isCustomMp4 = exportFormat === "mp4" && mp4Mode === "custom";
 
 	// Compiling phase: frames are done but the export is still finishing.
 	const isCompiling =
@@ -80,9 +145,41 @@ export function ExportDialog({
 
 	const getTitle = () => {
 		if (error) return t("export.failed");
+		if (isSettingsMode) return t("export.format");
 		if (isFinalizing && exportFormat === "mp4") return t("export.finalizingVideoTitle");
 		if (isCompiling || isFinalizing) return t("export.compilingGif");
 		return t("export.exportingFormat", { format: formatLabel });
+	};
+
+	const getMp4ModeLabel = (mode: Mp4ExportMode) => {
+		if (mode === "medium") return t("export.standardPreset");
+		if (mode === "good") return t("export.highPreset");
+		if (mode === "source") return t("export.ultraPreset");
+		return t("export.customPreset");
+	};
+
+	const handleStartExport = () => {
+		if (!initialSettings) return;
+		if (initialSettings.format === "gif") {
+			onStartExport(initialSettings);
+			return;
+		}
+
+		const mp4Config: Mp4ExportConfig =
+			mp4Mode === "custom"
+				? {
+						mode: "custom",
+						...selectedMp4Settings,
+					}
+				: {
+						mode: mp4Mode,
+						...(mp4Presets?.[mp4Mode] || selectedMp4Settings),
+					};
+		onStartExport({
+			...initialSettings,
+			quality: mp4Mode === "custom" ? initialSettings.quality : mp4Mode,
+			mp4Config,
+		});
 	};
 
 	return (
@@ -91,7 +188,7 @@ export function ExportDialog({
 				className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 animate-in fade-in duration-200"
 				onClick={isExporting ? undefined : onClose}
 			/>
-			<div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[60] bg-[#09090b] rounded-2xl shadow-2xl border border-white/10 p-8 w-[90vw] max-w-md animate-in zoom-in-95 duration-200">
+			<div className="fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-[60] bg-[#09090b] rounded-2xl shadow-2xl border border-white/10 p-8 w-[90vw] max-w-lg animate-in zoom-in-95 duration-200">
 				<div className="flex items-center justify-between mb-6">
 					<div className="flex items-center gap-4">
 						{showSuccess ? (
@@ -128,6 +225,10 @@ export function ExportDialog({
 									<div className="w-12 h-12 rounded-full bg-[#C24B72]/10 flex items-center justify-center">
 										<Loader2 className="w-6 h-6 text-[#C24B72] animate-spin" />
 									</div>
+								) : isSettingsMode ? (
+									<div className="w-12 h-12 rounded-full bg-[#C24B72]/10 flex items-center justify-center border border-[#C24B72]/25">
+										<SlidersHorizontal className="w-6 h-6 text-[#C24B72]" />
+									</div>
 								) : (
 									<div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center border border-white/10">
 										<Download className="w-6 h-6 text-slate-200" />
@@ -135,7 +236,9 @@ export function ExportDialog({
 								)}
 								<div>
 									<span className="text-xl font-bold text-slate-200 block">{getTitle()}</span>
-									<span className="text-sm text-slate-400">{getStatusMessage()}</span>
+									<span className="text-sm text-slate-400">
+										{isSettingsMode ? t("export.configureDescription") : getStatusMessage()}
+									</span>
 								</div>
 							</>
 						)}
@@ -151,6 +254,175 @@ export function ExportDialog({
 						</Button>
 					)}
 				</div>
+
+				{isSettingsMode && initialSettings && (
+					<div className="space-y-5">
+						{initialSettings.format === "mp4" && (
+							<>
+								<div className="grid grid-cols-4 gap-2">
+									{MP4_PRESET_ORDER.map((preset) => {
+										const settings = mp4Presets?.[preset];
+										const active = mp4Mode === preset;
+										return (
+											<button
+												key={preset}
+												type="button"
+												onClick={() => setMp4Mode(preset)}
+												className={`min-h-[74px] rounded-xl border px-3 py-2 text-left transition-all ${
+													active
+														? "border-[#C24B72]/70 bg-[#C24B72]/15 text-white"
+														: "border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.07] hover:text-slate-200"
+												}`}
+											>
+												<span className="block text-sm font-semibold">
+													{getMp4ModeLabel(preset)}
+												</span>
+												<span className="mt-1 block text-[11px] leading-snug">
+													{settings
+														? `${settings.width}x${settings.height}`
+														: t("export.recommended")}
+												</span>
+												<span className="block text-[11px] leading-snug">
+													{settings ? `${bitrateToMbps(settings.bitrate)} Mbps` : ""}
+												</span>
+											</button>
+										);
+									})}
+									<button
+										type="button"
+										onClick={() => setMp4Mode("custom")}
+										className={`min-h-[74px] rounded-xl border px-3 py-2 text-left transition-all ${
+											mp4Mode === "custom"
+												? "border-[#C24B72]/70 bg-[#C24B72]/15 text-white"
+												: "border-white/10 bg-white/[0.04] text-slate-400 hover:bg-white/[0.07] hover:text-slate-200"
+										}`}
+									>
+										<span className="block text-sm font-semibold">{getMp4ModeLabel("custom")}</span>
+										<span className="mt-1 block text-[11px] leading-snug">
+											{t("export.resolution")}
+										</span>
+										<span className="block text-[11px] leading-snug">{t("export.bitrate")}</span>
+									</button>
+								</div>
+
+								<div
+									className={`rounded-xl border p-4 transition-all ${
+										isCustomMp4
+											? "border-[#C24B72]/35 bg-[#C24B72]/10"
+											: "border-white/10 bg-white/[0.03] opacity-60"
+									}`}
+								>
+									<div className="mb-3 flex items-center justify-between">
+										<div className="flex items-center gap-2 text-sm font-semibold text-slate-200">
+											<Film className="h-4 w-4 text-[#C24B72]" />
+											{t("export.customMp4")}
+										</div>
+										<div className="text-xs text-slate-500">{sourceLabel}</div>
+									</div>
+									<div className="grid grid-cols-3 gap-3">
+										<label className="space-y-1.5">
+											<span className="text-[11px] font-medium text-slate-400">
+												{t("export.width")}
+											</span>
+											<Input
+												type="number"
+												inputMode="numeric"
+												min={320}
+												max={7680}
+												step={2}
+												disabled={!isCustomMp4}
+												value={customWidth}
+												onChange={(event) => setCustomWidth(event.target.value)}
+												className="h-10 border-white/10 bg-black/30 text-slate-100 focus-visible:ring-[#C24B72]/50"
+											/>
+										</label>
+										<label className="space-y-1.5">
+											<span className="text-[11px] font-medium text-slate-400">
+												{t("export.height")}
+											</span>
+											<Input
+												type="number"
+												inputMode="numeric"
+												min={180}
+												max={4320}
+												step={2}
+												disabled={!isCustomMp4}
+												value={customHeight}
+												onChange={(event) => setCustomHeight(event.target.value)}
+												className="h-10 border-white/10 bg-black/30 text-slate-100 focus-visible:ring-[#C24B72]/50"
+											/>
+										</label>
+										<label className="space-y-1.5">
+											<span className="text-[11px] font-medium text-slate-400">Mbps</span>
+											<Input
+												type="number"
+												inputMode="decimal"
+												min={MP4_EXPORT_BITRATE_LIMITS.minMbps}
+												max={MP4_EXPORT_BITRATE_LIMITS.maxMbps}
+												step={0.5}
+												disabled={!isCustomMp4}
+												value={customBitrateMbps}
+												onChange={(event) => setCustomBitrateMbps(event.target.value)}
+												className="h-10 border-white/10 bg-black/30 text-slate-100 focus-visible:ring-[#C24B72]/50"
+											/>
+										</label>
+									</div>
+									<div className="mt-3 text-xs text-slate-500">
+										{t("export.exportingDetails", {
+											width: selectedMp4Settings.width,
+											height: selectedMp4Settings.height,
+											bitrate: bitrateToMbps(selectedMp4Settings.bitrate),
+											maxBitrate: MP4_EXPORT_BITRATE_LIMITS.maxMbps,
+										})}
+									</div>
+								</div>
+							</>
+						)}
+
+						{initialSettings.format === "gif" && initialSettings.gifConfig && (
+							<div className="rounded-xl border border-white/10 bg-white/[0.04] p-4">
+								<div className="text-sm font-semibold text-slate-200">{t("export.gifExport")}</div>
+								<div className="mt-3 grid grid-cols-3 gap-3 text-sm">
+									<div className="rounded-lg bg-black/25 p-3">
+										<div className="text-[10px] uppercase text-slate-500">{t("export.size")}</div>
+										<div className="mt-1 text-slate-200">
+											{initialSettings.gifConfig.width}x{initialSettings.gifConfig.height}
+										</div>
+									</div>
+									<div className="rounded-lg bg-black/25 p-3">
+										<div className="text-[10px] uppercase text-slate-500">{t("export.fps")}</div>
+										<div className="mt-1 text-slate-200">{initialSettings.gifConfig.frameRate}</div>
+									</div>
+									<div className="rounded-lg bg-black/25 p-3">
+										<div className="text-[10px] uppercase text-slate-500">{t("export.loop")}</div>
+										<div className="mt-1 text-slate-200">
+											{initialSettings.gifConfig.loop ? t("export.on") : t("export.off")}
+										</div>
+									</div>
+								</div>
+							</div>
+						)}
+
+						<div className="flex gap-3 pt-1">
+							<Button
+								type="button"
+								variant="secondary"
+								onClick={onClose}
+								className="flex-1 rounded-xl border border-white/10 bg-white/5 py-6 text-slate-200 hover:bg-white/10"
+							>
+								{t("export.cancel")}
+							</Button>
+							<Button
+								type="button"
+								onClick={handleStartExport}
+								className="flex-1 rounded-xl bg-[#C24B72] py-6 text-white hover:bg-[#D65D82]"
+							>
+								<Download className="mr-2 h-4 w-4" />
+								{t("export.startExport")}
+							</Button>
+						</div>
+					</div>
+				)}
 
 				{error && (
 					<div className="mb-6 animate-in slide-in-from-top-2">
@@ -249,6 +521,7 @@ export function ExportDialog({
 							<div className="pt-2">
 								<Button
 									onClick={onCancel}
+									disabled={isCancelling}
 									variant="destructive"
 									className="w-full py-6 bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20 hover:border-red-500/30 transition-all rounded-xl"
 								>

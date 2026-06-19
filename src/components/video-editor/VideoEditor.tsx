@@ -48,7 +48,7 @@ import {
 	GifExporter,
 	type GifFrameRate,
 	type GifSizePreset,
-	VideoExporter,
+	type Mp4ExportSettings,
 } from "@/lib/exporter";
 import { computeFrameStepTime } from "@/lib/frameStep";
 import type { CursorCaptureMode, ProjectMedia } from "@/lib/recordingSession";
@@ -205,6 +205,7 @@ function buildSaveDiagnosticMessage(formatLabel: "GIF" | "Video", reason?: strin
 }
 
 const CAPTION_WORD_CHOICES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const;
+type CancellableExporter = { cancel: () => void | Promise<void> };
 
 export default function VideoEditor() {
 	const {
@@ -265,9 +266,17 @@ export default function VideoEditor() {
 	const [selectedAnnotationId, setSelectedAnnotationId] = useState<string | null>(null);
 	const [selectedBlurId, setSelectedBlurId] = useState<string | null>(null);
 	const [isExporting, setIsExporting] = useState(false);
+	const [isCancellingExport, setIsCancellingExport] = useState(false);
 	const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
 	const [exportError, setExportError] = useState<string | null>(null);
 	const [showExportDialog, setShowExportDialog] = useState(false);
+	const [pendingExportSettings, setPendingExportSettings] = useState<ExportSettings | null>(null);
+	const [pendingMp4Presets, setPendingMp4Presets] = useState<
+		Record<ExportQuality, Mp4ExportSettings> | undefined
+	>(undefined);
+	const [pendingExportSourceLabel, setPendingExportSourceLabel] = useState<string | undefined>(
+		undefined,
+	);
 	const [showNewRecordingDialog, setShowNewRecordingDialog] = useState(false);
 	const [exportQuality, setExportQuality] = useState<ExportQuality>(
 		DEFAULT_EXPORT_SETTINGS.quality,
@@ -358,7 +367,7 @@ export default function VideoEditor() {
 	const [showAutoCaptionsDialog, setShowAutoCaptionsDialog] = useState(false);
 	const [captionWordsMin, setCaptionWordsMin] = useState(2);
 	const [captionWordsMax, setCaptionWordsMax] = useState(7);
-	const exporterRef = useRef<VideoExporter | null>(null);
+	const exporterRef = useRef<CancellableExporter | null>(null);
 
 	const annotationOnlyRegions = useMemo(
 		() => annotationRegions.filter((region) => region.type !== "blur"),
@@ -2008,6 +2017,7 @@ export default function VideoEditor() {
 			const targetPath = pickResult.path;
 
 			setIsExporting(true);
+			setIsCancellingExport(false);
 			setExportProgress(null);
 			setExportError(null);
 			setExportedFilePath(null);
@@ -2096,7 +2106,7 @@ export default function VideoEditor() {
 						},
 					});
 
-					exporterRef.current = gifExporter as unknown as VideoExporter;
+					exporterRef.current = gifExporter;
 					const result = await gifExporter.export();
 
 					if (result.success && result.blob) {
@@ -2123,6 +2133,9 @@ export default function VideoEditor() {
 							toast.error(message);
 						}
 					} else {
+						if (result.error === "Export cancelled") {
+							return;
+						}
 						const message = buildExportDiagnosticMessage({
 							formatLabel: "GIF",
 							reason: result.error || "GIF export failed",
@@ -2136,17 +2149,14 @@ export default function VideoEditor() {
 					}
 				} else {
 					// MP4 Export
-					const quality = settings.quality || exportQuality;
-					const {
-						width: exportWidth,
-						height: exportHeight,
-						bitrate,
-					} = calculateMp4ExportSettings({
-						quality,
+					const presetSettings = calculateMp4ExportSettings({
+						quality: settings.quality || exportQuality,
 						sourceWidth: effectiveSourceDimensions.width,
 						sourceHeight: effectiveSourceDimensions.height,
 						aspectRatioValue,
 					});
+					const exportSettings = settings.mp4Config || presetSettings;
+					const { width: exportWidth, height: exportHeight, bitrate } = exportSettings;
 
 					const exporter = new FfmpegVideoExporter({
 						videoUrl: videoPath,
@@ -2193,7 +2203,7 @@ export default function VideoEditor() {
 						},
 					});
 
-					exporterRef.current = exporter as unknown as VideoExporter;
+					exporterRef.current = exporter;
 					const result = await exporter.export();
 
 					if (result.success && result.outputPath) {
@@ -2206,6 +2216,9 @@ export default function VideoEditor() {
 						setUnsavedExport(null);
 						handleExportSaved("Video", result.outputPath);
 					} else {
+						if (result.error === "Export cancelled") {
+							return;
+						}
 						const message = buildExportDiagnosticMessage({
 							formatLabel: "Video",
 							reason: result.error || "Export failed",
@@ -2226,6 +2239,12 @@ export default function VideoEditor() {
 				}
 			} catch (error) {
 				console.error("Export error:", error);
+				if (
+					error instanceof Error &&
+					(error.message === "Export cancelled" || error.message.includes("Export cancelled"))
+				) {
+					return;
+				}
 				if (error instanceof BackgroundLoadError) {
 					const message = t("errors.exportBackgroundLoadFailed", { url: error.displayUrl });
 					setExportError(message);
@@ -2242,10 +2261,12 @@ export default function VideoEditor() {
 				}
 			} finally {
 				setIsExporting(false);
+				setIsCancellingExport(false);
 				exporterRef.current = null;
 				// Reset so the next export can reopen the dialog (second export
 				// otherwise wouldn't show the save dialog).
 				setShowExportDialog(false);
+				setPendingExportSettings(null);
 				setExportProgress(null);
 			}
 		},
@@ -2291,6 +2312,10 @@ export default function VideoEditor() {
 	);
 
 	const handleOpenExportDialog = useCallback(() => {
+		if (isExporting || isCancellingExport) {
+			toast.info(rawT("dialogs.export.stillFinishing"));
+			return;
+		}
 		if (!videoPath) {
 			toast.error("No video loaded");
 			return;
@@ -2321,10 +2346,37 @@ export default function VideoEditor() {
 			GIF_SIZE_PRESETS,
 			aspectRatioValue,
 		);
+		const mp4Presets: Record<ExportQuality, Mp4ExportSettings> = {
+			medium: calculateMp4ExportSettings({
+				quality: "medium",
+				sourceWidth: effectiveSourceDimensions.width,
+				sourceHeight: effectiveSourceDimensions.height,
+				aspectRatioValue,
+			}),
+			good: calculateMp4ExportSettings({
+				quality: "good",
+				sourceWidth: effectiveSourceDimensions.width,
+				sourceHeight: effectiveSourceDimensions.height,
+				aspectRatioValue,
+			}),
+			source: calculateMp4ExportSettings({
+				quality: "source",
+				sourceWidth: effectiveSourceDimensions.width,
+				sourceHeight: effectiveSourceDimensions.height,
+				aspectRatioValue,
+			}),
+		};
 
 		const settings: ExportSettings = {
 			format: exportFormat,
 			quality: exportFormat === "mp4" ? exportQuality : undefined,
+			mp4Config:
+				exportFormat === "mp4"
+					? {
+							mode: exportQuality,
+							...mp4Presets[exportQuality],
+						}
+					: undefined,
 			gifConfig:
 				exportFormat === "gif"
 					? {
@@ -2338,11 +2390,13 @@ export default function VideoEditor() {
 		};
 
 		setShowExportDialog(true);
+		setPendingExportSettings(settings);
+		setPendingMp4Presets(mp4Presets);
+		setPendingExportSourceLabel(
+			`Source ${effectiveSourceDimensions.width}x${effectiveSourceDimensions.height}`,
+		);
 		setExportError(null);
 		setExportedFilePath(null);
-
-		// Start export immediately
-		handleExport(settings);
 	}, [
 		videoPath,
 		exportFormat,
@@ -2352,15 +2406,30 @@ export default function VideoEditor() {
 		gifSizePreset,
 		aspectRatio,
 		cropRegion,
-		handleExport,
+		isCancellingExport,
+		isExporting,
+		rawT,
 	]);
 
-	const handleCancelExport = useCallback(() => {
-		if (exporterRef.current) {
-			exporterRef.current.cancel();
+	const handleStartExportFromDialog = useCallback(
+		(settings: ExportSettings) => {
+			void handleExport(settings);
+		},
+		[handleExport],
+	);
+
+	const handleCancelExport = useCallback(async () => {
+		const exporter = exporterRef.current;
+		if (exporter) {
+			setIsCancellingExport(true);
+			setExportError(null);
+			await Promise.resolve(exporter.cancel()).catch((error) => {
+				console.warn("Export cancel cleanup failed:", error);
+			});
 			toast.info("Export canceled");
 			setShowExportDialog(false);
 			setIsExporting(false);
+			setIsCancellingExport(false);
 			setExportProgress(null);
 			setExportError(null);
 			setExportedFilePath(null);
@@ -3091,9 +3160,18 @@ export default function VideoEditor() {
 
 			<ExportDialog
 				isOpen={showExportDialog}
-				onClose={() => setShowExportDialog(false)}
+				onClose={() => {
+					if (isExporting || isCancellingExport) return;
+					setShowExportDialog(false);
+					setPendingExportSettings(null);
+				}}
+				initialSettings={pendingExportSettings}
+				mp4Presets={pendingMp4Presets}
+				sourceLabel={pendingExportSourceLabel}
+				onStartExport={handleStartExportFromDialog}
 				progress={exportProgress}
 				isExporting={isExporting}
+				isCancelling={isCancellingExport}
 				error={exportError}
 				onCancel={handleCancelExport}
 				exportFormat={exportFormat}

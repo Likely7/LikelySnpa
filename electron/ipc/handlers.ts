@@ -2482,6 +2482,11 @@ export function registerIpcHandlers(
 				return { success: true, granted: true, status };
 			}
 
+			const probeResult = await probeDesktopCaptureAccess();
+			if (probeResult.granted) {
+				return { success: true, granted: true, status: `${status}:capturer-granted` };
+			}
+
 			// Screen recording has no askForMediaAccess equivalent, so trigger the
 			// TCC prompt without opening LikelySnap's source selector above it.
 			if (status === "not-determined") {
@@ -2493,11 +2498,7 @@ export function registerIpcHandlers(
 					mainWin.focus();
 				}
 				app.focus({ steal: true });
-				desktopCapturer
-					.getSources({ types: ["screen"], thumbnailSize: { width: 1, height: 1 } })
-					.catch(() => {
-						// Permission probing failure is reported by the explicit status check below.
-					});
+				void probeDesktopCaptureAccess();
 				return { success: true, granted: false, status: "not-determined" };
 			}
 
@@ -2505,6 +2506,18 @@ export function registerIpcHandlers(
 		} catch (error) {
 			console.error("Failed to request screen access:", error);
 			return { success: false, granted: false, status: "unknown", error: String(error) };
+		}
+	}
+
+	async function probeDesktopCaptureAccess(): Promise<{ granted: boolean; error?: string }> {
+		try {
+			const sources = await desktopCapturer.getSources({
+				types: ["screen"],
+				thumbnailSize: { width: 1, height: 1 },
+			});
+			return { granted: sources.length > 0 };
+		} catch (error) {
+			return { granted: false, error: String(error) };
 		}
 	}
 

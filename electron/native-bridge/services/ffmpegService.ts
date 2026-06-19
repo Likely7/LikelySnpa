@@ -30,7 +30,11 @@ type ActiveExportSession = {
 	proc: ChildProcessWithoutNullStreams;
 	logs: string[];
 	exitPromise: Promise<number>;
+	cancelled: boolean;
 };
+
+const FRAME_WRITE_DRAIN_TIMEOUT_MS = 30_000;
+const CANCEL_EXIT_TIMEOUT_MS = 5_000;
 
 export class FfmpegService {
 	private sessions = new Map<string, ActiveExportSession>();
@@ -102,6 +106,7 @@ export class FfmpegService {
 			proc,
 			logs,
 			exitPromise,
+			cancelled: false,
 		});
 
 		return {
@@ -121,7 +126,10 @@ export class FfmpegService {
 	): Promise<FfmpegFrameExportWriteResult> {
 		const session = this.sessions.get(sessionId);
 		if (!session) {
-			return { success: false, error: "FFmpeg export session not found" };
+			return { success: false, error: "Export cancelled" };
+		}
+		if (session.cancelled || session.proc.killed || session.proc.stdin.destroyed) {
+			return { success: false, error: "Export cancelled", log: session.logs.slice(-20) };
 		}
 
 		const bytes =
@@ -129,32 +137,91 @@ export class FfmpegService {
 				? Buffer.from(chunk.buffer, chunk.byteOffset, chunk.byteLength)
 				: Buffer.from(chunk);
 
-		if (!session.proc.stdin.write(bytes)) {
-			await new Promise<void>((resolve, reject) => {
-				const onDrain = () => {
-					cleanup();
-					resolve();
+		let writeAccepted = false;
+		try {
+			writeAccepted = session.proc.stdin.write(bytes);
+		} catch (error) {
+			return {
+				success: false,
+				error: session.cancelled ? "Export cancelled" : String(error),
+				log: session.logs.slice(-20),
+			};
+		}
+
+		if (!writeAccepted) {
+			const drained = await this.waitForFrameDrain(session);
+
+			if (drained !== "drain") {
+				if (drained === "timeout") {
+					session.cancelled = true;
+					session.proc.stdin.destroy();
+					session.proc.kill("SIGTERM");
+					this.sessions.delete(sessionId);
+					await fs.rm(session.tempPath, { force: true }).catch(() => undefined);
+				}
+				return {
+					success: false,
+					error:
+						drained === "timeout"
+							? "FFmpeg did not accept video frames for 30 seconds"
+							: session.cancelled
+								? "Export cancelled"
+								: "FFmpeg stopped while receiving video frames",
+					log: session.logs.slice(-20),
 				};
-				const onError = (error: Error) => {
-					cleanup();
-					reject(error);
-				};
-				const cleanup = () => {
-					session.proc.stdin.off("drain", onDrain);
-					session.proc.stdin.off("error", onError);
-				};
-				session.proc.stdin.once("drain", onDrain);
-				session.proc.stdin.once("error", onError);
-			});
+			}
 		}
 
 		return { success: true };
 	}
 
+	private waitForFrameDrain(
+		session: ActiveExportSession,
+	): Promise<"drain" | "error" | "exit" | "cancelled" | "timeout"> {
+		return new Promise((resolve) => {
+			let settled = false;
+			let timeout: NodeJS.Timeout;
+
+			const finish = (result: "drain" | "error" | "exit" | "cancelled" | "timeout") => {
+				if (settled) return;
+				settled = true;
+				cleanup();
+				resolve(result);
+			};
+
+			const onDrain = () => {
+				finish("drain");
+			};
+
+			const onError = () => {
+				finish("error");
+			};
+
+			const onExit = () => {
+				finish(session.cancelled ? "cancelled" : "exit");
+			};
+
+			const cleanup = () => {
+				session.proc.stdin.off("drain", onDrain);
+				session.proc.stdin.off("error", onError);
+				session.proc.off("exit", onExit);
+				clearTimeout(timeout);
+			};
+
+			timeout = setTimeout(() => {
+				finish(session.cancelled ? "cancelled" : "timeout");
+			}, FRAME_WRITE_DRAIN_TIMEOUT_MS);
+
+			session.proc.stdin.once("drain", onDrain);
+			session.proc.stdin.once("error", onError);
+			session.proc.once("exit", onExit);
+		});
+	}
+
 	async finishFrameExport(sessionId: string): Promise<FfmpegFrameExportFinishResult> {
 		const session = this.sessions.get(sessionId);
 		if (!session) {
-			return { success: false, error: "FFmpeg export session not found" };
+			return { success: false, error: "Export cancelled" };
 		}
 
 		this.sessions.delete(sessionId);
@@ -195,8 +262,13 @@ export class FfmpegService {
 		}
 
 		this.sessions.delete(sessionId);
+		session.cancelled = true;
 		session.proc.stdin.destroy();
 		session.proc.kill("SIGTERM");
+		await Promise.race([
+			session.exitPromise.catch(() => undefined),
+			new Promise<void>((resolve) => setTimeout(resolve, CANCEL_EXIT_TIMEOUT_MS)),
+		]);
 		await fs.rm(session.tempPath, { force: true }).catch(() => undefined);
 		return { success: true };
 	}
@@ -331,6 +403,10 @@ export class FfmpegService {
 		}
 
 		const encoders = await this.getEncoderSet(binary);
+		if (process.platform === "win32") {
+			return { encoder: encoders.has("libx264") ? "libx264" : "h264", hardwareAcceleration: null };
+		}
+
 		const hardware = detectFfmpegHardwareAcceleration();
 		const hardwareEncoder =
 			hardware === "videotoolbox"

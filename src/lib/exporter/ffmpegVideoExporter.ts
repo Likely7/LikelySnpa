@@ -60,6 +60,7 @@ export class FfmpegVideoExporter {
 	private renderer: FrameRenderer | null = null;
 	private cancelled = false;
 	private sessionId: string | null = null;
+	private cancelPromise: Promise<void> | null = null;
 
 	constructor(config: FfmpegVideoExporterConfig) {
 		this.config = config;
@@ -228,7 +229,12 @@ export class FfmpegVideoExporter {
 							),
 						);
 						if (!writeResult.success) {
-							throw new Error(writeResult.error || "Failed to write FFmpeg frame");
+							const log = writeResult.log?.filter(Boolean).join("\n").trim();
+							throw new Error(
+								[writeResult.error || "Failed to write FFmpeg frame", log]
+									.filter(Boolean)
+									.join("\n"),
+							);
 						}
 
 						frameIndex++;
@@ -283,6 +289,9 @@ export class FfmpegVideoExporter {
 			};
 		} catch (error) {
 			await this.cancelActiveSession();
+			if (this.cancelled) {
+				return { success: false, error: "Export cancelled" };
+			}
 			return {
 				success: false,
 				error: error instanceof Error ? error.message : String(error),
@@ -299,11 +308,12 @@ export class FfmpegVideoExporter {
 		}
 	}
 
-	cancel(): void {
+	cancel(): Promise<void> {
 		this.cancelled = true;
 		this.streamingDecoder?.cancel();
 		this.webcamDecoder?.cancel();
-		void this.cancelActiveSession();
+		this.cancelPromise ??= this.cancelActiveSession();
+		return this.cancelPromise;
 	}
 
 	private async cancelActiveSession() {
