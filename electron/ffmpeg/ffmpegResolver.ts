@@ -23,21 +23,13 @@ export async function resolveFfmpegBinary(): Promise<FfmpegBinaryResolution | nu
 		candidates.push({ source: "env", executablePath: envPath });
 	}
 
+	if (app.isPackaged) {
+		candidates.push({ source: "bundled", executablePath: bundledFfmpegPath() });
+	}
+
 	const installerPath = resolveFfmpegInstallerPath();
 	if (installerPath) {
 		candidates.push({ source: "bundled", executablePath: installerPath });
-	}
-
-	if (app.isPackaged) {
-		const platformDir = `${process.platform}-${process.arch}`;
-		const bundled = path.join(
-			process.resourcesPath,
-			"electron",
-			"ffmpeg",
-			platformDir,
-			ffmpegBinaryName(),
-		);
-		candidates.push({ source: "bundled", executablePath: bundled });
 	}
 
 	candidates.push({ source: "system", executablePath: ffmpegBinaryName() });
@@ -50,6 +42,11 @@ export async function resolveFfmpegBinary(): Promise<FfmpegBinaryResolution | nu
 	}
 
 	return null;
+}
+
+function bundledFfmpegPath(): string {
+	const platformDir = `${process.platform}-${process.arch}`;
+	return path.join(process.resourcesPath, "electron", "ffmpeg", platformDir, ffmpegBinaryName());
 }
 
 function resolveFfmpegInstallerPath(): string | null {

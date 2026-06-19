@@ -68,7 +68,7 @@
     "target": [
       {
         "target": "dmg",
-        "arch": ["x64", "arm64"]
+        "arch": ["arm64"]
       }
     ],
     "icon": "icons/icons/mac/icon.icns",
@@ -78,6 +78,10 @@
         "from": "electron/native/bin",
         "to": "electron/native/bin",
         "filter": ["darwin-*/*"]
+      },
+      {
+        "from": "electron/ffmpeg-runtime",
+        "to": "electron/ffmpeg"
       }
     ],
     "extendInfo": {
@@ -108,6 +112,10 @@
         "from": "electron/native/bin",
         "to": "electron/native/bin",
         "filter": ["win32-*/*"]
+      },
+      {
+        "from": "electron/ffmpeg-runtime",
+        "to": "electron/ffmpeg"
       }
     ]
   },

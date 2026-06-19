@@ -5,10 +5,13 @@
 
 const { execFileSync } = require("node:child_process");
 const path = require("node:path");
+const { prepareFfmpegRuntime } = require("./prepare-ffmpeg-runtime.cjs");
 
-exports.default = async function beforePack() {
+exports.default = async function beforePack(context) {
 	execFileSync("node", [path.join(__dirname, "fetch-caption-model.mjs")], {
 		stdio: "inherit",
 		cwd: path.join(__dirname, ".."),
 	});
+
+	prepareFfmpegRuntime(context?.electronPlatformName ?? process.platform, context?.arch ?? process.arch);
 };
