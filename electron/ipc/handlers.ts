@@ -67,6 +67,7 @@ import {
 	resolveRecordingOutputPathInDirectory,
 } from "./recordingPackage";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
+import { resolveScreenAccessResult, type ScreenAccessStatus } from "./screenAccess";
 
 const PROJECT_FILE_EXTENSION = "likelysnap";
 export const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
@@ -2477,15 +2478,10 @@ export function registerIpcHandlers(
 		}
 
 		try {
-			const status = systemPreferences.getMediaAccessStatus("screen");
-			if (status === "granted") {
-				return { success: true, granted: true, status };
-			}
-
 			const probeResult = await probeDesktopCaptureAccess();
-			if (probeResult.granted) {
-				return { success: true, granted: true, status: `${status}:capturer-granted` };
-			}
+			const status = systemPreferences.getMediaAccessStatus("screen") as ScreenAccessStatus;
+			const resolvedAccess = resolveScreenAccessResult(probeResult, status);
+			if (resolvedAccess.granted) return resolvedAccess;
 
 			// Screen recording has no askForMediaAccess equivalent, so trigger the
 			// TCC prompt without opening LikelySnap's source selector above it.
@@ -2509,15 +2505,25 @@ export function registerIpcHandlers(
 		}
 	}
 
-	async function probeDesktopCaptureAccess(): Promise<{ granted: boolean; error?: string }> {
+	async function probeDesktopCaptureAccess(): Promise<{
+		granted: boolean;
+		status: string;
+		error?: string;
+	}> {
 		try {
 			const sources = await desktopCapturer.getSources({
-				types: ["screen"],
+				types: ["screen", "window"],
 				thumbnailSize: { width: 1, height: 1 },
+				fetchWindowIcons: false,
 			});
-			return { granted: sources.length > 0 };
+			const hasScreenSource = sources.some((source) => source.id.startsWith("screen:"));
+			const hasWindowSource = sources.some((source) => source.id.startsWith("window:"));
+			return {
+				granted: hasScreenSource || hasWindowSource,
+				status: hasScreenSource ? "capturer-screen-granted" : "capturer-window-granted",
+			};
 		} catch (error) {
-			return { granted: false, error: String(error) };
+			return { granted: false, status: "capturer-error", error: String(error) };
 		}
 	}
 
