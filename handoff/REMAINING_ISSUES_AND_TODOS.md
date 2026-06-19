@@ -17,7 +17,7 @@
 ## Existing P0 Validation
 
 1. Validate the known 4.4 GB legacy package opens the main screen video without freezing by skipping the oversized `webcam.webm`.
-2. Validate a real macOS recording with microphone, system audio, native `webcam.mp4`, editable cursor, and auto zoom enabled. Confirm `webcam.mp4` is non-zero, has a readable video track, and appears in `manifest.json`; if webcam fails, confirm `.sb-*` artifacts remain for diagnostics and the manifest does not falsely include webcam media.
+2. Validate a longer macOS recording with microphone, system audio, native `webcam.mp4`, editable cursor, and auto zoom enabled. Short-path webcam validation passed on `/Users/macbook/Movies/LikelySnap/recording-2026-06-19-20-24-41-248.likelysnap`; the remaining risk is longer duration and interrupted-session behavior.
 3. Validate a long macOS recording stops cleanly and leaves a ready `.likelysnap` package that opens in the editor.
 4. Validate moving a package to another folder and reopening it.
 5. Validate deleting `manifest.json` and reopening the package rebuilds a recoverable manifest.
@@ -57,7 +57,7 @@
 
 1. Record 20 minutes on macOS and stop successfully.
 2. Confirm selected recording directory shows one timestamped `recording-YYYY-MM-DD-HH-mm-ss-SSS.likelysnap` package with the LikelySnap Finder icon.
-3. Confirm package contains `screen.mp4`, optional validated native `webcam.mp4`, `cursor.json`, and `manifest.json`. If webcam was enabled, confirm there is no 0-byte `webcam.mp4` recorded as successful media.
+3. Confirm package contains `screen.mp4`, optional validated native `webcam.mp4`, `cursor.json`, and `manifest.json`. For macOS, the latest short retest confirmed no 0-byte webcam and no `.sb-*`; keep this check in the long-recording checklist.
 4. Confirm raw source file plays in Finder/QuickTime with audio in sync.
 5. Confirm editor auto zoom suggestions still appear from cursor telemetry.
 6. Confirm selected zoom settings can switch a single zoom between `Off`, `Smart Follow Mouse`, and `Always Follow Mouse` even when a global follow button has been used.

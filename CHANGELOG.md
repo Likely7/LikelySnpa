@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Stabilized macOS native webcam MP4 sidecar recording by finalizing webcam before the native stop result and appending camera frames through `AVAssetWriterInputPixelBufferAdaptor`. A short real-device retest produced a valid package-local `webcam.mp4` with no `.sb-*` side-band files.
+
 ## 1.1.0 - ARM64 Package Cleanup Release
 
 This release keeps the long-recording architecture, FFmpeg MP4 export, and bundled offline auto captions while trimming the safest packaging weight.

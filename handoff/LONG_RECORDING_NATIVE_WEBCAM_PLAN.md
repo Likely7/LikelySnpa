@@ -13,7 +13,7 @@ cursor.json   ~10 MB / ~43k samples
 manifest.json ~2 KB
 ```
 
-The main screen recording was healthy. The failure was caused by the webcam sidecar:
+At that time, the main screen recording was healthy and the failure was caused by the old webcam sidecar:
 
 1. The macOS webcam path still uses renderer `MediaRecorder` and writes `webcam.webm`.
 2. The webcam stream is not bounded tightly enough for long recordings.
@@ -28,6 +28,11 @@ The `.likelysnap` package directory itself is not the bottleneck. The problem is
 Implemented on 2026-06-17:
 
 - macOS native recordings now request a package-local `webcam.mp4` path and the ScreenCaptureKit helper records webcam video with `AVCaptureSession + AVAssetWriter`.
+- Follow-up macOS webcam stabilization on 2026-06-19:
+  - helper stop now finalizes webcam before emitting the native `recording-stopped` result;
+  - manifest only includes `webcamPath` after the webcam writer completed with samples, non-zero bytes, and a readable video track;
+  - webcam frames now append via `AVAssetWriterInputPixelBufferAdaptor` from camera pixel buffers instead of retimed camera sample-buffer copies, fixing the observed invalid MP4 / `.sb-*` side-band failure.
+- Short real-device macOS validation passed after the PixelBufferAdaptor fix: `/Users/macbook/Movies/LikelySnap/recording-2026-06-19-20-24-41-248.likelysnap` contains a valid package-local `webcam.mp4` (`49,666,110` bytes, H.264 1280x720, ~196.99s, 5893 frames), no `.sb-*` files, and `manifest.json` includes `media.webcamVideoPath`.
 - Windows native recordings now pass package-local `webcam.mp4` to the WGC helper and rely on the existing Media Foundation/DirectShow webcam path instead of a renderer `MediaRecorder` sidecar.
 - Native start paths no longer create renderer webcam recorders on macOS or Windows. The renderer only performs permission/device preflight, then releases the preview stream so the native helper can own the camera.
 - Windows stop/finalize no longer reads the native `screen.mp4` back into an `ArrayBuffer` and no longer repackages the recording after stop.
@@ -81,7 +86,7 @@ The editor must treat `manifest.media.webcamVideoPath` as format-agnostic.
 ### macOS
 
 - Keep screen capture on `ScreenCaptureKit + AVAssetWriter`.
-- Webcam sidecar now records natively with `AVCaptureSession + AVAssetWriter`.
+- Webcam sidecar now records natively with `AVCaptureSession + AVAssetWriter`; camera frames are appended through `AVAssetWriterInputPixelBufferAdaptor`.
 - New native recordings write package-local `webcam.mp4`.
 - Limit webcam capture to editor-appropriate settings:
   - target max resolution: 1280x720;
@@ -150,7 +155,7 @@ Status: implemented, pending user-facing app verification with the existing 4.4 
 - Change new native sidecar filename to `webcam.mp4`.
 - Keep `webcam.webm` as compatibility/fallback.
 
-Status: implemented in code. macOS helper typecheck/build passes locally. Windows code path is implemented but still requires Windows compile/run validation.
+Status: implemented in code. macOS helper typecheck/build passes locally, and short real-device macOS webcam validation passed after the PixelBufferAdaptor fix. Windows code path is implemented but still requires Windows compile/run validation.
 
 ### Phase 3: Long-Recording Editor Architecture
 

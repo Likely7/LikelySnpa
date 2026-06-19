@@ -969,6 +969,7 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 	private let queue = DispatchQueue(label: "app.openscreen.sck-helper.webcam")
 	private var writer: AVAssetWriter?
 	private var videoInput: AVAssetWriterInput?
+	private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
 	private var didStartWriting = false
 	private var isStopping = false
 	private var firstSampleTime: CMTime?
@@ -1069,7 +1070,13 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 		didOutput sampleBuffer: CMSampleBuffer,
 		from connection: AVCaptureConnection
 	) {
-		guard !isStopping, CMSampleBufferDataIsReady(sampleBuffer), let writer, let videoInput else {
+		guard !isStopping,
+			CMSampleBufferDataIsReady(sampleBuffer),
+			let writer,
+			let videoInput,
+			let pixelBufferAdaptor,
+			let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
+		else {
 			return
 		}
 
@@ -1081,15 +1088,13 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 			didStartWriting = true
 		}
 
-		guard let firstSampleTime,
-			let retimed = retime(sampleBuffer, subtracting: firstSampleTime),
-			videoInput.isReadyForMoreMediaData
-		else {
+		guard let firstSampleTime, videoInput.isReadyForMoreMediaData else {
 			return
 		}
-		if videoInput.append(retimed) {
+		let retimedPts = CMTimeSubtract(pts, firstSampleTime)
+		if pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: retimedPts) {
 			samplesAppended += 1
-			lastSampleTime = CMSampleBufferGetPresentationTimeStamp(retimed)
+			lastSampleTime = retimedPts
 		} else {
 			appendFailures += 1
 		}
@@ -1178,25 +1183,17 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 			throw HelperError.writerSetupFailed("Unable to add webcam H.264 input.")
 		}
 		writer.add(input)
+		let adaptor = AVAssetWriterInputPixelBufferAdaptor(
+			assetWriterInput: input,
+			sourcePixelBufferAttributes: [
+				kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
+				kCVPixelBufferWidthKey as String: outputWidth,
+				kCVPixelBufferHeightKey as String: outputHeight,
+			]
+		)
 		self.writer = writer
 		self.videoInput = input
-	}
-
-	private func retime(_ sampleBuffer: CMSampleBuffer, subtracting offset: CMTime) -> CMSampleBuffer? {
-		var timing = CMSampleTimingInfo(
-			duration: CMSampleBufferGetDuration(sampleBuffer),
-			presentationTimeStamp: CMTimeSubtract(CMSampleBufferGetPresentationTimeStamp(sampleBuffer), offset),
-			decodeTimeStamp: .invalid
-		)
-		var retimed: CMSampleBuffer?
-		let status = CMSampleBufferCreateCopyWithNewTiming(
-			allocator: kCFAllocatorDefault,
-			sampleBuffer: sampleBuffer,
-			sampleTimingEntryCount: 1,
-			sampleTimingArray: &timing,
-			sampleBufferOut: &retimed
-		)
-		return status == noErr ? retimed : sampleBuffer
+		self.pixelBufferAdaptor = adaptor
 	}
 }
 

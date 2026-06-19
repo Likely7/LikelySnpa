@@ -71,7 +71,7 @@ During recording:
 
 - `screen.mp4` is written by the macOS ScreenCaptureKit helper.
 - Native macOS and Windows recordings write package-local `webcam.mp4`.
-- macOS native `webcam.mp4` is only advertised in `manifest.json` after the helper has finalized the webcam writer and verified samples, non-zero bytes, and a readable video track. If AVAssetWriter leaves `.sb-*` side-band artifacts after a failure, they are preserved for diagnostics/recovery rather than deleted.
+- macOS native `webcam.mp4` is only advertised in `manifest.json` after the helper has finalized the webcam writer and verified samples, non-zero bytes, and a readable video track. Webcam video frames are appended with `AVAssetWriterInputPixelBufferAdaptor` from camera pixel buffers. If AVAssetWriter leaves `.sb-*` side-band artifacts after a failure, they are preserved for diagnostics/recovery rather than deleted.
 - Browser/fallback recordings may still write package-local `webcam.webm`.
 - `cursor.json` is created at start and refreshed in throttled snapshots.
 - `cursor-preview.json` is created/refreshed beside `cursor.json` as a bounded editor-open index. It stores package-relative source identity so moving the `.likelysnap` package does not invalidate the cache.
@@ -126,7 +126,7 @@ Implemented:
 
 Still pending:
 
-- Real macOS long-recording validation against package-local native `webcam.mp4`, including the recent stop/finalize race fix for 0-byte webcam files and `.sb-*` side-band artifacts.
+- Real macOS long-recording validation against package-local native `webcam.mp4`, including the recent stop/finalize race and PixelBufferAdaptor fixes. A short user retest already produced a valid package-local `webcam.mp4` with no `.sb-*` files.
 - Real Windows validation of WGC package-local `webcam.mp4`.
 - Interrupted-recording/kill-process recovery validation on real packages.
 

@@ -57,7 +57,7 @@ Current implementation:
 - New native recordings are grouped into one user-visible timestamped package directory such as `recording-2026-06-19-20-34-56-789.likelysnap/` in the selected recording directory.
 - Package files are `screen.mp4`, optional native `webcam.mp4`, `cursor.json`, and `manifest.json`.
 - macOS `screen.mp4` is continuously written by the ScreenCaptureKit helper.
-- macOS native webcam sidecars are written by the ScreenCaptureKit helper via `AVCaptureSession + AVAssetWriter` as package-local `webcam.mp4`.
+- macOS native webcam sidecars are written by the ScreenCaptureKit helper via `AVCaptureSession + AVAssetWriter` as package-local `webcam.mp4`; camera frames are appended through `AVAssetWriterInputPixelBufferAdaptor` for stable MP4 finalization.
 - Windows native webcam sidecars use the WGC helper's Media Foundation/DirectShow path as package-local `webcam.mp4`.
 - Cursor telemetry and the manifest are created at recording start and updated during/after capture.
 - The manifest uses relative paths so moved packages can reopen.

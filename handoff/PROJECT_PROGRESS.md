@@ -91,6 +91,7 @@
   - Nearby auto zoom suggestions within `3000ms` are merged into one longer span so the follow-follow camera motion can carry the scene through the gap instead of popping out and back in.
   - This specifically covers article/script narration where the cursor rests on a paragraph for tens of seconds; the generated zoom should stay stable instead of jumping in and out every fixed short duration.
 82. Fixed the macOS native webcam stop/finalize race that could leave `webcam.mp4` at 0 bytes with AVAssetWriter `.sb-*` side-band files. The ScreenCaptureKit helper now stops/finalizes webcam before emitting `recording-stopped`, reports `webcamPath` only when the webcam writer completed with samples, bytes, and a readable video track, and preserves failed side-band artifacts for diagnostics instead of deleting them.
+83. Fixed the remaining macOS native webcam writer instability by changing webcam frame writing from retimed camera sample-buffer appends to `AVAssetWriterInputPixelBufferAdaptor` pixel-buffer appends. The user retested with `/Users/macbook/Movies/LikelySnap/recording-2026-06-19-20-24-41-248.likelysnap`: package has a valid `webcam.mp4` (`49,666,110` bytes), `manifest.json` includes `media.webcamVideoPath`, `ffprobe` reads H.264 1280x720 / ~196.99s / 5893 frames, and no `.sb-*` side-band files are present.
 
 ## Implemented This Pass
 
@@ -151,6 +152,8 @@
   - `electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift`
   - `electron/ipc/handlers.ts`
   - `src/lib/nativeMacRecording.ts`
+- macOS native webcam PixelBufferAdaptor fix:
+  - `electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift`
 
 ## 2026-06-18 Package Size Cleanup Pass 1
 
@@ -210,6 +213,8 @@
 - `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after native webcam sidecar refactor with deprecation warnings only.
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local macOS helper binary.
 - `swiftc -O -parse-as-library -framework AVFoundation -framework CoreGraphics -framework CoreMedia -framework Foundation -framework ScreenCaptureKit electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local macOS helper binary after the native webcam finalize fix.
+- `swiftc -O -parse-as-library -framework AVFoundation -framework CoreGraphics -framework CoreMedia -framework Foundation -framework ScreenCaptureKit electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local macOS helper binary after the native webcam PixelBufferAdaptor fix.
+- Manual macOS recording validation after the native webcam PixelBufferAdaptor fix produced a valid package-local webcam sidecar: `/Users/macbook/Movies/LikelySnap/recording-2026-06-19-20-24-41-248.likelysnap/webcam.mp4` is readable by `ffprobe`, present in `manifest.json`, and no `.sb-*` files exist in the package.
 - `npx tsc --noEmit` passes after the native webcam finalize fix.
 - `npm test -- electron/ipc/recordingPackage.test.ts electron/ipc/recordingStream.test.ts src/lib/nativeMacRecording.test.ts src/lib/nativeWindowsRecording.test.ts` passes after the native webcam finalize fix.
 - `npm run build-vite` passes after the native webcam finalize fix.
