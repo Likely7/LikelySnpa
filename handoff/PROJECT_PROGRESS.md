@@ -93,6 +93,7 @@
 82. Fixed the macOS native webcam stop/finalize race that could leave `webcam.mp4` at 0 bytes with AVAssetWriter `.sb-*` side-band files. The ScreenCaptureKit helper now stops/finalizes webcam before emitting `recording-stopped`, reports `webcamPath` only when the webcam writer completed with samples, bytes, and a readable video track, and preserves failed side-band artifacts for diagnostics instead of deleting them.
 83. Fixed the remaining macOS native webcam writer instability by changing webcam frame writing from retimed camera sample-buffer appends to `AVAssetWriterInputPixelBufferAdaptor` pixel-buffer appends. The user retested with `/Users/macbook/Movies/LikelySnap/recording-2026-06-19-20-24-41-248.likelysnap`: package has a valid `webcam.mp4` (`49,666,110` bytes), `manifest.json` includes `media.webcamVideoPath`, `ffprobe` reads H.264 1280x720 / ~196.99s / 5893 frames, and no `.sb-*` side-band files are present.
 84. Refined Auto Zoom dwell detection after Windows testing feedback: final suggestion merge gap is now `1500ms`; dwell detection uses a small-region model (`0.035` normalized radius, `500ms` grace, `1200ms` max sample gap, minimum 3 samples) so normal hand jitter inside a tight explanation area still counts as one dwell; long-dwell generated spans now anchor to the dwell start plus context padding instead of centering and appearing late.
+85. Fixed and documented the packaged macOS permission false-negative case. The installed DMG could keep prompting for screen-recording permission even when System Settings showed LikelySnap as allowed, while the dev app still recorded normally. The durable code fix trusts a real `desktopCapturer.getSources` capture-source probe before stale `getMediaAccessStatus("screen")` data, and the validated local-machine cleanup covers old LikelySnap/OpenScreen installs, userData, TCC records, and LaunchServices registrations. User retested the clean reinstall and confirmed it is now OK. Full recurrence playbook: `handoff/MACOS_PERMISSION_TROUBLESHOOTING.md`.
 
 ## Implemented This Pass
 
@@ -332,3 +333,8 @@ Continue validation and hardening from the current staged editor-open + FFmpeg e
   - `./node_modules/.bin/tsc --noEmit --pretty false`
   - `npx biome check src/components/video-editor/timeline/zoomSuggestionUtils.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts`
   - `npm run build-vite`
+- Packaged macOS permission verification:
+  - `npm test -- electron/ipc/screenAccess.test.ts src/components/launch/openSourceSelectorFlow.test.ts` passed after the screen-access probe fix.
+  - `npx tsc --noEmit` passed.
+  - `npm run build-vite` passed.
+  - User confirmed the freshly installed DMG can record after stale local app/TCC/LaunchServices state was cleaned.

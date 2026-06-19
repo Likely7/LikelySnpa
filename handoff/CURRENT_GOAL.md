@@ -27,6 +27,7 @@ Build a durable macOS/Windows LikelySnap recorder/editor that can record long vi
 20. Auto Zoom must use a maintainable intent model instead of one-off cursor dwell heuristics. Zoom regions must support three independent follow modes: `Off`, `Smart Follow Mouse`, and `Always Follow Mouse`.
 21. Smart Follow Mouse is the default global follow behavior for generated zooms and must be mutually exclusive with the global Always Follow Mouse batch toggle. Enabling one global follow mode disables the other.
 22. Smart Follow Mouse must respect each zoom region's effective scale/custom scale. Higher zoom levels have a smaller visible viewport, so the safe cursor area and edge-follow threshold must be derived from the actual zoom scale, not a fixed percentage.
+23. Packaged macOS permission gating must be based on real capture capability, not only stale status strings. If the installed DMG says permission is missing while System Settings says it is allowed, follow `handoff/MACOS_PERMISSION_TROUBLESHOOTING.md` before changing recorder logic.
 
 ## Current Priority
 
@@ -80,3 +81,7 @@ The next implementation pass starts from the stable rollback baseline and target
 Implementation status: code is now implemented and verified at type/test/build level. It still needs user-facing macOS recording/editor retest for product feel, especially Smart Follow boundary behavior at different custom zoom scales.
 
 Follow-up status: after user testing, the auto zoom selector was tightened again. A plain single click is no longer a standalone trigger because it captures too many UI-control actions such as closing apps or clicking buttons. Long stable same-area cursor dwell is now a separate candidate class so article/script explanations can stay zoomed for the actual narrated section instead of producing one short fixed-length zoom. The dwell detector now uses a `1000ms` confirmation window for short hover zooms, small-region dwell detection for natural mouse jitter inside a tight explanation area, and nearby auto zoom suggestions within `1500ms` can merge into one longer span so narration can carry through short gaps without over-merging unrelated topics. Long-dwell generated spans now anchor to the dwell start plus context padding instead of centering around the dwell midpoint. Held mouse-button detection still requires at least `450ms` of press overlap to avoid treating ordinary slow clicks as press/drag intent.
+
+## 2026-06-20 macOS Packaged Permission Note
+
+The installed DMG previously kept asking for Screen & System Audio Recording permission even though macOS System Settings showed LikelySnap as allowed, while the dev app could record. The code now treats a successful `desktopCapturer.getSources({ types: ["screen", "window"] })` probe as authoritative for packaged app screen access. The user's machine also required a full cleanup of stale LikelySnap/OpenScreen app installs, userData, TCC entries, and LaunchServices registrations before reinstalling. User retest is now OK. Future agents should use `handoff/MACOS_PERMISSION_TROUBLESHOOTING.md` for this exact symptom.

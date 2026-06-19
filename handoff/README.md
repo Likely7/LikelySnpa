@@ -12,6 +12,7 @@ Read in this order:
 6. `AUDIO_VIDEO_SYNC_INVESTIGATION.md`
 7. `REMAINING_ISSUES_AND_TODOS.md`
 8. `PROJECT_PROGRESS.md`
+9. `MACOS_PERMISSION_TROUBLESHOOTING.md`
 
 The central direction is final-product repair, not temporary workaround:
 
@@ -25,3 +26,4 @@ The central direction is final-product repair, not temporary workaround:
 - app branding and icon assets must come from reproducible project files, not one-off generated output.
 - edited MP4 export now uses the FFmpeg frame-streaming path as the primary MP4 backend; GIF export and the old WebCodecs/BufferTarget exporter remain compatibility/legacy paths.
 - long-recording editor open is now staged: preview cursor data, idle waveform preparation, idle auto zoom, and cursor parse caching should keep the editor interactive while background jobs continue.
+- packaged macOS permission issues have a recorded troubleshooting path in `MACOS_PERMISSION_TROUBLESHOOTING.md`; do not confuse dev-app permission success with packaged-app TCC/LaunchServices state.
