@@ -2028,6 +2028,13 @@ type NativeMacCaptureStartInfo = {
 	bitrate?: number;
 };
 
+type NativeMacCaptureStopInfo = {
+	screenPath: string;
+	webcamPath?: string;
+	webcamDurationMs?: number;
+	webcamSamplesAppended?: number;
+};
+
 function normalizePositiveNumber(value: unknown) {
 	return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : undefined;
 }
@@ -2064,6 +2071,17 @@ function attachNativeMacCaptureOutputDrain(proc: ChildProcessWithoutNullStreams)
 			if (event) {
 				if (event.event === "recording-diagnostics") {
 					nativeMacCaptureDiagnostics = { ...(nativeMacCaptureDiagnostics ?? {}), ...event };
+				}
+				if (event.event === "warning") {
+					nativeMacCaptureDiagnostics = {
+						...(nativeMacCaptureDiagnostics ?? {}),
+						warnings: [
+							...((nativeMacCaptureDiagnostics?.warnings as
+								| Array<Record<string, unknown>>
+								| undefined) ?? []),
+							event,
+						],
+					};
 				}
 				nativeMacCaptureEvents.emit("helper-event", event);
 			}
@@ -2140,7 +2158,7 @@ function waitForNativeMacCaptureStart(proc: ChildProcessWithoutNullStreams) {
 }
 
 function waitForNativeMacCaptureStop(proc: ChildProcessWithoutNullStreams) {
-	return new Promise<string>((resolve, reject) => {
+	return new Promise<NativeMacCaptureStopInfo>((resolve, reject) => {
 		const timer = setTimeout(() => {
 			cleanup();
 			reject(
@@ -2155,7 +2173,19 @@ function waitForNativeMacCaptureStop(proc: ChildProcessWithoutNullStreams) {
 		const inspect = (event: Record<string, unknown>) => {
 			if (event.event === "recording-stopped") {
 				cleanup();
-				resolve(String(event.screenPath ?? nativeMacCaptureTargetPath ?? ""));
+				resolve({
+					screenPath: String(event.screenPath ?? nativeMacCaptureTargetPath ?? ""),
+					...(typeof event.webcamPath === "string" && event.webcamPath.trim()
+						? { webcamPath: event.webcamPath }
+						: {}),
+					...(typeof event.webcamDurationMs === "number" && Number.isFinite(event.webcamDurationMs)
+						? { webcamDurationMs: Math.max(0, event.webcamDurationMs) }
+						: {}),
+					...(typeof event.webcamSamplesAppended === "number" &&
+					Number.isFinite(event.webcamSamplesAppended)
+						? { webcamSamplesAppended: Math.max(0, event.webcamSamplesAppended) }
+						: {}),
+				});
 				return;
 			}
 			if (event.event === "error") {
@@ -2168,7 +2198,7 @@ function waitForNativeMacCaptureStop(proc: ChildProcessWithoutNullStreams) {
 		const onClose = (code: number | null) => {
 			if (code === 0 && nativeMacCaptureTargetPath) {
 				cleanup();
-				resolve(nativeMacCaptureTargetPath);
+				resolve({ screenPath: nativeMacCaptureTargetPath });
 				return;
 			}
 			cleanup();
@@ -3305,8 +3335,8 @@ export function registerIpcHandlers(
 			completeNativeMacCursorPauseRange();
 			const stoppedPathPromise = waitForNativeMacCaptureStop(proc);
 			proc.stdin.write("stop\n");
-			const stoppedPath = await stoppedPathPromise;
-			const screenVideoPath = stoppedPath || preferredPath;
+			const stoppedInfo = await stoppedPathPromise;
+			const screenVideoPath = stoppedInfo.screenPath || preferredPath;
 			if (!screenVideoPath) {
 				throw new Error("Native macOS capture did not return an output path.");
 			}
@@ -3330,10 +3360,19 @@ export function registerIpcHandlers(
 			}
 
 			let webcamVideoPath: string | undefined;
-			if (preferredWebcamPath) {
-				const webcamStats = await fs.stat(preferredWebcamPath).catch(() => null);
+			if (stoppedInfo.webcamPath) {
+				const webcamStats = await fs.stat(stoppedInfo.webcamPath).catch(() => null);
 				if (webcamStats?.isFile() && webcamStats.size > 0) {
-					webcamVideoPath = preferredWebcamPath;
+					webcamVideoPath = stoppedInfo.webcamPath;
+				} else {
+					nativeMacCaptureDiagnostics = {
+						...(nativeMacCaptureDiagnostics ?? {}),
+						webcamWarning: {
+							code: "webcam-output-invalid",
+							path: stoppedInfo.webcamPath,
+							size: webcamStats?.size ?? 0,
+						},
+					};
 				}
 			}
 
@@ -3343,6 +3382,20 @@ export function registerIpcHandlers(
 				createdAt: recordingId,
 				cursorCaptureMode,
 			};
+			if (webcamVideoPath) {
+				nativeMacCaptureDiagnostics = {
+					...(nativeMacCaptureDiagnostics ?? {}),
+					webcam: {
+						path: webcamVideoPath,
+						...(typeof stoppedInfo.webcamDurationMs === "number"
+							? { durationMs: stoppedInfo.webcamDurationMs }
+							: {}),
+						...(typeof stoppedInfo.webcamSamplesAppended === "number"
+							? { samplesAppended: stoppedInfo.webcamSamplesAppended }
+							: {}),
+					},
+				};
+			}
 			const diagnostics = getNativeMacDiagnosticsForPath(screenVideoPath);
 			setCurrentRecordingSessionState(session);
 			currentProjectPath = null;

@@ -223,8 +223,8 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			])
 		}
 
-		await finishWriter()
-		await webcamRecorder?.stop()
+		let webcamResult = await webcamRecorder?.stop()
+		await finishWriter(webcamResult: webcamResult)
 	}
 
 	func pause() {
@@ -546,7 +546,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 		])
 	}
 
-	private func finishWriter() async {
+	private func finishWriter(webcamResult: NativeWebcamRecorder.StopResult?) async {
 		guard let writer else {
 			return
 		}
@@ -563,14 +563,30 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
 		if writer.status == .completed {
 			emitRecordingDiagnostics(for: request.outputs.screenPath)
-			emit([
+			var event: [String: Any] = [
 				"event": "recording-stopped",
 				"screenPath": request.outputs.screenPath,
 				"width": outputWidth,
 				"height": outputHeight,
 				"fps": request.video.fps,
 				"bitrate": selectedVideoBitrate,
-			])
+			]
+			if let webcamResult {
+				if webcamResult.completed {
+					event["webcamPath"] = webcamResult.path
+					event["webcamDurationMs"] = webcamResult.durationMs as Any
+					event["webcamSamplesAppended"] = webcamResult.samplesAppended
+				} else {
+					emit([
+						"event": "warning",
+						"code": "webcam-writer-failed",
+						"message": webcamResult.errorMessage ?? "Native webcam writer did not complete.",
+						"path": webcamResult.path,
+						"samplesAppended": webcamResult.samplesAppended,
+					])
+				}
+			}
+			emit(event)
 		} else {
 			emitError(
 				code: "writer-failed",
@@ -939,6 +955,14 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 
 @available(macOS 13.0, *)
 final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
+	struct StopResult {
+		let path: String
+		let completed: Bool
+		let durationMs: Double?
+		let samplesAppended: Int
+		let errorMessage: String?
+	}
+
 	private let request: RecordingRequest.Webcam
 	private let outputPath: String
 	private let session = AVCaptureSession()
@@ -948,6 +972,9 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 	private var didStartWriting = false
 	private var isStopping = false
 	private var firstSampleTime: CMTime?
+	private var lastSampleTime: CMTime?
+	private var samplesAppended = 0
+	private var appendFailures = 0
 	private(set) var outputWidth = 1280
 	private(set) var outputHeight = 720
 	private(set) var outputFps = 30
@@ -998,11 +1025,15 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 		}
 	}
 
-	func stop() async {
+	func stop() async -> StopResult {
 		await withCheckedContinuation { continuation in
 			queue.async {
 				if self.isStopping {
-					continuation.resume()
+					continuation.resume(
+						returning: self.makeStopResult(
+							errorMessage: "Native webcam recorder was already stopping."
+						)
+					)
 					return
 				}
 				self.isStopping = true
@@ -1011,11 +1042,23 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 				}
 				self.videoInput?.markAsFinished()
 				guard let writer = self.writer, self.didStartWriting else {
-					continuation.resume()
+					continuation.resume(
+						returning: self.makeStopResult(
+							errorMessage: "Native webcam writer received no frames."
+						)
+					)
 					return
 				}
 				writer.finishWriting {
-					continuation.resume()
+					let errorMessage: String?
+					if writer.status == .completed {
+						errorMessage = nil
+					} else {
+						errorMessage =
+							writer.error.map { "\($0)" } ??
+							"Native webcam writer failed with status \(writer.status.rawValue)."
+					}
+					continuation.resume(returning: self.makeStopResult(errorMessage: errorMessage))
 				}
 			}
 		}
@@ -1044,7 +1087,38 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 		else {
 			return
 		}
-		_ = videoInput.append(retimed)
+		if videoInput.append(retimed) {
+			samplesAppended += 1
+			lastSampleTime = CMSampleBufferGetPresentationTimeStamp(retimed)
+		} else {
+			appendFailures += 1
+		}
+	}
+
+	private func makeStopResult(errorMessage: String?) -> StopResult {
+		let fileSize =
+			(try? FileManager.default.attributesOfItem(atPath: outputPath)[.size] as? NSNumber)?
+			.int64Value ?? 0
+		let writerCompleted = writer?.status == .completed
+		let hasVideoTrack = AVURLAsset(url: URL(fileURLWithPath: outputPath))
+			.tracks(withMediaType: .video)
+			.isEmpty == false
+		let completed =
+			writerCompleted && samplesAppended > 0 && fileSize > 0 && hasVideoTrack && errorMessage == nil
+		let durationMs: Double?
+		if let lastSampleTime, lastSampleTime.isValid {
+			let seconds = CMTimeGetSeconds(lastSampleTime)
+			durationMs = seconds.isFinite ? seconds * 1000 : nil
+		} else {
+			durationMs = nil
+		}
+		return StopResult(
+			path: outputPath,
+			completed: completed,
+			durationMs: durationMs,
+			samplesAppended: samplesAppended,
+			errorMessage: errorMessage ?? (appendFailures > 0 ? "Native webcam writer had \(appendFailures) append failures." : nil)
+		)
 	}
 
 	private func resolveDevice() -> AVCaptureDevice? {

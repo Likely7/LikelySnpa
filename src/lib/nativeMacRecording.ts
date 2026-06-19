@@ -70,6 +70,8 @@ export type NativeMacHelperRecordingStoppedEvent = {
 	event: "recording-stopped";
 	screenPath: string;
 	webcamPath?: string;
+	webcamDurationMs?: number;
+	webcamSamplesAppended?: number;
 };
 
 export type NativeMacHelperRecordingDiagnosticsEvent = {

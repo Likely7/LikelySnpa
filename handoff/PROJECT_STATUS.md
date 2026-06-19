@@ -37,6 +37,7 @@
 - macOS native H.264 screen recordings now include BT.709 color primaries, transfer function, and YCbCr matrix metadata to avoid washed/gray playback.
 - macOS native recording diagnostics now persist actual `recordingStarted` width, height, FPS, bitrate, requested dimensions, and color metadata into `manifest.json`.
 - macOS native webcam sidecar now records in the ScreenCaptureKit helper with `AVCaptureSession + AVAssetWriter` and writes package-local `webcam.mp4`.
+- macOS native webcam finalization is now part of the helper stop result instead of a best-effort side task. The helper finalizes webcam before emitting `recording-stopped`, only includes `webcamPath` when the webcam writer completed with samples, bytes, and a readable video track, and emits diagnostics/warnings for failures. Failed `.sb-*` AVAssetWriter side-band files are not deleted by the recovery path.
 - Windows native webcam sidecar now uses the WGC helper's Media Foundation/DirectShow path and writes package-local `webcam.mp4`; renderer webcam recording is no longer used on the native Windows path.
 - Windows support is currently scoped to x64 only. The WGC helper resolver and build scripts target `electron/native/bin/win32-x64`; Windows ARM64 is not a supported packaging target.
 - Windows native webcam sidecars now persist `webcamStartOffsetMs` from the WGC helper's first written webcam-sidecar frame relative to the screen timeline. Editor preview and MP4/GIF export already consume this manifest field, matching the macOS webcam offset path.
@@ -64,7 +65,7 @@
 - User retest after this fix reported the Follow Mouse behavior is close enough to continue; treat Follow Mouse zoom as implemented unless a new concrete offset sample appears.
 - Editor settings footer no longer exposes report bug, save diagnostics, or GitHub star buttons. It shows one centered contact line: `抖音小红书：Likely7  反馈问题`.
 - Project files use `.likelysnap` only.
-- New native recordings now write into readable timestamped package directories like `recording-2026-06-19-20-34-56-789.likelysnap/` with `screen.mp4`, optional `webcam.mp4`, `cursor.json`, `cursor-preview.json`, and `manifest.json`. Browser fallback and legacy packages may still use `webcam.webm`.
+- New native recordings now write into readable timestamped package directories like `recording-2026-06-19-20-34-56-789.likelysnap/` with `screen.mp4`, optional validated `webcam.mp4`, `cursor.json`, `cursor-preview.json`, and `manifest.json`. Browser fallback and legacy packages may still use `webcam.webm`.
 - A real ~32 minute macOS test produced healthy `screen.mp4` but a ~4 GB `webcam.webm`; stop-time WebM duration patch failed with `ERR_FS_FILE_TOO_LARGE`, and the editor could freeze when mounting that sidecar.
 - Long-recording direction is now implemented and documented in `handoff/LONG_RECORDING_NATIVE_WEBCAM_PLAN.md`: native `webcam.mp4` sidecars on macOS/Windows, bounded WebM fallback, sidecar degradation in editor, and NLE-style large media handling.
 - Stop/finalize paths no longer whole-file patch WebM sidecars over the 2 GB safe threshold.
@@ -109,6 +110,7 @@
 - The previous editor-load stall from waveform generation has been addressed architecturally with ranged reads and cache reuse; waveform display is default-on again. The known ~17 minute package and subsequent user testing reported the current editor behavior as acceptable after the staged open pass.
 - App settings are implemented and verified at the type/build level, but still need an end-to-end product retest from both entry points: launch HUD gear and editor top-bar gear.
 - Windows native webcam code is implemented and now has a persisted sidecar timeline offset, but it is still not truth-tested on Windows hardware from this macOS machine.
+- The recent macOS `webcam.mp4` zero-byte / `.sb-*` failure was traced to webcam AVAssetWriter finalization being separate from the main screen writer stop event. Code now waits for webcam finalization before reporting the native stop result, but it still needs a real recording retest with webcam enabled to confirm the package manifest includes a valid `webcam.mp4`.
 - Windows x64 packaging still depends on the native WGC helper binaries being built on Windows. Public GitHub release/build automation was removed until the project has a clean LikelySnap-owned release pipeline.
 - Windows export performance is now on the FFmpeg path, but still needs real Windows x64 validation with Task Manager/video encode metrics and app-side diagnostics showing the selected encoder.
 - Windows one-hour editor-open freeze has a concrete code-level fix in place for the largest cursor bottleneck: editor open now reads `cursor-preview.json` instead of parsing/transferring full `cursor.json`. This still needs the user's Windows package retest.
@@ -163,6 +165,10 @@
 - `npx biome check src/lib/appSettings.ts src/hooks/useScreenRecorder.ts src/components/launch/AppSettingsDialog.tsx src/lib/nativeMacRecording.ts src/lib/nativeWindowsRecording.ts electron/ipc/handlers.ts` passes after the OBS-style recording settings work.
 - `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after the OBS-style recording settings work with existing deprecation warnings only.
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local dev helper after the OBS-style recording settings work.
+- `swiftc -O -parse-as-library -framework AVFoundation -framework CoreGraphics -framework CoreMedia -framework Foundation -framework ScreenCaptureKit electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local dev helper after the macOS native webcam finalize fix. Existing macOS SDK deprecation warnings remain.
+- `npx tsc --noEmit` passes after the macOS native webcam finalize fix.
+- `npm test -- electron/ipc/recordingPackage.test.ts electron/ipc/recordingStream.test.ts src/lib/nativeMacRecording.test.ts src/lib/nativeWindowsRecording.test.ts` passes after the macOS native webcam finalize fix.
+- `npm run build-vite` passes after the macOS native webcam finalize fix.
 - `npx tsc --noEmit` passes after the package-local `cursor-preview.json` editor-open fix.
 - `npx vitest run electron/ipc/recordingPackage.test.ts src/lib/cursor/nativeCursor.test.ts src/components/video-editor/timeline/zoomSuggestionUtils.test.ts` passes after the package-local `cursor-preview.json` editor-open fix. The run still prints the known jsdom `HTMLCanvasElement.getContext()` warning, but all 23 tests pass.
 - Manual macOS reopen test after this fix hit `[editor-open] cursor preview cache hit` in 13ms for `cursor-preview.json`, confirming the preview index path is live on the current app.

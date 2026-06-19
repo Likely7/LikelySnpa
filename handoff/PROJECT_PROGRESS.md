@@ -90,6 +90,7 @@
   - Stable same-area cursor dwell longer than `8s` creates a long explanation zoom span based on the actual dwell duration plus context padding, capped at `45s`.
   - Nearby auto zoom suggestions within `3000ms` are merged into one longer span so the follow-follow camera motion can carry the scene through the gap instead of popping out and back in.
   - This specifically covers article/script narration where the cursor rests on a paragraph for tens of seconds; the generated zoom should stay stable instead of jumping in and out every fixed short duration.
+82. Fixed the macOS native webcam stop/finalize race that could leave `webcam.mp4` at 0 bytes with AVAssetWriter `.sb-*` side-band files. The ScreenCaptureKit helper now stops/finalizes webcam before emitting `recording-stopped`, reports `webcamPath` only when the webcam writer completed with samples, bytes, and a readable video track, and preserves failed side-band artifacts for diagnostics instead of deleting them.
 
 ## Implemented This Pass
 
@@ -146,6 +147,10 @@
 - `electron/ipc/nativeBridge.ts`
 - `electron/native-bridge/cursor/telemetryCursorAdapter.ts`
 - `src/native/hooks/useCursorEditorData.ts`
+- macOS native webcam finalize fix:
+  - `electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift`
+  - `electron/ipc/handlers.ts`
+  - `src/lib/nativeMacRecording.ts`
 
 ## 2026-06-18 Package Size Cleanup Pass 1
 
@@ -204,6 +209,10 @@
 - `./node_modules/.bin/tsc --noEmit` passes after native webcam sidecar refactor.
 - `swiftc -parse-as-library -typecheck electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift` passes after native webcam sidecar refactor with deprecation warnings only.
 - `swiftc -parse-as-library electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local macOS helper binary.
+- `swiftc -O -parse-as-library -framework AVFoundation -framework CoreGraphics -framework CoreMedia -framework Foundation -framework ScreenCaptureKit electron/native/screencapturekit/Sources/OpenScreenScreenCaptureKitHelper/main.swift -o electron/native/screencapturekit/build/openscreen-screencapturekit-helper` passes and refreshes the local macOS helper binary after the native webcam finalize fix.
+- `npx tsc --noEmit` passes after the native webcam finalize fix.
+- `npm test -- electron/ipc/recordingPackage.test.ts electron/ipc/recordingStream.test.ts src/lib/nativeMacRecording.test.ts src/lib/nativeWindowsRecording.test.ts` passes after the native webcam finalize fix.
+- `npm run build-vite` passes after the native webcam finalize fix.
 - `npm run generate:icons -- /Users/macbook/Downloads/logo.png` passes and regenerates all app icon assets from the stored source logo.
 - `npm run lint` and `./node_modules/.bin/tsc --noEmit` pass after the settings footer simplification.
 - `npm run build-vite` passes after the ranged/cached waveform refactor.

@@ -71,6 +71,7 @@ During recording:
 
 - `screen.mp4` is written by the macOS ScreenCaptureKit helper.
 - Native macOS and Windows recordings write package-local `webcam.mp4`.
+- macOS native `webcam.mp4` is only advertised in `manifest.json` after the helper has finalized the webcam writer and verified samples, non-zero bytes, and a readable video track. If AVAssetWriter leaves `.sb-*` side-band artifacts after a failure, they are preserved for diagnostics/recovery rather than deleted.
 - Browser/fallback recordings may still write package-local `webcam.webm`.
 - `cursor.json` is created at start and refreshed in throttled snapshots.
 - `cursor-preview.json` is created/refreshed beside `cursor.json` as a bounded editor-open index. It stores package-relative source identity so moving the `.likelysnap` package does not invalidate the cache.
@@ -78,7 +79,7 @@ During recording:
 
 On stop:
 
-- Flush/close screen and webcam streams.
+- Flush/close screen and webcam streams. On macOS, webcam finalization happens before the helper emits the native `recording-stopped` event so the main process cannot race ahead and mark a 0-byte webcam as missing/successful incorrectly.
 - Patch `webcam.webm` duration if a fallback streamed WebM needs it and is below the safe whole-file threshold.
 - Finalize cursor telemetry with pause/warmup offsets applied.
 - Finalize `cursor-preview.json` from the corrected cursor telemetry so the next editor open can avoid full `cursor.json` parsing.
@@ -98,7 +99,7 @@ For each package:
 1. Read `manifest.json` if present.
 2. If missing, rebuild it from files in the package.
 3. Require readable `screen.mp4`; without it the package is failed.
-4. Attach `webcam.mp4` or fallback `webcam.webm` if present and safe to mount.
+4. Attach `webcam.mp4` or fallback `webcam.webm` only if present and safe to mount. Do not attach a 0-byte `webcam.mp4`; preserve related `.sb-*` files for inspection if the writer failed.
 5. Attach `cursor.json` if present and prefer `cursor-preview.json` for editor preview when it matches the source file size/mtime.
 6. Mark as `recoverable` if stop/finalize did not complete cleanly.
 
@@ -125,7 +126,7 @@ Implemented:
 
 Still pending:
 
-- Real macOS long-recording validation against package-local native `webcam.mp4`.
+- Real macOS long-recording validation against package-local native `webcam.mp4`, including the recent stop/finalize race fix for 0-byte webcam files and `.sb-*` side-band artifacts.
 - Real Windows validation of WGC package-local `webcam.mp4`.
 - Interrupted-recording/kill-process recovery validation on real packages.
 
@@ -134,7 +135,7 @@ Still pending:
 - A new recording creates exactly one visible `recording-YYYY-MM-DD-HH-mm-ss-SSS.likelysnap` package in the recording directory.
 - New macOS packages receive a Finder custom icon from `public/likelysnap.png` so the package itself shows the LikelySnap icon even when LaunchServices document-icon caching is stale.
 - During active recording, package contents are present and growing/updating.
-- Opening the package loads screen, safe webcam sidecar, cursor telemetry, and webcam offset.
+- Opening the package loads screen, validated safe webcam sidecar, cursor telemetry, and webcam offset.
 - Opening the package uses `cursor-preview.json` for cursor preview/auto zoom when valid, while full `cursor.json` remains available for export.
 - Moving the package to another folder still opens correctly because manifest paths are relative.
 - Deleting `manifest.json` and reopening the package rebuilds a usable manifest.
