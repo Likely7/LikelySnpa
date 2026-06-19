@@ -6,7 +6,7 @@ English | [简体中文](./README.md)
 
 # LikelySnap
 
-LikelySnap is based on OpenScreen 1.5.0, but it is not a skin. The recording, editing, and exporting pipelines have been rebuilt so long recordings can be saved, reopened, edited, and exported with much better confidence.
+LikelySnap is based on OpenScreen 1.5.0, but it is not a skin. The recording storage flow, project package format, webcam path, and long-video export path have been rebuilt so long recordings are much less likely to disappear and can still be reopened, edited, and exported.
 
 ## Why This Project Exists
 
@@ -26,11 +26,11 @@ I did not want another short-recording toy. I wanted a recorder that keeps real 
 
 So LikelySnap rebuilds the original project around that goal.
 
-## The Biggest Change: New Recording, Editing, And Export Pipelines
+## The Biggest Change: Recording And Export Rebuilt First
 
 The most important upgrade is not the name, the color, or a new button.
 
-The real change is that recording, editing, and exporting now follow a different model.
+The real change is that recording storage and export now follow a more durable model. The editor itself has not yet been fully rewritten into a Premiere Pro, DaVinci Resolve, or Final Cut Pro style NLE architecture. It still builds on the original browser-based editor architecture, with reliability and usability improvements layered on top.
 
 The original app was closer to a small utility: record something, stop, and let the app package everything at the end. That can work for short clips. It becomes fragile when recordings grow to dozens of minutes or hours.
 
@@ -38,15 +38,15 @@ LikelySnap treats every recording as a real project.
 
 Professional editors such as Premiere Pro, DaVinci Resolve, Final Cut Pro, and CapCut do not survive long media because they magically load everything into memory. They manage media as project assets: files stay on disk, timelines read what they need, waveform and preview data can be cached, heavy work moves to background jobs, and export writes continuously to files.
 
-LikelySnap is moving in that direction.
+LikelySnap is moving in that direction, but the current version is not a full NLE yet. Recording and export have moved toward a project-based, file-backed flow first. The editor still has old-architecture limits, so long projects can still take a while to open.
 
 Instead of creating one loose video and calling it done, LikelySnap stores the screen recording, webcam sidecar, audio, cursor telemetry, and project metadata inside one `.likelysnap` project package. The package can be moved, reopened, and edited again.
 
-Opening the editor also avoids treating long videos as something that must be fully swallowed before the UI appears. The goal is to show the project first, let the user scrub and edit, then prepare heavier data such as waveforms, cursor previews, and Auto Zoom suggestions in the background.
+Editor opening has had some load-reduction and caching work, but the architecture problem is not solved. A 30 minute to 1 hour project, or anything longer, can still make the app pause for a noticeable amount of time, especially on Windows. That should not be marketed as instant editing. The long-term direction is to move the editor toward a real NLE model with media indexing, proxies, layered caches, and background jobs.
 
 Export follows the same idea. Long exports should not be assembled as one giant in-memory result. LikelySnap writes processed output to a temporary file and promotes it to the final MP4 only after the export succeeds.
 
-That is the core of LikelySnap: recording no longer depends on the last second, editing no longer tries to eat the whole recording at once, and exporting no longer bets the entire video on memory.
+That is the current core of LikelySnap: recording no longer depends on the last second, project assets are kept together, webcam recording is treated as a real sidecar, and export no longer bets the entire video on memory. The editor is improved, but it is not the final architecture yet.
 
 ## What Changed
 
@@ -78,11 +78,13 @@ Normal users do not need to care about these internal files. The important part 
 
 Move the whole `.likelysnap` package, and the project should still open.
 
-### 3. Long Videos Should Not Freeze The Editor
+### 3. Long Video Opening Is Still A Current Limit
 
-Long recordings are heavy. LikelySnap tries to open the project first, then prepare heavier data progressively.
+Long recordings are heavy, and the current editor still uses the original browser-based architecture.
 
-Waveforms, cursor data, and Auto Zoom suggestions may still need preparation time on long recordings. A very long project can take seconds or longer to become fully ready. The goal is that the app is preparing useful data, not sitting in a fake-dead state.
+LikelySnap can open and edit long recordings, but it does not guarantee instant interaction on large projects. A 30 minute to 1 hour recording, or a longer one, may still pause while the app reads video information, prepares timeline state, loads cursor data, and handles waveform or Auto Zoom related data.
+
+The honest target today is: the project should remain recoverable and editable. The long-term target is a deeper NLE architecture with media indexes, proxies, background jobs, layered caches, and true on-demand loading.
 
 ### 4. Webcam, Audio, And Cursor Stay On The Same Timeline
 
@@ -186,7 +188,7 @@ LikelySnap changes the direction:
 - From short-recording first to long-recording first.
 - From "package everything after stop" to "write important files during recording."
 - From loose video output to a complete project package.
-- From heavy upfront editor loading to staged preparation.
+- Editor work is still a staged improvement on the original architecture; long-video opening remains a known limit, and the future direction is a deeper NLE architecture.
 - From one-size Auto Zoom to editable per-zoom behavior.
 - From memory-heavy export to file-backed export.
 - From minimal settings to configurable recording folders, project folders, cache folders, quality, frame rate, resolution, and bitrate.
@@ -203,7 +205,7 @@ Depending on the machine and project size, that can take seconds or longer. The 
 
 This project is still being refined:
 
-- Very long recordings may still take time on first open.
+- Very long recordings may still take noticeable time on first open. This is especially true for 30 minute to 1 hour projects and beyond, because the editor has not yet been fully moved to an NLE architecture.
 - GIF export is not meant for long videos. Use MP4 for long exports.
 - Windows support exists, but GPU drivers, hardware, and OS differences need more real-device testing.
 - Multi-hour projects are much safer than the original flow, but still need more stress testing.
