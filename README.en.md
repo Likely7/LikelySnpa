@@ -4,6 +4,24 @@
 
 English | [简体中文](./README.md)
 
+## Installation
+
+Ready-to-use builds are available on GitHub Releases. You do not need to download the source code or compile the app yourself.
+
+[Download LikelySnap from Releases](https://github.com/Likely7/LikelySnpa/releases/latest)
+
+### macOS
+
+Download the macOS `.dmg`, open it, and drag `LikelySnap.app` into the `Applications` folder.
+
+On first launch, macOS may ask for Screen Recording, System Audio, Microphone, and Camera permissions. Grant the requested permissions, then fully quit and reopen LikelySnap if macOS asks you to restart the app.
+
+### Windows
+
+Download the Windows portable `.zip`, extract it to a normal folder, and run `LikelySnap.exe`.
+
+Do not run the app directly from inside the zip file. Extract the full folder first, because recording and export depend on the bundled runtime files next to the executable.
+
 # LikelySnap
 
 LikelySnap is based on OpenScreen 1.5.0, but it is not a skin. The recording storage flow, project package format, webcam path, and long-video export path have been rebuilt so long recordings are much less likely to disappear and can still be reopened, edited, and exported.

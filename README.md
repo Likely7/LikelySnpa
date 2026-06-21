@@ -4,6 +4,24 @@
 
 [English](./README.en.md) | 简体中文
 
+## 安装说明
+
+已经打包好的安装包都在 GitHub Releases 里，不需要自己下载源码编译。
+
+[前往 Releases 下载安装包](https://github.com/Likely7/LikelySnpa/releases/latest)
+
+### macOS
+
+下载 macOS 的 `.dmg` 安装包，打开后把 `LikelySnap.app` 拖到 `Applications` / `应用程序` 文件夹里。
+
+第一次启动时，macOS 可能会要求授予录屏、系统音频、麦克风和摄像头权限。按提示授权后，如果系统要求重新打开软件，就完全退出 LikelySnap 再重新启动一次。
+
+### Windows
+
+下载 Windows 的免安装压缩包，解压到一个固定文件夹里，然后直接运行里面的 `LikelySnap.exe`。
+
+不要在压缩包里直接双击运行。先完整解压，再打开软件。录制和导出时会用到同目录里的运行文件，直接在压缩包里运行可能会出问题。
+
 # LikelySnap
 
 不是换皮，是底层重做。LikelySnap 基于 OpenScreen 1.5.0 改造而来，已经重做了录制保存、项目包、摄像头链路和长视频导出，目标很简单：让长录制更安心，录完之后文件真的在，后面还能继续编辑和导出。
