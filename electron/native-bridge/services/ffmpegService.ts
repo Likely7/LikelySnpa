@@ -69,7 +69,19 @@ export class FfmpegService {
 
 		const tempPath = await this.createTempOutputPath(request.outputPath);
 		const encoderChoice = await this.selectVideoEncoder(binary, request.hardwarePreference);
-		const args = this.buildFrameExportArgs(request, tempPath, encoderChoice.encoder);
+		const audioStreamCount = request.inputAudioPath
+			? await this.probeAudioStreamCount(
+					binary.executablePath,
+					request.inputAudioPath,
+					request.hasAudio,
+				)
+			: 0;
+		const args = this.buildFrameExportArgs(
+			request,
+			tempPath,
+			encoderChoice.encoder,
+			audioStreamCount,
+		);
 		const logs: string[] = [];
 		const proc = spawn(binary.executablePath, args, {
 			stdio: ["pipe", "pipe", "pipe"],
@@ -277,7 +289,10 @@ export class FfmpegService {
 		request: FfmpegFrameExportRequest,
 		outputPath: string,
 		videoEncoder: string,
+		audioStreamCount: number,
 	): string[] {
+		const inputAudioPath = request.inputAudioPath;
+		const shouldIncludeAudio = Boolean(inputAudioPath && audioStreamCount > 0);
 		const args: string[] = [
 			"-y",
 			"-hide_banner",
@@ -295,16 +310,17 @@ export class FfmpegService {
 			"pipe:0",
 		];
 
-		if (request.hasAudio && request.inputAudioPath) {
-			args.push("-i", request.inputAudioPath);
+		if (shouldIncludeAudio && inputAudioPath) {
+			args.push("-i", inputAudioPath);
 		}
 
 		args.push("-map", "0:v:0");
 
-		if (request.hasAudio && request.inputAudioPath) {
+		if (shouldIncludeAudio) {
 			const audioFilter = this.buildAudioFilterComplex(
 				request.audioTimeline,
 				request.sourceDurationSec,
+				audioStreamCount,
 			);
 			if (audioFilter) {
 				args.push("-filter_complex", audioFilter, "-map", "[aout]");
@@ -333,6 +349,7 @@ export class FfmpegService {
 	private buildAudioFilterComplex(
 		timeline: FfmpegFrameExportRequest["audioTimeline"],
 		sourceDurationSec: number,
+		audioStreamCount: number,
 	): string | null {
 		const segments = timeline.filter(
 			(segment) =>
@@ -340,7 +357,8 @@ export class FfmpegService {
 				Number.isFinite(segment.endSec) &&
 				segment.endSec > segment.startSec,
 		);
-		if (segments.length === 0) {
+		const safeAudioStreamCount = Math.max(0, Math.floor(audioStreamCount));
+		if (safeAudioStreamCount <= 0 || segments.length === 0) {
 			return null;
 		}
 
@@ -350,7 +368,8 @@ export class FfmpegService {
 			effectiveSegments.length === 1 &&
 			Math.abs(effectiveSegments[0].startSec) < 0.0001 &&
 			Math.abs(effectiveSegments[0].endSec - sourceDurationSec) < 0.25 &&
-			Math.abs(effectiveSegments[0].speed - 1) < 0.0001
+			Math.abs(effectiveSegments[0].speed - 1) < 0.0001 &&
+			safeAudioStreamCount === 1
 		) {
 			return null;
 		}
@@ -358,21 +377,79 @@ export class FfmpegService {
 		const parts: string[] = [];
 		effectiveSegments.forEach((segment, index) => {
 			const label = `a${index}`;
-			const filters = [
-				`atrim=start=${Math.max(0, segment.startSec).toFixed(6)}:end=${Math.max(segment.startSec, segment.endSec).toFixed(6)}`,
-				"asetpts=PTS-STARTPTS",
-				...this.buildAtempoFilters(segment.speed),
-			];
-			parts.push(`[1:a]${filters.join(",")}[${label}]`);
+			const segmentTrackLabels: string[] = [];
+			for (let trackIndex = 0; trackIndex < safeAudioStreamCount; trackIndex += 1) {
+				const trackLabel = `a${index}_${trackIndex}`;
+				const filters = [
+					`atrim=start=${Math.max(0, segment.startSec).toFixed(6)}:end=${Math.max(segment.startSec, segment.endSec).toFixed(6)}`,
+					"asetpts=PTS-STARTPTS",
+					...this.buildAtempoFilters(segment.speed),
+				];
+				parts.push(`[1:a:${trackIndex}]${filters.join(",")}[${trackLabel}]`);
+				segmentTrackLabels.push(`[${trackLabel}]`);
+			}
+			if (safeAudioStreamCount === 1) {
+				parts[parts.length - 1] = parts[parts.length - 1].replace(/\[a\d+_0\]$/, `[${label}]`);
+			} else {
+				parts.push(
+					`${segmentTrackLabels.join("")}amix=inputs=${safeAudioStreamCount}:duration=longest:dropout_transition=0:normalize=0[${label}]`,
+				);
+			}
 		});
 
 		if (effectiveSegments.length === 1) {
-			return parts[0].replace(/\[a0\]$/, "[aout]");
+			return parts.join(";").replace(/\[a0\]$/, "[aout]");
 		}
 
 		const concatInputs = effectiveSegments.map((_, index) => `[a${index}]`).join("");
 		parts.push(`${concatInputs}concat=n=${effectiveSegments.length}:v=0:a=1[aout]`);
 		return parts.join(";");
+	}
+
+	private async probeAudioStreamCount(
+		ffmpegPath: string,
+		inputPath: string,
+		fallbackHasAudio: boolean,
+	): Promise<number> {
+		try {
+			const output = await this.probeInputInfo(ffmpegPath, inputPath);
+			return this.parseAudioStreamCount(output);
+		} catch {
+			return fallbackHasAudio ? 1 : 0;
+		}
+	}
+
+	private parseAudioStreamCount(ffmpegInputInfo: string): number {
+		return (ffmpegInputInfo.match(/Stream #0:\d+(?:\[[^\]]+\])?(?:\([^)]+\))?: Audio:/g) ?? [])
+			.length;
+	}
+
+	private probeInputInfo(ffmpegPath: string, inputPath: string): Promise<string> {
+		return new Promise((resolve, reject) => {
+			const proc = spawn(ffmpegPath, ["-hide_banner", "-i", inputPath], {
+				stdio: ["ignore", "pipe", "pipe"],
+			});
+			let stdout = "";
+			let stderr = "";
+			const timeout = setTimeout(() => {
+				proc.kill("SIGKILL");
+				reject(new Error("Timed out while probing FFmpeg input"));
+			}, 10_000);
+			proc.stdout.on("data", (chunk) => {
+				stdout += String(chunk);
+			});
+			proc.stderr.on("data", (chunk) => {
+				stderr += String(chunk);
+			});
+			proc.once("error", (error) => {
+				clearTimeout(timeout);
+				reject(error);
+			});
+			proc.once("close", () => {
+				clearTimeout(timeout);
+				resolve(`${stdout}\n${stderr}`);
+			});
+		});
 	}
 
 	private buildAtempoFilters(speed: number): string[] {

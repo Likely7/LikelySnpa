@@ -46,6 +46,9 @@ describe("recording package paths", () => {
 		expect(resolveRecordingOutputPathInDirectory("recording-123.likelysnap/webcam.mp4", "/r")).toBe(
 			path.join("/r", "recording-123.likelysnap", "webcam.mp4"),
 		);
+		expect(resolveRecordingOutputPathInDirectory("recording-123.likelysnap/webcam.mov", "/r")).toBe(
+			path.join("/r", "recording-123.likelysnap", "webcam.mov"),
+		);
 		expect(
 			resolveRecordingOutputPathInDirectory("recording-123.likelysnap/webcam.webm", "/r"),
 		).toBe(path.join("/r", "recording-123.likelysnap", "webcam.webm"));
@@ -161,6 +164,29 @@ describe("recording package paths", () => {
 		expect(normalizeRecordingPackageManifest(manifest, packageDir)).toEqual({
 			screenVideoPath: path.join(packageDir, "screen.mp4"),
 			webcamVideoPath: path.join(packageDir, "webcam.webm"),
+			createdAt: 123,
+		});
+	});
+
+	it("keeps macOS movie-file webcam sidecars loadable", () => {
+		const packageDir = path.join("/r", "recording-123.likelysnap");
+		const manifest = {
+			schemaVersion: 1,
+			createdAt: 123,
+			brand: "LikelySnap",
+			media: {
+				screenVideoPath: "screen.mp4",
+				webcamVideoPath: "webcam.mov",
+				cursorTelemetryPath: "cursor.json",
+			},
+			recording: {
+				status: "ready",
+			},
+		};
+
+		expect(normalizeRecordingPackageManifest(manifest, packageDir)).toEqual({
+			screenVideoPath: path.join(packageDir, "screen.mp4"),
+			webcamVideoPath: path.join(packageDir, "webcam.mov"),
 			createdAt: 123,
 		});
 	});

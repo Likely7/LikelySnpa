@@ -136,9 +136,7 @@ export class FfmpegVideoExporter {
 			);
 			const startResult = await window.electronAPI.startFfmpegFrameExport({
 				outputPath: this.config.outputPath,
-				inputAudioPath: videoInfo.hasAudio
-					? (this.config.inputAudioPath ?? this.config.videoUrl)
-					: undefined,
+				inputAudioPath: this.config.inputAudioPath ?? this.config.videoUrl,
 				hasAudio: videoInfo.hasAudio,
 				width: this.config.width,
 				height: this.config.height,

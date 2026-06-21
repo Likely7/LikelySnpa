@@ -41,6 +41,7 @@ import type {
 	ProjectFileResult,
 	ProjectPathResult,
 } from "../../src/native/contracts";
+import { resolveFfmpegBinary } from "../ffmpeg/ffmpegResolver";
 import { mainT } from "../i18n";
 import { RECORDINGS_DIR as LEGACY_RECORDINGS_DIR } from "../main";
 import { createCursorRecordingSession } from "../native-bridge/cursor/recording/factory";
@@ -63,11 +64,13 @@ import {
 	isRecordingPackagePath,
 	normalizeRecordingPackageManifest,
 	RECORDING_PACKAGE_LEGACY_WEBCAM_VIDEO,
+	RECORDING_PACKAGE_MAC_WEBCAM_VIDEO,
 	RECORDING_PACKAGE_WEBCAM_VIDEO,
 	resolveRecordingOutputPathInDirectory,
 } from "./recordingPackage";
 import { RecordingStreamRegistry, registerRecordingStreamHandlers } from "./recordingStream";
 import { resolveScreenAccessResult, type ScreenAccessStatus } from "./screenAccess";
+import { ffmpegInputProbeHasVideoTrack } from "./videoProbe";
 
 const PROJECT_FILE_EXTENSION = "likelysnap";
 export const SHORTCUTS_FILE = path.join(app.getPath("userData"), "shortcuts.json");
@@ -648,7 +651,7 @@ async function prepareSupplementalPreviewAudioTrack(videoPath: string) {
 }
 
 type WaveformPeakCache = {
-	version: 1;
+	version: 2;
 	sourcePath: string;
 	sourceSize: number;
 	sourceMtimeMs: number;
@@ -686,7 +689,7 @@ function isValidWaveformPeakCache(
 
 	const cache = value as Partial<WaveformPeakCache>;
 	return (
-		cache.version === 1 &&
+		cache.version === 2 &&
 		cache.sourcePath === sourcePath &&
 		cache.sourceSize === sourceStat.size &&
 		cache.sourceMtimeMs === sourceStat.mtimeMs &&
@@ -758,7 +761,7 @@ async function writeWaveformPeaksCache(
 	const sourceStat = await fs.stat(normalizedPath);
 	const cachePath = await getWaveformCachePath(normalizedPath, sourceStat);
 	const payload: WaveformPeakCache = {
-		version: 1,
+		version: 2,
 		sourcePath: normalizedPath,
 		sourceSize: sourceStat.size,
 		sourceMtimeMs: sourceStat.mtimeMs,
@@ -777,6 +780,33 @@ async function writeWaveformPeaksCache(
 		peaksPerSecond: WAVEFORM_PEAKS_PER_SECOND,
 		cached: false,
 	};
+}
+
+async function hasReadableVideoTrack(filePath: string): Promise<boolean> {
+	const ffmpegPath = await resolveFfmpegBinary().then((binary) => binary?.executablePath);
+	if (!ffmpegPath) {
+		return true;
+	}
+
+	const result = await runProcess(ffmpegPath, ["-hide_banner", "-i", filePath]);
+	const probeOutput = `${result.stdout}\n${result.stderr}`;
+	return ffmpegInputProbeHasVideoTrack(probeOutput);
+}
+
+async function resolveValidatedVideoSidecarPath(
+	filePath?: string | null,
+): Promise<{ path?: string; size?: number; readable?: boolean }> {
+	if (!filePath) {
+		return {};
+	}
+
+	const stats = await fs.stat(filePath).catch(() => null);
+	if (!stats?.isFile() || stats.size <= 0) {
+		return { size: stats?.size ?? 0, readable: false };
+	}
+
+	const readable = await hasReadableVideoTrack(filePath).catch(() => false);
+	return readable ? { path: filePath, size: stats.size, readable } : { size: stats.size, readable };
 }
 
 async function directorySizeBytes(dirPath: string): Promise<number> {
@@ -2059,6 +2089,22 @@ function getNativeMacDiagnosticsForPath(screenVideoPath: string) {
 	return null;
 }
 
+function getNativeMacDiagnosticTrackDurationMs(mediaType: "video" | "audio") {
+	const tracks = (nativeMacCaptureDiagnostics?.tracks as Record<string, unknown> | undefined)?.[
+		mediaType
+	];
+	if (!Array.isArray(tracks)) {
+		return undefined;
+	}
+	for (const track of tracks) {
+		const durationMs = (track as Record<string, unknown> | null)?.durationMs;
+		if (typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs > 0) {
+			return durationMs;
+		}
+	}
+	return undefined;
+}
+
 function attachNativeMacCaptureOutputDrain(proc: ChildProcessWithoutNullStreams) {
 	let lineBuffer = "";
 	const drain = (chunk: Buffer) => {
@@ -2387,6 +2433,7 @@ async function loadRecordingPackageSession(packageDir: string): Promise<Recordin
 
 		let webcamVideoPath: string | undefined;
 		for (const childName of [
+			RECORDING_PACKAGE_MAC_WEBCAM_VIDEO,
 			RECORDING_PACKAGE_WEBCAM_VIDEO,
 			RECORDING_PACKAGE_LEGACY_WEBCAM_VIDEO,
 		]) {
@@ -3014,6 +3061,10 @@ export function registerIpcHandlers(
 						null)
 					: getSelectedDisplay();
 			const bounds = request.source.bounds ?? sourceDisplay?.bounds ?? getSelectedSourceBounds();
+			const macWebcamOutputPath = path.join(
+				packagePaths.packageDir,
+				RECORDING_PACKAGE_MAC_WEBCAM_VIDEO,
+			);
 			const config: NativeMacRecordingRequest = {
 				...request,
 				schemaVersion: 1,
@@ -3034,7 +3085,7 @@ export function registerIpcHandlers(
 				},
 				outputs: {
 					screenPath: outputPath,
-					...(request.webcam.enabled ? { webcamPath: packagePaths.webcamVideoPath } : {}),
+					...(request.webcam.enabled ? { webcamPath: macWebcamOutputPath } : {}),
 					manifestPath: packagePaths.manifestPath,
 				},
 			};
@@ -3059,9 +3110,7 @@ export function registerIpcHandlers(
 			);
 			nativeMacCaptureOutput = "";
 			nativeMacCaptureTargetPath = outputPath;
-			nativeMacCaptureWebcamTargetPath = request.webcam.enabled
-				? packagePaths.webcamVideoPath
-				: null;
+			nativeMacCaptureWebcamTargetPath = request.webcam.enabled ? macWebcamOutputPath : null;
 			nativeMacCaptureDiagnostics = null;
 			nativeMacCaptureRecordingId = recordingId;
 			nativeMacCaptureBounds = null;
@@ -3378,21 +3427,31 @@ export function registerIpcHandlers(
 				await writePendingCursorTelemetry(screenVideoPath);
 			}
 
-			let webcamVideoPath: string | undefined;
-			if (stoppedInfo.webcamPath) {
-				const webcamStats = await fs.stat(stoppedInfo.webcamPath).catch(() => null);
-				if (webcamStats?.isFile() && webcamStats.size > 0) {
-					webcamVideoPath = stoppedInfo.webcamPath;
-				} else {
-					nativeMacCaptureDiagnostics = {
-						...(nativeMacCaptureDiagnostics ?? {}),
-						webcamWarning: {
-							code: "webcam-output-invalid",
-							path: stoppedInfo.webcamPath,
-							size: webcamStats?.size ?? 0,
-						},
-					};
-				}
+			const stoppedWebcamValidation = await resolveValidatedVideoSidecarPath(
+				stoppedInfo.webcamPath,
+			);
+			const expectedWebcamValidation =
+				!stoppedWebcamValidation.path && preferredWebcamPath
+					? await resolveValidatedVideoSidecarPath(preferredWebcamPath)
+					: {};
+			const webcamVideoPath = stoppedWebcamValidation.path ?? expectedWebcamValidation.path;
+			if (!webcamVideoPath && (stoppedInfo.webcamPath || preferredWebcamPath)) {
+				nativeMacCaptureDiagnostics = {
+					...(nativeMacCaptureDiagnostics ?? {}),
+					webcamWarning: {
+						code: "webcam-output-invalid",
+						path: stoppedInfo.webcamPath ?? preferredWebcamPath,
+						size: stoppedWebcamValidation.size ?? expectedWebcamValidation.size ?? 0,
+						readable:
+							stoppedWebcamValidation.readable ?? expectedWebcamValidation.readable ?? false,
+					},
+				};
+			}
+			if (!stoppedInfo.webcamPath && expectedWebcamValidation.path) {
+				nativeMacCaptureDiagnostics = {
+					...(nativeMacCaptureDiagnostics ?? {}),
+					webcamRecoveredFromExpectedPath: expectedWebcamValidation.path,
+				};
 			}
 
 			const session: RecordingSession = {
@@ -3402,6 +3461,21 @@ export function registerIpcHandlers(
 				cursorCaptureMode,
 			};
 			if (webcamVideoPath) {
+				const screenDurationMs = getNativeMacDiagnosticTrackDurationMs("video");
+				if (
+					typeof screenDurationMs === "number" &&
+					typeof stoppedInfo.webcamDurationMs === "number" &&
+					stoppedInfo.webcamDurationMs + 2000 < screenDurationMs
+				) {
+					nativeMacCaptureDiagnostics = {
+						...(nativeMacCaptureDiagnostics ?? {}),
+						webcamDurationWarning: {
+							code: "webcam-duration-short",
+							screenDurationMs,
+							webcamDurationMs: stoppedInfo.webcamDurationMs,
+						},
+					};
+				}
 				nativeMacCaptureDiagnostics = {
 					...(nativeMacCaptureDiagnostics ?? {}),
 					webcam: {
@@ -3663,9 +3737,10 @@ export function registerIpcHandlers(
 			const videoFiles = files.filter((file) => {
 				const lower = file.toLowerCase();
 				return (
-					(lower.endsWith(".webm") || lower.endsWith(".mp4")) &&
+					(lower.endsWith(".webm") || lower.endsWith(".mp4") || lower.endsWith(".mov")) &&
 					!lower.endsWith("-webcam.webm") &&
-					!lower.endsWith("-webcam.mp4")
+					!lower.endsWith("-webcam.mp4") &&
+					!lower.endsWith("-webcam.mov")
 				);
 			});
 

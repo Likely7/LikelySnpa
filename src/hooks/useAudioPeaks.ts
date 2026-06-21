@@ -1,4 +1,11 @@
-import { ALL_FORMATS, type AudioSample, AudioSampleSink, Input, UrlSource } from "mediabunny";
+import {
+	ALL_FORMATS,
+	type AudioSample,
+	AudioSampleSink,
+	Input,
+	type InputAudioTrack,
+	UrlSource,
+} from "mediabunny";
 import { useEffect, useRef, useState } from "react";
 
 const WAVEFORM_PEAKS_PER_SECOND = 200;
@@ -117,7 +124,7 @@ function createWaveformSource(videoUrl: string) {
 	});
 }
 
-function accumulateSamplePeaks(
+export function accumulateSamplePeaks(
 	sample: AudioSample,
 	peaks: Float32Array,
 	totalBlocks: number,
@@ -152,16 +159,34 @@ function accumulateSamplePeaks(
 			totalBlocks - 1,
 			Math.max(0, Math.floor((timestampSec / durationSec) * totalBlocks)),
 		);
-		let value = 0;
-		for (const channel of channels) {
-			value += channel[frame] ?? 0;
-		}
-		value /= channels.length;
-
 		const minIndex = blockIndex * 2;
 		const maxIndex = minIndex + 1;
-		if (value < peaks[minIndex]) peaks[minIndex] = value;
-		if (value > peaks[maxIndex]) peaks[maxIndex] = value;
+		for (const channel of channels) {
+			const value = channel[frame] ?? 0;
+			if (value < peaks[minIndex]) peaks[minIndex] = value;
+			if (value > peaks[maxIndex]) peaks[maxIndex] = value;
+		}
+	}
+}
+
+async function accumulateTrackPeaks(
+	audioTrack: InputAudioTrack,
+	peaks: Float32Array,
+	totalBlocks: number,
+	durationSec: number,
+	signal: AbortSignal,
+) {
+	const sink = new AudioSampleSink(audioTrack);
+	for await (const sample of sink.samples(0, durationSec)) {
+		if (signal.aborted) {
+			sample.close();
+			throw new DOMException("Aborted", "AbortError");
+		}
+		try {
+			accumulateSamplePeaks(sample, peaks, totalBlocks, durationSec);
+		} finally {
+			sample.close();
+		}
 	}
 }
 
@@ -172,13 +197,19 @@ async function computeAudioPeaks(videoUrl: string, signal: AbortSignal): Promise
 	});
 
 	try {
-		const audioTrack = await input.getPrimaryAudioTrack();
+		const audioTracks = await input.getAudioTracks();
 		if (signal.aborted) throw new DOMException("Aborted", "AbortError");
-		if (!audioTrack) {
+		if (audioTracks.length === 0) {
 			return { durationSec: 0, peaksPerSecond: WAVEFORM_PEAKS_PER_SECOND, peaks: [] };
 		}
 
-		if (!(await audioTrack.canDecode())) {
+		const decodableTracks: InputAudioTrack[] = [];
+		for (const audioTrack of audioTracks) {
+			if (await audioTrack.canDecode()) {
+				decodableTracks.push(audioTrack);
+			}
+		}
+		if (decodableTracks.length === 0) {
 			throw new Error("Audio track cannot be decoded for waveform.");
 		}
 
@@ -192,18 +223,12 @@ async function computeAudioPeaks(videoUrl: string, signal: AbortSignal): Promise
 			Math.min(WAVEFORM_MAX_PEAK_BLOCKS, Math.ceil(durationSec * WAVEFORM_PEAKS_PER_SECOND)),
 		);
 		const peaks = new Float32Array(totalBlocks * 2);
-		const sink = new AudioSampleSink(audioTrack);
 
-		for await (const sample of sink.samples(0, durationSec)) {
+		for (const audioTrack of decodableTracks) {
 			if (signal.aborted) {
-				sample.close();
 				throw new DOMException("Aborted", "AbortError");
 			}
-			try {
-				accumulateSamplePeaks(sample, peaks, totalBlocks, durationSec);
-			} finally {
-				sample.close();
-			}
+			await accumulateTrackPeaks(audioTrack, peaks, totalBlocks, durationSec, signal);
 		}
 
 		return {

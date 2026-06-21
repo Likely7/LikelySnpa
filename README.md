@@ -101,7 +101,7 @@ LikelySnap 会把一次录制保存成一个 `.likelysnap` 文件夹。你可以
 ```text
 recording-xxxx.likelysnap/
   screen.mp4
-  webcam.mp4
+  webcam.mov / webcam.mp4
   cursor.json
   manifest.json
 ```

@@ -532,7 +532,7 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			return
 		}
 
-		let recorder = try NativeWebcamRecorder(request: request.webcam, outputPath: webcamPath)
+		let recorder = NativeWebcamRecorder(request: request.webcam, outputPath: webcamPath)
 		webcamRecorder = recorder
 		try recorder.prepare()
 		emit([
@@ -574,16 +574,23 @@ final class ScreenCaptureRecorder: NSObject, SCStreamOutput, SCStreamDelegate {
 			if let webcamResult {
 				if webcamResult.completed {
 					event["webcamPath"] = webcamResult.path
-					event["webcamDurationMs"] = webcamResult.durationMs as Any
-					event["webcamSamplesAppended"] = webcamResult.samplesAppended
+					if let webcamDurationMs = webcamResult.durationMs {
+						event["webcamDurationMs"] = webcamDurationMs
+					}
+					if let webcamSamplesAppended = webcamResult.samplesAppended {
+						event["webcamSamplesAppended"] = webcamSamplesAppended
+					}
 				} else {
-					emit([
+					var warning: [String: Any] = [
 						"event": "warning",
 						"code": "webcam-writer-failed",
 						"message": webcamResult.errorMessage ?? "Native webcam writer did not complete.",
 						"path": webcamResult.path,
-						"samplesAppended": webcamResult.samplesAppended,
-					])
+					]
+					if let webcamSamplesAppended = webcamResult.samplesAppended {
+						warning["samplesAppended"] = webcamSamplesAppended
+					}
+					emit(warning)
 				}
 			}
 			emit(event)
@@ -959,7 +966,7 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 		let path: String
 		let completed: Bool
 		let durationMs: Double?
-		let samplesAppended: Int
+		let samplesAppended: Int?
 		let errorMessage: String?
 	}
 
@@ -969,13 +976,16 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 	private let queue = DispatchQueue(label: "app.openscreen.sck-helper.webcam")
 	private var writer: AVAssetWriter?
 	private var videoInput: AVAssetWriterInput?
-	private var pixelBufferAdaptor: AVAssetWriterInputPixelBufferAdaptor?
-	private var didStartWriting = false
 	private var isStopping = false
+	private var didStartRecording = false
 	private var firstSampleTime: CMTime?
 	private var lastSampleTime: CMTime?
 	private var samplesAppended = 0
+	private var droppedInputNotReady = 0
+	private var droppedWhileStopping = 0
 	private var appendFailures = 0
+	private var runtimeWarnings: [[String: Any]] = []
+	private var notificationTokens: [NSObjectProtocol] = []
 	private(set) var outputWidth = 1280
 	private(set) var outputHeight = 720
 	private(set) var outputFps = 30
@@ -1009,13 +1019,14 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 		output.setSampleBufferDelegate(self, queue: queue)
 		guard session.canAddOutput(output) else {
 			session.commitConfiguration()
-			throw HelperError.writerSetupFailed("Unable to add webcam output.")
+			throw HelperError.writerSetupFailed("Unable to add webcam video output.")
 		}
 		session.addOutput(output)
 		session.commitConfiguration()
 
 		try configureDevice(device)
 		try setupWriter()
+		observeSessionNotifications()
 	}
 
 	func start() {
@@ -1038,11 +1049,10 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 					return
 				}
 				self.isStopping = true
-				if self.session.isRunning {
-					self.session.stopRunning()
-				}
+				self.stopSessionIfNeeded()
+				self.removeSessionObservers()
 				self.videoInput?.markAsFinished()
-				guard let writer = self.writer, self.didStartWriting else {
+				guard let writer = self.writer, self.didStartRecording else {
 					continuation.resume(
 						returning: self.makeStopResult(
 							errorMessage: "Native webcam writer received no frames."
@@ -1070,34 +1080,50 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 		didOutput sampleBuffer: CMSampleBuffer,
 		from connection: AVCaptureConnection
 	) {
-		guard !isStopping,
-			CMSampleBufferDataIsReady(sampleBuffer),
-			let writer,
-			let videoInput,
-			let pixelBufferAdaptor,
-			let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer)
-		else {
+		guard CMSampleBufferDataIsReady(sampleBuffer), let writer, let videoInput else {
+			return
+		}
+		if isStopping {
+			droppedWhileStopping += 1
 			return
 		}
 
 		let pts = CMSampleBufferGetPresentationTimeStamp(sampleBuffer)
-		if !didStartWriting {
+		if !didStartRecording {
 			firstSampleTime = pts
 			writer.startWriting()
-			writer.startSession(atSourceTime: .zero)
-			didStartWriting = true
+			writer.startSession(atSourceTime: pts)
+			didStartRecording = true
+			emit([
+				"event": "webcam-recording-started",
+				"path": outputPath,
+				"timestampMs": Int(Date().timeIntervalSince1970 * 1000),
+				"width": outputWidth,
+				"height": outputHeight,
+				"fps": outputFps,
+				"deviceName": deviceName,
+			])
 		}
 
-		guard let firstSampleTime, videoInput.isReadyForMoreMediaData else {
+		guard videoInput.isReadyForMoreMediaData else {
+			droppedInputNotReady += 1
 			return
 		}
-		let retimedPts = CMTimeSubtract(pts, firstSampleTime)
-		if pixelBufferAdaptor.append(pixelBuffer, withPresentationTime: retimedPts) {
+
+		if videoInput.append(sampleBuffer) {
 			samplesAppended += 1
-			lastSampleTime = retimedPts
+			lastSampleTime = pts
 		} else {
 			appendFailures += 1
 		}
+	}
+
+	func captureOutput(
+		_ output: AVCaptureOutput,
+		didDrop sampleBuffer: CMSampleBuffer,
+		from connection: AVCaptureConnection
+	) {
+		droppedInputNotReady += 1
 	}
 
 	private func makeStopResult(errorMessage: String?) -> StopResult {
@@ -1111,11 +1137,25 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 		let completed =
 			writerCompleted && samplesAppended > 0 && fileSize > 0 && hasVideoTrack && errorMessage == nil
 		let durationMs: Double?
-		if let lastSampleTime, lastSampleTime.isValid {
-			let seconds = CMTimeGetSeconds(lastSampleTime)
+		if let firstSampleTime, let lastSampleTime, firstSampleTime.isValid, lastSampleTime.isValid {
+			let seconds = CMTimeGetSeconds(CMTimeSubtract(lastSampleTime, firstSampleTime))
 			durationMs = seconds.isFinite ? seconds * 1000 : nil
 		} else {
 			durationMs = nil
+		}
+		for warning in runtimeWarnings {
+			emit(warning)
+		}
+		if appendFailures > 0 || droppedInputNotReady > 0 || droppedWhileStopping > 0 {
+			emit([
+				"event": "warning",
+				"code": "webcam-frame-diagnostics",
+				"path": outputPath,
+				"samplesAppended": samplesAppended,
+				"appendFailures": appendFailures,
+				"droppedInputNotReady": droppedInputNotReady,
+				"droppedWhileStopping": droppedWhileStopping,
+			])
 		}
 		return StopResult(
 			path: outputPath,
@@ -1124,6 +1164,108 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 			samplesAppended: samplesAppended,
 			errorMessage: errorMessage ?? (appendFailures > 0 ? "Native webcam writer had \(appendFailures) append failures." : nil)
 		)
+	}
+
+	private func setupWriter() throws {
+		let outputUrl = URL(fileURLWithPath: outputPath)
+		try? FileManager.default.removeItem(at: outputUrl)
+		try FileManager.default.createDirectory(
+			at: outputUrl.deletingLastPathComponent(),
+			withIntermediateDirectories: true
+		)
+		let fileType: AVFileType = outputUrl.pathExtension.lowercased() == "mov" ? .mov : .mp4
+		let writer = try AVAssetWriter(outputURL: outputUrl, fileType: fileType)
+		let settings: [String: Any] = [
+			AVVideoCodecKey: AVVideoCodecType.h264,
+			AVVideoWidthKey: outputWidth,
+			AVVideoHeightKey: outputHeight,
+			AVVideoColorPropertiesKey: [
+				AVVideoColorPrimariesKey: AVVideoColorPrimaries_ITU_R_709_2,
+				AVVideoTransferFunctionKey: AVVideoTransferFunction_ITU_R_709_2,
+				AVVideoYCbCrMatrixKey: AVVideoYCbCrMatrix_ITU_R_709_2,
+			],
+			AVVideoCompressionPropertiesKey: [
+				AVVideoAverageBitRateKey: 2_000_000,
+				AVVideoExpectedSourceFrameRateKey: outputFps,
+				AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+			],
+		]
+		let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
+		input.expectsMediaDataInRealTime = true
+
+		guard writer.canAdd(input) else {
+			throw HelperError.writerSetupFailed("Unable to add webcam H.264 input.")
+		}
+
+		writer.add(input)
+		self.writer = writer
+		self.videoInput = input
+	}
+
+	private func observeSessionNotifications() {
+		let center = NotificationCenter.default
+		notificationTokens.append(
+			center.addObserver(
+				forName: .AVCaptureSessionRuntimeError,
+				object: session,
+				queue: nil
+			) { [weak self] notification in
+				self?.queue.async {
+					let error = notification.userInfo?[AVCaptureSessionErrorKey]
+					self?.runtimeWarnings.append([
+						"event": "warning",
+						"code": "webcam-session-runtime-error",
+						"message": "\(error ?? "unknown")",
+						"path": self?.outputPath ?? "",
+					])
+				}
+			}
+		)
+		notificationTokens.append(
+			center.addObserver(
+				forName: .AVCaptureSessionWasInterrupted,
+				object: session,
+				queue: nil
+			) { [weak self] notification in
+				self?.queue.async {
+					self?.runtimeWarnings.append([
+						"event": "warning",
+						"code": "webcam-session-interrupted",
+						"message": notification.name.rawValue,
+						"path": self?.outputPath ?? "",
+					])
+				}
+			}
+		)
+		notificationTokens.append(
+			center.addObserver(
+				forName: .AVCaptureSessionInterruptionEnded,
+				object: session,
+				queue: nil
+			) { [weak self] _ in
+				self?.queue.async {
+					self?.runtimeWarnings.append([
+						"event": "warning",
+						"code": "webcam-session-interruption-ended",
+						"path": self?.outputPath ?? "",
+					])
+				}
+			}
+		)
+	}
+
+	private func removeSessionObservers() {
+		let center = NotificationCenter.default
+		for token in notificationTokens {
+			center.removeObserver(token)
+		}
+		notificationTokens.removeAll()
+	}
+
+	private func stopSessionIfNeeded() {
+		if session.isRunning {
+			session.stopRunning()
+		}
 	}
 
 	private func resolveDevice() -> AVCaptureDevice? {
@@ -1160,42 +1302,9 @@ final class NativeWebcamRecorder: NSObject, AVCaptureVideoDataOutputSampleBuffer
 		device.unlockForConfiguration()
 	}
 
-	private func setupWriter() throws {
-		let outputUrl = URL(fileURLWithPath: outputPath)
-		try? FileManager.default.removeItem(at: outputUrl)
-		try FileManager.default.createDirectory(
-			at: outputUrl.deletingLastPathComponent(),
-			withIntermediateDirectories: true
-		)
-		let writer = try AVAssetWriter(outputURL: outputUrl, fileType: .mp4)
-		let settings: [String: Any] = [
-			AVVideoCodecKey: AVVideoCodecType.h264,
-			AVVideoWidthKey: outputWidth,
-			AVVideoHeightKey: outputHeight,
-			AVVideoCompressionPropertiesKey: [
-				AVVideoAverageBitRateKey: 2_000_000,
-				AVVideoExpectedSourceFrameRateKey: outputFps,
-			],
-		]
-		let input = AVAssetWriterInput(mediaType: .video, outputSettings: settings)
-		input.expectsMediaDataInRealTime = true
-		guard writer.canAdd(input) else {
-			throw HelperError.writerSetupFailed("Unable to add webcam H.264 input.")
-		}
-		writer.add(input)
-		let adaptor = AVAssetWriterInputPixelBufferAdaptor(
-			assetWriterInput: input,
-			sourcePixelBufferAttributes: [
-				kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
-				kCVPixelBufferWidthKey as String: outputWidth,
-				kCVPixelBufferHeightKey as String: outputHeight,
-			]
-		)
-		self.writer = writer
-		self.videoInput = input
-		self.pixelBufferAdaptor = adaptor
-	}
 }
+
+extension NativeWebcamRecorder: @unchecked Sendable {}
 
 @main
 struct OpenScreenScreenCaptureKitHelper {

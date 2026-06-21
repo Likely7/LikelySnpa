@@ -10,7 +10,7 @@ New recordings are grouped into one Finder-friendly recording package:
 recording-YYYY-MM-DD-HH-mm-ss-SSS.likelysnap/
   manifest.json
   screen.mp4
-  webcam.mp4
+  webcam.mov   # macOS native webcam; Windows native uses webcam.mp4
   cursor.json
   cursor-preview.json
 ```
@@ -19,7 +19,7 @@ On macOS this behaves like a single user-facing document/package while staying a
 
 ## Why Package Directory, Not Zip Or Single Binary
 
-- A directory package allows `screen.mp4`, `webcam.mp4`/fallback `webcam.webm`, `cursor.json`, `cursor-preview.json`, and `manifest.json` to be written during capture.
+- A directory package allows `screen.mp4`, native webcam sidecars (`webcam.mov` on macOS, `webcam.mp4` on Windows), fallback `webcam.webm`, `cursor.json`, `cursor-preview.json`, and `manifest.json` to be written during capture.
 - Zip would only exist after capture, so a crash before finalization still leaves loose partial files or no package.
 - Embedding everything into MP4 or a custom binary container would make live writes, recovery, and editor reads much more fragile.
 
@@ -45,7 +45,7 @@ Use relative paths so packages can be moved between folders and machines:
   "brand": "LikelySnap",
   "media": {
     "screenVideoPath": "screen.mp4",
-    "webcamVideoPath": "webcam.mp4",
+    "webcamVideoPath": "webcam.mov",
     "webcamStartOffsetMs": 120,
     "cursorTelemetryPath": "cursor.json"
   },
@@ -70,8 +70,8 @@ Status transitions:
 During recording:
 
 - `screen.mp4` is written by the macOS ScreenCaptureKit helper.
-- Native macOS and Windows recordings write package-local `webcam.mp4`.
-- macOS native `webcam.mp4` is only advertised in `manifest.json` after the helper has finalized the webcam writer and verified samples, non-zero bytes, and a readable video track. Webcam video frames are appended with `AVAssetWriterInputPixelBufferAdaptor` from camera pixel buffers. If AVAssetWriter leaves `.sb-*` side-band artifacts after a failure, they are preserved for diagnostics/recovery rather than deleted.
+- Native macOS recordings write package-local `webcam.mov` through the ScreenCaptureKit helper's `AVCaptureVideoDataOutput -> AVAssetWriterInput.append(sampleBuffer)` path; native Windows recordings write package-local `webcam.mp4` through the WGC helper webcam path.
+- macOS native `webcam.mov` is only advertised in `manifest.json` after the helper has finalized the writer and verified samples, non-zero bytes, and a readable video track. The abandoned `AVAssetWriterInputPixelBufferAdaptor` webcam writer and the later `AVCaptureMovieFileOutput` attempt must not be reintroduced as the default path.
 - Browser/fallback recordings may still write package-local `webcam.webm`.
 - `cursor.json` is created at start and refreshed in throttled snapshots.
 - `cursor-preview.json` is created/refreshed beside `cursor.json` as a bounded editor-open index. It stores package-relative source identity so moving the `.likelysnap` package does not invalidate the cache.
@@ -99,7 +99,7 @@ For each package:
 1. Read `manifest.json` if present.
 2. If missing, rebuild it from files in the package.
 3. Require readable `screen.mp4`; without it the package is failed.
-4. Attach `webcam.mp4` or fallback `webcam.webm` only if present and safe to mount. Do not attach a 0-byte `webcam.mp4`; preserve related `.sb-*` files for inspection if the writer failed.
+4. Attach `webcam.mov`, `webcam.mp4`, or fallback `webcam.webm` only if present and safe to mount. Do not attach a 0-byte native sidecar; preserve failed artifacts for inspection if the writer failed.
 5. Attach `cursor.json` if present and prefer `cursor-preview.json` for editor preview when it matches the source file size/mtime.
 6. Mark as `recoverable` if stop/finalize did not complete cleanly.
 
@@ -111,10 +111,10 @@ Implemented:
 
 1. Added package path helpers in the main process:
    - create package directory path;
-   - resolve `screen.mp4`, `webcam.mp4`, fallback `webcam.webm`, `cursor.json`, `manifest.json`;
+   - resolve `screen.mp4`, `webcam.mov`, `webcam.mp4`, fallback `webcam.webm`, `cursor.json`, `manifest.json`;
    - validate paths stay inside the package.
 2. Changed native macOS recording output path to package `screen.mp4`.
-3. Changed native macOS/Windows webcam sidecars to package `webcam.mp4`.
+3. Changed native webcam sidecars to package-local native files: `webcam.mov` on macOS and `webcam.mp4` on Windows.
 4. Changed cursor live telemetry path to package `cursor.json`.
 5. Added package-local `cursor-preview.json` and native bridge preview loading so long recordings open from bounded cursor samples instead of parsing full `cursor.json`.
 6. Changed session manifest writer to write package `manifest.json`.
@@ -126,7 +126,7 @@ Implemented:
 
 Still pending:
 
-- Real macOS long-recording validation against package-local native `webcam.mp4`, including the recent stop/finalize race and PixelBufferAdaptor fixes. A short user retest already produced a valid package-local `webcam.mp4` with no `.sb-*` files.
+- Real macOS long-recording validation against package-local native `webcam.mov` after abandoning both the PixelBufferAdaptor writer and the `AVCaptureMovieFileOutput` attempt for direct sample-buffer appends into `AVAssetWriter`.
 - Real Windows validation of WGC package-local `webcam.mp4`.
 - Interrupted-recording/kill-process recovery validation on real packages.
 

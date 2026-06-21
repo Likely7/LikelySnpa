@@ -17,7 +17,7 @@
 ## Existing P0 Validation
 
 1. Validate the known 4.4 GB legacy package opens the main screen video without freezing by skipping the oversized `webcam.webm`.
-2. Validate a longer macOS recording with microphone, system audio, native `webcam.mp4`, editable cursor, and auto zoom enabled. Short-path webcam validation passed on `/Users/macbook/Movies/LikelySnap/recording-2026-06-19-20-24-41-248.likelysnap`; the remaining risk is longer duration and interrupted-session behavior.
+2. Validate a longer macOS recording with microphone, system audio, native `webcam.mov`, editable cursor, and auto zoom enabled. The earlier macOS PixelBufferAdaptor path is abandoned after repeated real-package finalize failures, and the later `AVCaptureMovieFileOutput` attempt is abandoned after producing a readable but truncated `webcam.mov`; new macOS validation must target the direct `AVCaptureVideoDataOutput -> AVAssetWriterInput.append(sampleBuffer)` path. One real package has passed at ~11 minutes (`screen.mp4` ~665s, `webcam.mov` ~664s) after the ffmpeg input-probe fix, but 20+ minute validation is still required.
 3. Validate a long macOS recording stops cleanly and leaves a ready `.likelysnap` package that opens in the editor.
 4. Validate moving a package to another folder and reopening it.
 5. Validate deleting `manifest.json` and reopening the package rebuilds a recoverable manifest.
@@ -57,7 +57,7 @@
 
 1. Record 20 minutes on macOS and stop successfully.
 2. Confirm selected recording directory shows one timestamped `recording-YYYY-MM-DD-HH-mm-ss-SSS.likelysnap` package with the LikelySnap Finder icon.
-3. Confirm package contains `screen.mp4`, optional validated native `webcam.mp4`, `cursor.json`, and `manifest.json`. For macOS, the latest short retest confirmed no 0-byte webcam and no `.sb-*`; keep this check in the long-recording checklist.
+3. Confirm package contains `screen.mp4`, optional validated native webcam sidecar (`webcam.mov` on macOS, `webcam.mp4` on Windows), `cursor.json`, `cursor-preview.json`, and `manifest.json`. For macOS, confirm no 0-byte webcam, no `.sb-*` AVAssetWriter side-band files, and a readable `webcam.mov` video track.
 4. Confirm raw source file plays in Finder/QuickTime with audio in sync.
 5. Confirm editor auto zoom suggestions still appear from cursor telemetry.
 6. Confirm selected zoom settings can switch a single zoom between `Off`, `Smart Follow Mouse`, and `Always Follow Mouse` even when a global follow button has been used.
