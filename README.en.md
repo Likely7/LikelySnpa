@@ -1,6 +1,6 @@
-![LikelySnap promo](./promo/github-15s/poster.png)
-
 ![LikelySnap promo animation](./promo/github-15s/LikelySnap-github-promo.gif)
+
+![LikelySnap promo](./promo/github-15s/poster.png)
 
 English | [简体中文](./README.md)
 
