@@ -349,3 +349,7 @@ Continue validation and hardening from the current staged editor-open + FFmpeg e
   - `npx tsc --noEmit` passed.
   - `npm run build-vite` passed.
   - User confirmed the freshly installed DMG can record after stale local app/TCC/LaunchServices state was cleaned.
+- 2026-06-22 release-version bump:
+  - Set the package/app version from `1.1.0` to `1.2.0` in `package.json` and `package-lock.json`.
+  - Current macOS ARM64 DMG target is `/Users/macbook/Desktop/LikelySnap-Mac-arm64-1.2.0-Installer.dmg`.
+  - Windows agents should build the x64 portable zip from the pushed `main` branch and expect `release/1.2.0/LikelySnap-Win-x64-1.2.0.zip`.

@@ -44,7 +44,7 @@ Current packaged identity:
 
 - App name: `LikelySnap`
 - Bundle id: `com.likelysnap.app`
-- Current package version: `1.1.0`
+- Current package version: `1.2.0`
 - Expected install path for manual testing: `/Applications/LikelySnap.app`
 
 Do not test permissions by launching from:
