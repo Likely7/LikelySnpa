@@ -23,6 +23,7 @@ import {
 	getSelectedDesktopSource,
 	registerIpcHandlers,
 } from "./ipc/handlers";
+import { runMacosFirstLaunchPermissionReset } from "./macosPermissionReset";
 import {
 	createCountdownOverlayWindow,
 	createEditorWindow,
@@ -527,6 +528,13 @@ app.whenReady().then(async () => {
 	if (process.platform === "darwin") {
 		app.dock?.show();
 	}
+
+	await runMacosFirstLaunchPermissionReset({
+		platform: process.platform,
+		isPackaged: app.isPackaged,
+		appVersion: app.getVersion(),
+		userDataDir: app.getPath("userData"),
+	});
 
 	session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
 		const allowed = [

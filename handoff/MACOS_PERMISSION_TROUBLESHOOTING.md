@@ -55,6 +55,25 @@ Do not test permissions by launching from:
 
 Dev and packaged builds are different macOS permission identities. A dev build working does not prove the packaged app's TCC identity is clean.
 
+## Product-Level First-Launch Reset Policy
+
+LikelySnap is currently distributed from GitHub without paid Developer ID signing. Packaged macOS builds are ad-hoc signed, so macOS can treat a new download/update as a different code-signing requirement even when the bundle id remains `com.likelysnap.app`. In practice this can leave System Settings showing an allowed toggle while the freshly installed app still cannot use ScreenCaptureKit.
+
+Current durable product behavior:
+
+- Packaged macOS builds run a minimal TCC reset once per app version on first launch.
+- The reset targets only LikelySnap/OpenScreen privacy grants for `ScreenCapture`, `Microphone`, `Camera`, and `Accessibility`.
+- The reset does not delete recordings, project files, app settings, cache directories, or user media.
+- The reset is guarded by `macos-permission-reset.json` under Electron `userData`, so the same installed version does not clear permissions on every launch.
+- Installing a later version can reset once again, intentionally forcing a clean re-authorization for ad-hoc GitHub builds.
+
+Implementation:
+
+- `electron/macosPermissionReset.ts`
+- `electron/main.ts` calls `runMacosFirstLaunchPermissionReset(...)` before requesting microphone permission.
+
+Do not move this reset after `askForMediaAccess("microphone")`; the point is to clear stale grants before macOS creates new permission state for the current app bundle.
+
 ## Fast Diagnosis Checklist
 
 When the installed macOS app says screen-recording permission is missing even after the user enabled it:
