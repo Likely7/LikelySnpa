@@ -796,6 +796,11 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 	const isCountdownRunActive = (runId?: number) =>
 		runId === undefined || countdownRunId.current === runId;
 
+	const getSelectedOrDefaultSource = async () =>
+		(await window.electronAPI.getSelectedSource()) ??
+		(await window.electronAPI.ensureDefaultSelectedSource?.()) ??
+		null;
+
 	const startNativeWindowsRecordingIfAvailable = async (
 		selectedSource: ProcessedDesktopSource,
 		countdownRunToken?: number,
@@ -1047,7 +1052,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 		let selectedSource: ProcessedDesktopSource | null = null;
 		try {
-			selectedSource = await window.electronAPI.getSelectedSource();
+			selectedSource = await getSelectedOrDefaultSource();
 		} catch (error) {
 			console.warn("Failed to read selected source before countdown:", error);
 		}
@@ -1138,9 +1143,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 	const startRecording = async (countdownRunToken?: number) => {
 		try {
-			const selectedSource =
-				(await window.electronAPI.getSelectedSource()) ??
-				(await window.electronAPI.ensureDefaultSelectedSource?.());
+			const selectedSource = await getSelectedOrDefaultSource();
 			if (!selectedSource) {
 				alert(t("recording.selectSource"));
 				return;
