@@ -801,6 +801,14 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		(await window.electronAPI.ensureDefaultSelectedSource?.()) ??
 		null;
 
+	const openSourceSelectorWhenMissing = async () => {
+		try {
+			await window.electronAPI.openSourceSelector?.();
+		} catch (error) {
+			console.warn("Failed to open source selector after missing recording source:", error);
+		}
+	};
+
 	const startNativeWindowsRecordingIfAvailable = async (
 		selectedSource: ProcessedDesktopSource,
 		countdownRunToken?: number,
@@ -1065,7 +1073,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 			if (countdownRunId.current === runId) {
 				setCountdownActive(false);
 			}
-			alert(t("recording.selectSource"));
+			await openSourceSelectorWhenMissing();
 			return;
 		}
 
@@ -1145,7 +1153,7 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 		try {
 			const selectedSource = await getSelectedOrDefaultSource();
 			if (!selectedSource) {
-				alert(t("recording.selectSource"));
+				await openSourceSelectorWhenMissing();
 				return;
 			}
 
