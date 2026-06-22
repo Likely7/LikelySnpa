@@ -994,6 +994,46 @@ let currentRecordingSession: RecordingSession | null = null;
 export function getSelectedDesktopSource(): DesktopCapturerSource | null {
 	return selectedDesktopSource;
 }
+
+function toProcessedDesktopSource(source: DesktopCapturerSource): SelectedSource {
+	return {
+		id: source.id,
+		name: source.name,
+		display_id: source.display_id,
+		thumbnail: source.thumbnail ? source.thumbnail.toDataURL() : null,
+		appIcon: source.appIcon ? source.appIcon.toDataURL() : null,
+	};
+}
+
+export async function ensureDefaultSelectedSource(): Promise<SelectedSource | null> {
+	if (selectedSource && selectedDesktopSource) {
+		return selectedSource;
+	}
+	if (process.platform === "darwin") {
+		return selectedSource;
+	}
+
+	try {
+		const sources = await desktopCapturer.getSources({
+			types: ["screen"],
+			thumbnailSize: { width: 0, height: 0 },
+			fetchWindowIcons: false,
+		});
+		lastEnumeratedSources = new Map(sources.map((source) => [source.id, source]));
+		const primarySource =
+			sources.find((source) => source.id.startsWith("screen:")) ?? sources[0] ?? null;
+		if (!primarySource) {
+			return selectedSource;
+		}
+
+		selectedDesktopSource = primarySource;
+		selectedSource = toProcessedDesktopSource(primarySource);
+		return selectedSource;
+	} catch (error) {
+		console.warn("[desktop-source] Failed to prepare default screen source:", error);
+		return selectedSource;
+	}
+}
 let currentVideoPath: string | null = null;
 
 function normalizePath(filePath: string) {
@@ -2577,13 +2617,7 @@ export function registerIpcHandlers(
 	ipcMain.handle("get-sources", async (_, opts) => {
 		const sources = await desktopCapturer.getSources(opts);
 		lastEnumeratedSources = new Map(sources.map((source) => [source.id, source]));
-		return sources.map((source) => ({
-			id: source.id,
-			name: source.name,
-			display_id: source.display_id,
-			thumbnail: source.thumbnail ? source.thumbnail.toDataURL() : null,
-			appIcon: source.appIcon ? source.appIcon.toDataURL() : null,
-		}));
+		return sources.map(toProcessedDesktopSource);
 	});
 
 	ipcMain.handle("select-source", async (_, source: SelectedSource) => {
@@ -2615,6 +2649,10 @@ export function registerIpcHandlers(
 
 	ipcMain.handle("get-selected-source", () => {
 		return selectedSource;
+	});
+
+	ipcMain.handle("ensure-default-selected-source", async () => {
+		return ensureDefaultSelectedSource();
 	});
 
 	ipcMain.handle("request-camera-access", async () => {

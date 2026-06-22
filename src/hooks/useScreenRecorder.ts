@@ -1138,7 +1138,9 @@ export function useScreenRecorder(): UseScreenRecorderReturn {
 
 	const startRecording = async (countdownRunToken?: number) => {
 		try {
-			const selectedSource = await window.electronAPI.getSelectedSource();
+			const selectedSource =
+				(await window.electronAPI.getSelectedSource()) ??
+				(await window.electronAPI.ensureDefaultSelectedSource?.());
 			if (!selectedSource) {
 				alert(t("recording.selectSource"));
 				return;

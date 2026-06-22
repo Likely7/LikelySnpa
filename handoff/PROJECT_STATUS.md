@@ -98,6 +98,8 @@
 - Cursor preview data intentionally omits the full native cursor asset table for speed; cursor rendering now falls back to built-in themed cursor assets so the mouse overlay and mouse settings panel stay visible in editor preview.
 - The editor still loads full `cursor.json` on demand for export and future deep cursor editing, so preview indexing does not remove cursor quality or features from final renders.
 - User tested the current app after the staged editor-open and cursor fallback fixes and reported that the visible functionality has no obvious issue.
+- Public release feedback on 2026-06-22 exposed two launch/first-run bugs. The macOS packaged app could crash when a window-open path touched Electron's `screen` module before `app.ready`; main-window/editor/settings entry points are now ready-gated before creating windows. Windows first-run users could see the record button disabled because the HUD displayed `Screen` while no real `selectedSource` existed; non-macOS startup now prepares a default screen source, the HUD syncs that source, and the record button is no longer locked behind a manual source-picker step.
+- Windows portable packaging now has `scripts/verify-windows-portable.cjs`, and `npm run build:win:portable` runs it after FFmpeg verification. The script checks the release zip for `LikelySnap.exe`, `resources/electron/native/bin/win32-x64/wgc-capture.exe`, `cursor-sampler.exe`, and `resources/electron/ffmpeg/win32-x64/ffmpeg.exe`. The uploaded `LikelySnap-Win-x64-1.1.0-r6.zip` was inspected and contains those files, so the reported gray record button is not explained by missing WGC/FFmpeg runtime files.
 
 ## Current Risk Summary
 

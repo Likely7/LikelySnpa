@@ -18,7 +18,11 @@ import {
 	unregisterAllGlobalShortcuts,
 } from "./globalShortcut";
 import { mainT, setMainLocale } from "./i18n";
-import { getSelectedDesktopSource, registerIpcHandlers } from "./ipc/handlers";
+import {
+	ensureDefaultSelectedSource,
+	getSelectedDesktopSource,
+	registerIpcHandlers,
+} from "./ipc/handlers";
 import {
 	createCountdownOverlayWindow,
 	createEditorWindow,
@@ -93,11 +97,25 @@ const trayIconSize = isMac ? 16 : 24;
 const defaultTrayIcon = getTrayIcon("likelysnap.png", trayIconSize);
 const recordingTrayIcon = getTrayIcon("rec-button.png", trayIconSize);
 
+function runWhenReady(action: () => void | Promise<void>) {
+	if (app.isReady()) {
+		void action();
+		return;
+	}
+
+	void app.whenReady().then(action);
+}
+
 function createWindow() {
 	mainWindow = createHudOverlayWindow();
 }
 
 function showMainWindow() {
+	if (!app.isReady()) {
+		runWhenReady(showMainWindow);
+		return;
+	}
+
 	if (mainWindow && !mainWindow.isDestroyed()) {
 		if (mainWindow.isMinimized()) {
 			mainWindow.restore();
@@ -117,6 +135,11 @@ function isEditorWindow(window: BrowserWindow) {
 function sendEditorMenuAction(
 	channel: "menu-load-project" | "menu-save-project" | "menu-save-project-as" | "menu-new-project",
 ) {
+	if (!app.isReady()) {
+		runWhenReady(() => sendEditorMenuAction(channel));
+		return;
+	}
+
 	let targetWindow = BrowserWindow.getFocusedWindow() ?? mainWindow;
 
 	if (!targetWindow || targetWindow.isDestroyed() || !isEditorWindow(targetWindow)) {
@@ -286,6 +309,7 @@ function setupApplicationMenu() {
 }
 
 function createTray() {
+	if (!app.isReady()) return;
 	tray = new Tray(defaultTrayIcon);
 	tray.on("click", () => {
 		showMainWindow();
@@ -367,6 +391,13 @@ function forceCloseEditorWindow(windowToClose: BrowserWindow | null) {
 }
 
 function createEditorWindowWrapper() {
+	if (!app.isReady()) {
+		runWhenReady(() => {
+			createEditorWindowWrapper();
+		});
+		return;
+	}
+
 	if (mainWindow) {
 		isForceClosing = true;
 		mainWindow.close();
@@ -410,6 +441,10 @@ function createEditorWindowWrapper() {
 }
 
 function createSourceSelectorWindowWrapper() {
+	if (!app.isReady()) {
+		throw new Error("Cannot create source selector before Electron app is ready.");
+	}
+
 	sourceSelectorWindow = createSourceSelectorWindow();
 	sourceSelectorWindow.on("closed", () => {
 		sourceSelectorWindow = null;
@@ -418,6 +453,10 @@ function createSourceSelectorWindowWrapper() {
 }
 
 function createCountdownOverlayWindowWrapper() {
+	if (!app.isReady()) {
+		throw new Error("Cannot create countdown overlay before Electron app is ready.");
+	}
+
 	if (countdownOverlayWindow && !countdownOverlayWindow.isDestroyed()) {
 		return countdownOverlayWindow;
 	}
@@ -430,6 +469,13 @@ function createCountdownOverlayWindowWrapper() {
 }
 
 function createSettingsWindowWrapper() {
+	if (!app.isReady()) {
+		runWhenReady(() => {
+			createSettingsWindowWrapper();
+		});
+		return null;
+	}
+
 	if (settingsWindow && !settingsWindow.isDestroyed()) {
 		settingsWindow.show();
 		settingsWindow.focus();
@@ -450,6 +496,11 @@ app.on("window-all-closed", () => {
 });
 
 app.on("activate", () => {
+	if (!app.isReady()) {
+		runWhenReady(showMainWindow);
+		return;
+	}
+
 	// On macOS, re-open a window when the dock icon is clicked and none are open.
 	const hasVisibleWindow = BrowserWindow.getAllWindows().some((window) => {
 		if (window.isDestroyed() || !window.isVisible()) {
@@ -550,6 +601,7 @@ app.whenReady().then(async () => {
 	updateTrayMenu();
 	setupApplicationMenu();
 	await ensureRecordingsDir();
+	await ensureDefaultSelectedSource();
 
 	function switchToHudWrapper() {
 		if (mainWindow) {

@@ -16,6 +16,7 @@
 
 ## Existing P0 Validation
 
+0. Publish fresh macOS and Windows builds after the 2026-06-22 public-feedback fixes. Validate that the macOS packaged app no longer throws `The 'screen' module can't be used before the app 'ready' event` on launch/reactivation, and that a clean Windows x64 profile opens with a selected default screen source and an enabled record button.
 1. Validate the known 4.4 GB legacy package opens the main screen video without freezing by skipping the oversized `webcam.webm`.
 2. Validate a longer macOS recording with microphone, system audio, native `webcam.mov`, editable cursor, and auto zoom enabled. The earlier macOS PixelBufferAdaptor path is abandoned after repeated real-package finalize failures, and the later `AVCaptureMovieFileOutput` attempt is abandoned after producing a readable but truncated `webcam.mov`; new macOS validation must target the direct `AVCaptureVideoDataOutput -> AVAssetWriterInput.append(sampleBuffer)` path. One real package has passed at ~11 minutes (`screen.mp4` ~665s, `webcam.mov` ~664s) after the ffmpeg input-probe fix, but 20+ minute validation is still required.
 3. Validate a long macOS recording stops cleanly and leaves a ready `.likelysnap` package that opens in the editor.
@@ -70,6 +71,6 @@
 13. Open a long recording with the trim waveform visible by default, confirm the editor remains responsive during generation, then close/reopen and confirm the waveform loads from cache.
 14. Change recording quality/resolution/FPS/bitrate in the standalone settings window and confirm the next native macOS recording request uses the configured profile.
 15. Open settings from the editor top-bar gear and confirm the same persisted values are shown as the launch HUD settings entry.
-16. On a Windows x64 build machine, run `npm run build:win:portable` and confirm the produced zip contains `resources/electron/native/bin/win32-x64/wgc-capture.exe` and `cursor-sampler.exe`.
+16. On a Windows x64 build machine, run `npm run build:win:portable` and confirm the produced zip passes `npm run verify:win:portable`, including `resources/electron/native/bin/win32-x64/wgc-capture.exe`, `cursor-sampler.exe`, bundled FFmpeg, and `LikelySnap.exe`.
 17. On Windows x64, record with webcam enabled and inspect `.likelysnap/manifest.json`; confirm `media.webcamStartOffsetMs` is present when `webcam.mp4` exists, then verify preview/export webcam sync.
 18. On Windows x64, export the same project with Task Manager's CPU/GPU video encode graphs visible and confirm the UI/diagnostics report the actual encoder path. Current code-level expectation is hardware-first only when FFmpeg exposes `h264_nvenc`; otherwise it falls back to CPU.

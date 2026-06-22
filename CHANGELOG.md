@@ -4,9 +4,15 @@
 
 ### Fixed
 
+- Fixed a packaged macOS startup crash where the HUD could touch Electron's `screen` module before the app `ready` event.
+- Fixed the Windows first-run recording button appearing disabled by preparing a default screen source automatically while keeping the manual source picker for switching displays/windows.
 - Stabilized the current macOS native webcam sidecar path by replacing the unstable PixelBufferAdaptor writer and the later early-finishing MovieFileOutput attempt with direct camera sample-buffer appends into `AVAssetWriter`. New macOS native webcam sidecars remain package-local `webcam.mov` files and now carry better frame/drop/session diagnostics.
 - Fixed healthy macOS `webcam.mov` sidecars being hidden from the editor when the main process misused `ffmpeg` as `ffprobe` and failed to write `media.webcamVideoPath` into the package manifest.
 - Refined Auto Zoom dwell detection: nearby generated zooms now merge only within `1500ms`, long explanation zooms start at dwell onset, and natural small-area mouse movement still counts as one dwell instead of requiring the cursor to be perfectly still.
+
+### Changed
+
+- Added a Windows portable zip verification script so release builds fail if `LikelySnap.exe`, the WGC helper, cursor sampler, or bundled FFmpeg are missing from the package.
 
 ## 1.1.0 - ARM64 Package Cleanup Release
 

@@ -471,7 +471,9 @@ export function LaunchWindow() {
 	useEffect(() => {
 		const checkSelectedSource = async () => {
 			if (window.electronAPI) {
-				const source = await window.electronAPI.getSelectedSource();
+				const source =
+					(await window.electronAPI.getSelectedSource()) ??
+					(await window.electronAPI.ensureDefaultSelectedSource?.());
 				if (source) {
 					setSelectedSource(source.name);
 					setHasSelectedSource(true);
@@ -861,7 +863,6 @@ export function LaunchWindow() {
 							: "bg-white/[0.06] hover:bg-white/[0.10]"
 					}`}
 					onClick={toggleRecording}
-					disabled={!hasSelectedSource && !recording}
 					style={{ flex: "0 0 auto" }}
 				>
 					<div className={`flex items-center justify-center ${recording ? "gap-1.5" : ""}`}>

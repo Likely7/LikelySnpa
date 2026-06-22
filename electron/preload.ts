@@ -56,6 +56,9 @@ contextBridge.exposeInMainWorld("electronAPI", {
 	getSelectedSource: () => {
 		return ipcRenderer.invoke("get-selected-source");
 	},
+	ensureDefaultSelectedSource: () => {
+		return ipcRenderer.invoke("ensure-default-selected-source");
+	},
 	requestCameraAccess: () => {
 		return ipcRenderer.invoke("request-camera-access");
 	},
