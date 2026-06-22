@@ -61,11 +61,11 @@ LikelySnap is currently distributed from GitHub without paid Developer ID signin
 
 Current durable product behavior:
 
-- Packaged macOS builds run a minimal TCC reset once per app version on first launch.
+- Packaged macOS builds run a minimal TCC reset once per signed app build on first launch.
 - The reset targets only LikelySnap/OpenScreen privacy grants for `ScreenCapture`, `Microphone`, `Camera`, and `Accessibility`.
 - The reset does not delete recordings, project files, app settings, cache directories, or user media.
-- The reset is guarded by `macos-permission-reset.json` under Electron `userData`, so the same installed version does not clear permissions on every launch.
-- Installing a later version can reset once again, intentionally forcing a clean re-authorization for ad-hoc GitHub builds.
+- The reset is guarded by `macos-permission-reset.json` under Electron `userData`, using `appVersion + CDHash` as the key when macOS code-signature data is available. This means the exact same installed DMG does not clear permissions on every launch, while a same-version hotfix DMG can still force a clean re-authorization.
+- Installing a later version or a rebuilt same-version ad-hoc package can reset once again, intentionally forcing a clean re-authorization for GitHub builds.
 
 Implementation:
 

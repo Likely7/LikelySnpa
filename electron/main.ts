@@ -1,6 +1,8 @@
+import { execFile } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { promisify } from "node:util";
 import {
 	app,
 	BrowserWindow,
@@ -33,6 +35,7 @@ import {
 } from "./windows";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const execFileAsync = promisify(execFile);
 
 // Use Screen & System Audio Recording permissions instead of the CoreAudio Tap API on macOS.
 // Tap needs NSAudioCaptureUsageDescription in the parent app's Info.plist, which breaks when
@@ -62,6 +65,43 @@ async function ensureRecordingsDir() {
 	} catch (error) {
 		console.error("Failed to create recordings directory:", error);
 	}
+}
+
+async function getMacosPackagedBuildId(): Promise<string | null> {
+	if (process.platform !== "darwin" || !app.isPackaged) {
+		return null;
+	}
+
+	try {
+		const { stdout, stderr } = await execFileAsync(
+			"codesign",
+			["-dv", "--verbose=4", process.execPath],
+			{
+				timeout: 10_000,
+			},
+		);
+		return parseCodesignBuildId(`${stdout}\n${stderr}`);
+	} catch (error) {
+		const output =
+			typeof error === "object" && error !== null && "stderr" in error
+				? String((error as { stderr?: unknown }).stderr ?? "")
+				: "";
+		const buildId = parseCodesignBuildId(output);
+		if (buildId) {
+			return buildId;
+		}
+		console.warn("[macos-permissions] Failed to read packaged app code signature:", error);
+		return null;
+	}
+}
+
+function parseCodesignBuildId(output: string): string | null {
+	const cdHashMatch = output.match(/^CDHash=([A-Fa-f0-9]+)$/m);
+	if (cdHashMatch?.[1]) {
+		return `cdhash-${cdHashMatch[1].toLowerCase()}`;
+	}
+
+	return null;
 }
 
 // The built directory structure
@@ -533,6 +573,7 @@ app.whenReady().then(async () => {
 		platform: process.platform,
 		isPackaged: app.isPackaged,
 		appVersion: app.getVersion(),
+		appBuildId: await getMacosPackagedBuildId(),
 		userDataDir: app.getPath("userData"),
 	});
 

@@ -48,6 +48,7 @@ export type MacosFirstLaunchPermissionResetOptions = {
 	platform: NodeJS.Platform;
 	isPackaged: boolean;
 	appVersion: string;
+	appBuildId?: string | null;
 	userDataDir: string;
 	runTccReset?: RunTccReset;
 	now?: () => Date;
@@ -65,6 +66,7 @@ export async function runMacosFirstLaunchPermissionReset({
 	platform,
 	isPackaged,
 	appVersion,
+	appBuildId,
 	userDataDir,
 	runTccReset = defaultRunTccReset,
 	now = () => new Date(),
@@ -81,7 +83,7 @@ export async function runMacosFirstLaunchPermissionReset({
 	}
 
 	const marker = await readPermissionResetMarker(markerPath);
-	const versionKey = normalizeVersionKey(appVersion);
+	const versionKey = normalizeVersionKey(appVersion, appBuildId);
 	if (marker.resetVersions[versionKey]) {
 		return { ran: false, reason: "already-reset", errors: [], markerPath };
 	}
@@ -118,9 +120,11 @@ export function getMacosPermissionResetMarkerPath(userDataDir: string): string {
 	return path.join(userDataDir, MACOS_PERMISSION_RESET_MARKER);
 }
 
-function normalizeVersionKey(appVersion: string): string {
+function normalizeVersionKey(appVersion: string, appBuildId?: string | null): string {
 	const normalized = appVersion.trim();
-	return normalized.length > 0 ? normalized : "unknown";
+	const version = normalized.length > 0 ? normalized : "unknown";
+	const buildId = appBuildId?.trim();
+	return buildId ? `${version}+${buildId}` : version;
 }
 
 async function defaultRunTccReset(service: TccResetService, bundleId: TccResetBundleId) {

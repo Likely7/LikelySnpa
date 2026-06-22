@@ -52,7 +52,7 @@ describe("runMacosFirstLaunchPermissionReset", () => {
 		expect(calls).toHaveLength(0);
 	});
 
-	it("runs once for the packaged macOS app version", async () => {
+	it("runs once for the packaged macOS app build", async () => {
 		const calls: Array<[TccResetService, TccResetBundleId]> = [];
 		const userDataDir = await makeTempDir();
 
@@ -60,6 +60,7 @@ describe("runMacosFirstLaunchPermissionReset", () => {
 			platform: "darwin",
 			isPackaged: true,
 			appVersion: "1.1.0",
+			appBuildId: "cdhash-aaa",
 			userDataDir,
 			now: () => new Date("2026-06-22T10:00:00.000Z"),
 			runTccReset: async (service, bundleId) => {
@@ -71,6 +72,7 @@ describe("runMacosFirstLaunchPermissionReset", () => {
 			platform: "darwin",
 			isPackaged: true,
 			appVersion: "1.1.0",
+			appBuildId: "cdhash-aaa",
 			userDataDir,
 			runTccReset: async (service, bundleId) => {
 				calls.push([service, bundleId]);
@@ -86,7 +88,7 @@ describe("runMacosFirstLaunchPermissionReset", () => {
 		);
 
 		const marker = JSON.parse(await fs.readFile(first.markerPath, "utf8"));
-		expect(marker.resetVersions["1.1.0"]).toMatchObject({
+		expect(marker.resetVersions["1.1.0+cdhash-aaa"]).toMatchObject({
 			resetAt: "2026-06-22T10:00:00.000Z",
 			services: MACOS_TCC_SERVICES_TO_RESET,
 			bundleIds: MACOS_TCC_BUNDLE_IDS_TO_RESET,
@@ -102,6 +104,28 @@ describe("runMacosFirstLaunchPermissionReset", () => {
 				platform: "darwin",
 				isPackaged: true,
 				appVersion: version,
+				userDataDir,
+				runTccReset: async (service, bundleId) => {
+					calls.push([service, bundleId]);
+				},
+			});
+		}
+
+		expect(calls).toHaveLength(
+			MACOS_TCC_SERVICES_TO_RESET.length * MACOS_TCC_BUNDLE_IDS_TO_RESET.length * 2,
+		);
+	});
+
+	it("runs again when the packaged build changes under the same app version", async () => {
+		const calls: Array<[TccResetService, TccResetBundleId]> = [];
+		const userDataDir = await makeTempDir();
+
+		for (const buildId of ["cdhash-aaa", "cdhash-bbb"]) {
+			await runMacosFirstLaunchPermissionReset({
+				platform: "darwin",
+				isPackaged: true,
+				appVersion: "1.1.0",
+				appBuildId: buildId,
 				userDataDir,
 				runTccReset: async (service, bundleId) => {
 					calls.push([service, bundleId]);

@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- Added a packaged macOS first-launch permission reset for GitHub/ad-hoc builds. Each app version clears stale LikelySnap/OpenScreen Screen Recording, Microphone, Camera, and Accessibility grants once before requesting new permissions, avoiding the "permission is enabled but recording still loops" state without resetting on every launch.
+- Added a packaged macOS first-launch permission reset for GitHub/ad-hoc builds. Each signed app build clears stale LikelySnap/OpenScreen Screen Recording, Microphone, Camera, and Accessibility grants once before requesting new permissions, avoiding the "permission is enabled but recording still loops" state without resetting on every launch. Same-version hotfix DMGs now use the app code-signature hash as part of the reset key, so rebuilding `1.1.0` can still force a clean re-authorization.
 - Fixed macOS recording start with no selected source: clicking Record now opens the source picker instead of showing a raw untranslated `recording.selectSource` alert.
 - Hardened the public-release first-run path after code review: Windows record now uses the default screen source before countdown as well as before capture, and the HUD no longer renders the record icon as disabled while that source is still being prepared.
 - Fixed macOS Screen Recording permission gating when System Settings already shows LikelySnap as allowed but Electron still cannot enumerate capturable screens/windows. This now returns a restart-required state instead of opening an empty source picker.
