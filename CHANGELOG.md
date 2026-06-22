@@ -4,6 +4,12 @@
 
 ### Fixed
 
+- Hardened the public-release first-run path after code review: Windows record now uses the default screen source before countdown as well as before capture, and the HUD no longer renders the record icon as disabled while that source is still being prepared.
+- Fixed macOS Screen Recording permission gating when System Settings already shows LikelySnap as allowed but Electron still cannot enumerate capturable screens/windows. This now returns a restart-required state instead of opening an empty source picker.
+- Fixed a dangerous cache cleanup boundary. User-selected cache locations are now treated as containers; LikelySnap only writes and clears its own managed cache subdirectory.
+- Fixed long webcam sidecars being hidden purely because they exceed 2 GB. The editor now keeps valid webcam sidecar paths for preview/export instead of dropping them at open time.
+- Fixed webcam export timeline sampling so webcam sidecars stay on their own original time axis and are sampled via `webcamStartOffsetMs`, matching preview behavior across trims and speed changes.
+- Fixed Windows portable verification so it parses ZIP contents with Node directly instead of requiring a Unix `unzip` binary on the Windows build machine.
 - Fixed a packaged macOS startup crash where the HUD could touch Electron's `screen` module before the app `ready` event.
 - Fixed the Windows first-run recording button appearing disabled by preparing a default screen source automatically while keeping the manual source picker for switching displays/windows.
 - Stabilized the current macOS native webcam sidecar path by replacing the unstable PixelBufferAdaptor writer and the later early-finishing MovieFileOutput attempt with direct camera sample-buffer appends into `AVAssetWriter`. New macOS native webcam sidecars remain package-local `webcam.mov` files and now carry better frame/drop/session diagnostics.
@@ -13,6 +19,7 @@
 ### Changed
 
 - Added a Windows portable zip verification script so release builds fail if `LikelySnap.exe`, the WGC helper, cursor sampler, or bundled FFmpeg are missing from the package.
+- Windows portable verification now also fails if the package contains duplicate `@ffmpeg-installer` FFmpeg binaries or non-target `onnxruntime-node` native binaries. Packaged builds use the explicit `resources/electron/ffmpeg` runtime; the installer package fallback is kept for development only.
 
 ## 1.1.0 - ARM64 Package Cleanup Release
 
@@ -53,7 +60,7 @@ This baseline is based on OpenScreen 1.5.0 and has been rebuilt as LikelySnap.
 - Editor preview no longer needs full cursor assets at open time; it can render from preview cursor samples and built-in cursor assets.
 - Automatic zoom now separates span detection from Follow Mouse behavior, and each zoom segment can be controlled individually.
 - Long audio waveform generation is ranged, lazy, and cache-backed while remaining visible by default.
-- Huge legacy `webcam.webm` sidecars are skipped instead of blocking the main screen video from opening.
+- Unhealthy legacy `webcam.webm` sidecars should degrade without blocking the main screen video from opening; this must be based on readability/codec diagnostics instead of a blanket file-size cutoff.
 
 ### Fixed
 

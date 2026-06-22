@@ -12,7 +12,7 @@ describe("resolveScreenAccessResult", () => {
 		});
 	});
 
-	it("uses granted media status as a fallback when probing fails", () => {
+	it("requires a successful desktop capture probe even when macOS media status is granted", () => {
 		expect(
 			resolveScreenAccessResult(
 				{ granted: false, status: "capturer-error", error: "probe failed" },
@@ -20,8 +20,8 @@ describe("resolveScreenAccessResult", () => {
 			),
 		).toEqual({
 			success: true,
-			granted: true,
-			status: "granted",
+			granted: false,
+			status: "restart-required",
 			error: "probe failed",
 		});
 	});

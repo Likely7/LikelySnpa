@@ -37,7 +37,12 @@
     "!*.md",
     "!README.md",
     "!CONTRIBUTING.md",
-    "!LICENSE"
+    "!LICENSE",
+    "!node_modules/@ffmpeg-installer/*/ffmpeg",
+    "!node_modules/@ffmpeg-installer/*/ffmpeg.exe",
+    "!node_modules/onnxruntime-node/bin/napi-v3/darwin/**",
+    "!node_modules/onnxruntime-node/bin/napi-v3/linux/**",
+    "!node_modules/onnxruntime-node/bin/napi-v3/win32/arm64/**"
   ],
   // Asset layout contract: "wallpapers/" and "cursors/" under resourcesPath must
   // align with assetBaseDir in electron/preload.ts (packaged branch).

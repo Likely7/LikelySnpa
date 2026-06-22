@@ -89,6 +89,7 @@ const ALLOWED_IMPORT_VIDEO_EXTENSIONS = new Set([
 const APP_SETTINGS_FILE = path.join(app.getPath("userData"), "app-settings.json");
 const RECORDING_SETTINGS_FILE = path.join(app.getPath("userData"), "recording-settings.json");
 const RECORDING_DIRECTORY_WRITE_TEST_FILE = ".likelysnap-write-test";
+const MANAGED_CACHE_DIR_NAME = "managed-cache";
 const WAVEFORM_PEAKS_PER_SECOND = 200;
 const nativeMacCaptureEvents = new EventEmitter();
 let activeRecordingsDir = getDefaultRecordingsDir();
@@ -416,7 +417,7 @@ async function saveAppSettings(partial: Partial<AppSettings>): Promise<AppSettin
 }
 
 async function getCacheRootDir(): Promise<string> {
-	return (await loadAppSettings()).cacheDirectory;
+	return path.join((await loadAppSettings()).cacheDirectory, MANAGED_CACHE_DIR_NAME);
 }
 
 async function getProjectRootDir(): Promise<string> {
@@ -2585,7 +2586,7 @@ export function registerIpcHandlers(
 				return { success: true, granted: false, status: "not-determined" };
 			}
 
-			return { success: true, granted: false, status };
+			return resolvedAccess;
 		} catch (error) {
 			console.error("Failed to request screen access:", error);
 			return { success: false, granted: false, status: "unknown", error: String(error) };
@@ -2730,20 +2731,24 @@ export function registerIpcHandlers(
 		if (!access.granted) {
 			if (process.platform === "darwin" && access.status !== "not-determined") {
 				const mainWin = getMainWindow();
+				const restartRequired = access.status === "restart-required";
 				const messageOptions = {
 					type: "warning",
-					buttons: ["Open System Settings", "Cancel"],
+					buttons: restartRequired ? ["OK"] : ["Open System Settings", "Cancel"],
 					defaultId: 0,
-					cancelId: 1,
-					message: "Screen Recording permission is required",
-					detail:
-						"Allow LikelySnap in macOS System Settings, then come back and choose a screen or window.",
+					cancelId: restartRequired ? 0 : 1,
+					message: restartRequired
+						? "Restart LikelySnap to finish Screen Recording permission"
+						: "Screen Recording permission is required",
+					detail: restartRequired
+						? "macOS reports that Screen Recording is allowed, but the current LikelySnap process still cannot see capturable screens or windows. Quit and reopen LikelySnap, then choose a screen or window again."
+						: "Allow LikelySnap in macOS System Settings, then come back and choose a screen or window.",
 				} satisfies Electron.MessageBoxOptions;
 				const result =
 					mainWin && !mainWin.isDestroyed()
 						? await dialog.showMessageBox(mainWin, messageOptions)
 						: await dialog.showMessageBox(messageOptions);
-				if (result.response === 0) {
+				if (!restartRequired && result.response === 0) {
 					await shell.openExternal(
 						"x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture",
 					);

@@ -28,8 +28,18 @@ Build a durable macOS/Windows LikelySnap recorder/editor that can record long vi
 21. Smart Follow Mouse is the default global follow behavior for generated zooms and must be mutually exclusive with the global Always Follow Mouse batch toggle. Enabling one global follow mode disables the other.
 22. Smart Follow Mouse must respect each zoom region's effective scale/custom scale. Higher zoom levels have a smaller visible viewport, so the safe cursor area and edge-follow threshold must be derived from the actual zoom scale, not a fixed percentage.
 23. Packaged macOS permission gating must be based on real capture capability, not only stale status strings. If the installed DMG says permission is missing while System Settings says it is allowed, follow `handoff/MACOS_PERMISSION_TROUBLESHOOTING.md` before changing recorder logic.
+24. Public releases must distinguish "locally built for testing" from "safe for random users". Official macOS release artifacts need Developer ID signing, notarization, and stapling; official Windows artifacts need clean-machine runtime verification for native helpers, FFmpeg, and MSVC runtime dependencies.
+25. Cache cleanup must never delete arbitrary user-selected folders. User-selected cache location is a container only; LikelySnap-owned cache files live under the managed cache subdirectory.
 
 ## Current Priority
+
+Immediate release-hardening priority after the 2026-06-22 public feedback pass:
+
+- Ship fresh macOS/Windows builds from the hardened code path and verify the exact two public bugs: macOS launch/permission behavior and Windows first-run recording.
+- Do not claim the current ad-hoc macOS DMG is a fully polished public installer. It can still be blocked by Gatekeeper until Developer ID notarization is implemented.
+- Do not claim Intel Mac support unless x64/universal builds and native helpers are produced and tested.
+- Verify Windows on a clean non-developer machine. Helper presence alone is not enough; MSVC runtime availability must be proven or removed by static runtime linking.
+- Keep the new cache cleanup boundary intact: no future settings refactor may clear the user-selected cache container directly.
 
 Push the package model from "recording works" to "long recordings remain editable", using the architecture in `handoff/NLE_EDITOR_ARCHITECTURE_PLAN.md`:
 
@@ -53,7 +63,7 @@ Push the package model from "recording works" to "long recordings remain editabl
 - The direct sample-buffer macOS webcam path has one successful real package so far: `recording-2026-06-21-16-07-22-769.likelysnap` has screen and webcam durations within about 1.3 seconds, and user confirmed the editor shows webcam after the ffmpeg input-probe/manifest fix. Continue with longer validation before calling multi-hour webcam fully stable.
 - Validate Windows native `webcam.mp4` sidecar sync after the WGC helper now emits and persists `webcamStartOffsetMs`.
 - Produce the Windows x64 portable zip on a Windows x64 build machine with `npm run build:win:portable`; this macOS Apple Silicon machine cannot produce the final Windows zip because the WGC helper binary is missing and electron-builder's Wine resource step cannot execute.
-- Confirm the existing 4.4 GB `webcam.webm` package opens the main video without freezing by skipping the unsafe webcam sidecar.
+- Confirm the existing 4.4 GB `webcam.webm` package opens the main video without freezing. The editor must not hide sidecars purely by size; unhealthy legacy sidecars need readable-track diagnostics and graceful degradation.
 - Confirm the known ~17 minute package stays interactive with waveform on by default and uses the ranged/cached waveform path.
 - Confirm the Windows one-hour package opens interactively after the cursor-preview pass: `cursor-preview.json` should load instead of full `cursor.json`, waveform should prepare in idle time, and auto zoom should not block the editor.
 - Treat the layout panel as intentionally disabled when no webcam sidecar exists; this is not a Windows layout bug unless a recording includes webcam media and `webcamVideoPath` is still missing.
@@ -62,6 +72,8 @@ Push the package model from "recording works" to "long recordings remain editabl
 - Validate FFmpeg MP4 export on longer real projects: renderer compositing feeds frames, FFmpeg handles hardware-first encoding, audio muxing, and temp-file/streaming output.
 - Keep the legacy WebCodecs MP4 exporter only as a compatibility fallback; do not reintroduce Blob-based final MP4 saves as the main path.
 - Keep source-aware FPS on the export track: current MP4 export is fixed at 60 FPS, so long 30 FPS recordings can do unnecessary work.
+- Treat source decode as still incomplete NLE architecture: MP4 output writing is streamed through FFmpeg, but `StreamingVideoDecoder`/caption paths still load local source files whole through `readBinaryFile`. This must be replaced before claiming true multi-hour NLE behavior.
+- Webcam sidecar preview/export should not be disabled only because a file is over 2 GB. Use readable-track/probe diagnostics for unhealthy sidecars, and keep valid large native sidecars visible.
 
 ## 2026-06-19 Rollback Note
 

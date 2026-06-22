@@ -24,8 +24,8 @@ export function resolveScreenAccessResult(
 	if (mediaStatus === "granted") {
 		return {
 			success: true,
-			granted: true,
-			status: mediaStatus,
+			granted: false,
+			status: "restart-required",
 			...(probe.error ? { error: probe.error } : {}),
 		};
 	}

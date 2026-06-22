@@ -27,9 +27,11 @@ export async function resolveFfmpegBinary(): Promise<FfmpegBinaryResolution | nu
 		candidates.push({ source: "bundled", executablePath: bundledFfmpegPath() });
 	}
 
-	const installerPath = resolveFfmpegInstallerPath();
-	if (installerPath) {
-		candidates.push({ source: "bundled", executablePath: installerPath });
+	if (!app.isPackaged) {
+		const installerPath = resolveFfmpegInstallerPath();
+		if (installerPath) {
+			candidates.push({ source: "bundled", executablePath: installerPath });
+		}
 	}
 
 	candidates.push({ source: "system", executablePath: ffmpegBinaryName() });

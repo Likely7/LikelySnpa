@@ -306,8 +306,8 @@ export class VideoExporter {
 							return webcamDecoder
 								.decodeAll(
 									this.config.frameRate,
-									this.config.trimRegions,
-									this.config.speedRegions,
+									undefined,
+									undefined,
 									async (webcamFrame, _exportTimestampUs, webcamSourceTimestampMs) => {
 										while (queue.length >= 12 && !this.cancelled && !stopWebcamDecode) {
 											await new Promise((resolve) => setTimeout(resolve, 2));

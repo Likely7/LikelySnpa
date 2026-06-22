@@ -465,7 +465,6 @@ export function LaunchWindow() {
 	}, [isLanguageMenuOpen, setHudMouseEventsEnabled]);
 
 	const [selectedSource, setSelectedSource] = useState("Screen");
-	const [hasSelectedSource, setHasSelectedSource] = useState(false);
 	const [, setRecordPointerDownCount] = useState(0);
 
 	useEffect(() => {
@@ -476,10 +475,8 @@ export function LaunchWindow() {
 					(await window.electronAPI.ensureDefaultSelectedSource?.());
 				if (source) {
 					setSelectedSource(source.name);
-					setHasSelectedSource(true);
 				} else {
 					setSelectedSource("Screen");
-					setHasSelectedSource(false);
 				}
 			}
 		};
@@ -868,7 +865,7 @@ export function LaunchWindow() {
 					<div className={`flex items-center justify-center ${recording ? "gap-1.5" : ""}`}>
 						{recording
 							? getIcon("stop", paused ? "text-amber-400" : "text-red-400")
-							: getIcon("record", hasSelectedSource ? "text-white/80" : "text-white/30")}
+							: getIcon("record", "text-white/80")}
 						{recording && (
 							<span
 								className={`${paused ? "text-amber-400" : "text-red-400"} inline-block w-[34px] text-left text-xs font-semibold tabular-nums`}

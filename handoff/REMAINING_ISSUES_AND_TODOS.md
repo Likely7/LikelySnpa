@@ -2,6 +2,11 @@
 
 ## P0
 
+0. Publish fresh macOS and Windows builds after the 2026-06-22 public-release hardening pass. Validate:
+   - macOS packaged launch no longer crashes before Electron `app.ready`.
+   - macOS Screen Recording permission shows a restart-required message, not an empty picker, when System Settings is granted but capture probing still fails.
+   - Windows clean profile can click Record immediately and the countdown/capture path resolves a default screen source.
+   - Windows portable zip fails verification if WGC/cursor/FFmpeg are missing, or if duplicate installer FFmpeg / non-target onnxruntime native binaries are present.
 1. Validate the FFmpeg MP4 export path on long real projects on macOS and Windows x64, including audio sync, webcam offset, cursor overlay, zoom, trims, and speed changes.
 2. Validate Windows x64 FFmpeg encoder selection on real NVIDIA/Intel/AMD machines and expose the actual encoder used in UI/diagnostics.
 3. Add package-local `cache/media-info.json` so editor-open can trust persisted media metadata before deeper validation.
@@ -13,11 +18,12 @@
 9. Add a background job manager for media preparation so media info, waveform, thumbnails, cursor indexes, auto zoom suggestions, and proxy generation are coordinated instead of being separate ad hoc effects.
 10. Before another Windows one-hour optimization, add hard timing checkpoints for manifest read, file stat, session preparation, video metadata readiness, first React paint, cursor preview load, waveform start/cache/generation, auto zoom start/finish, and proxy generation.
 11. Validate the implemented Auto Zoom / Follow Mouse model on real recordings: three per-zoom modes (`Off`, `Smart Follow Mouse`, `Always Follow Mouse`), mutually exclusive global Smart/Always controls, scale-aware smart safe areas, slower eased always-follow motion, ignored isolated single clicks, retained repeated-click/double-click/press/drag suggestions, long stable same-area explanation zooms, small-region dwell detection for natural hand jitter, long-dwell spans starting at dwell onset, and `1500ms` max auto-merge gap between nearby generated zooms.
+12. Add a true project asset model before claiming saved `.likelysnap` projects are portable across machines: relative media paths when assets live beside the project, package-copy/reference support, and a relink UI when absolute paths are missing.
+13. Replace local export/caption source loading that still uses `readBinaryFile` + WebDemuxer whole-file load with ranged/native streaming. Current FFmpeg export writes output incrementally, but source decode is still not fully NLE-style for multi-hour media.
 
 ## Existing P0 Validation
 
-0. Publish fresh macOS and Windows builds after the 2026-06-22 public-feedback fixes. Validate that the macOS packaged app no longer throws `The 'screen' module can't be used before the app 'ready' event` on launch/reactivation, and that a clean Windows x64 profile opens with a selected default screen source and an enabled record button.
-1. Validate the known 4.4 GB legacy package opens the main screen video without freezing by skipping the oversized `webcam.webm`.
+1. Validate the known 4.4 GB legacy package opens the main screen video without freezing. The blanket 2 GB webcam-sidecar skip was removed; unhealthy legacy WebM sidecars now need codec/readability diagnostics instead of size-only hiding.
 2. Validate a longer macOS recording with microphone, system audio, native `webcam.mov`, editable cursor, and auto zoom enabled. The earlier macOS PixelBufferAdaptor path is abandoned after repeated real-package finalize failures, and the later `AVCaptureMovieFileOutput` attempt is abandoned after producing a readable but truncated `webcam.mov`; new macOS validation must target the direct `AVCaptureVideoDataOutput -> AVAssetWriterInput.append(sampleBuffer)` path. One real package has passed at ~11 minutes (`screen.mp4` ~665s, `webcam.mov` ~664s) after the ffmpeg input-probe fix, but 20+ minute validation is still required.
 3. Validate a long macOS recording stops cleanly and leaves a ready `.likelysnap` package that opens in the editor.
 4. Validate moving a package to another folder and reopening it.
@@ -32,6 +38,7 @@
 
 ## P1
 
+0. Add a formal macOS public release pipeline: Developer ID Application signing, notarization, stapling, and CI/release-script failure when credentials or notarization are missing. Current public DMGs are ad-hoc signed and can be blocked by Gatekeeper.
 1. Add MP4 export sync diagnostics.
 2. Move any remaining MP4 fallback/export-save paths away from in-memory final Blobs; the primary MP4 path is FFmpeg streaming now, but compatibility paths should stay clearly gated.
 3. Ensure exported MP4 with source audio fails loudly if audio cannot be preserved.
@@ -47,6 +54,10 @@
 13. Make MP4 export frame rate source-aware instead of hard-coded to 60 FPS; default to source FPS or a user-selected export FPS so 30 FPS recordings do not pay for double-frame export work.
 14. Move GIF export to a streaming/temp-file path or explicitly label it as short-form only.
 15. Add a real Windows native recording GPU scaling pass if Windows must honor recording resolution choices (`1080p`, `1440p`, `4K`, custom). The current WGC encoder uses source texture dimensions because `CopyResource` requires matching texture sizes.
+16. Build Windows helpers with static MSVC runtime or bundle exact `vcruntime/msvcp` DLLs beside `wgc-capture.exe` and `cursor-sampler.exe`, then verify on a clean Windows VM with no developer tooling installed.
+17. Decide whether macOS Intel is supported. If yes, ship universal/x64 DMGs and build/verify `darwin-x64` helper and FFmpeg resources. If no, state ARM64-only clearly on the release page.
+18. Align macOS minimum system version with ScreenCaptureKit helper requirements, likely macOS 13+, unless a real macOS 12 fallback recorder is implemented.
+19. Pin auto-caption model downloads to a HuggingFace commit SHA and verify checksums for reproducible releases.
 
 ## P2
 
@@ -67,7 +78,7 @@
 9. Confirm held mouse-button/drag spans default their suggested zoom to Smart Follow Mouse, while ordinary single clicks and click-and-leave UI actions do not create auto zooms.
 10. Confirm export MP4 remains in sync.
 11. Kill the app mid-recording and verify the package is recoverable.
-12. Open an old package with `webcam.webm`; if the sidecar is oversized, confirm the app warns and still opens the main video.
+12. Open an old package with `webcam.webm`; if the sidecar is corrupt/unreadable, confirm the app warns and still opens the main video instead of relying on size-only skipping.
 13. Open a long recording with the trim waveform visible by default, confirm the editor remains responsive during generation, then close/reopen and confirm the waveform loads from cache.
 14. Change recording quality/resolution/FPS/bitrate in the standalone settings window and confirm the next native macOS recording request uses the configured profile.
 15. Open settings from the editor top-bar gear and confirm the same persisted values are shown as the launch HUD settings entry.
