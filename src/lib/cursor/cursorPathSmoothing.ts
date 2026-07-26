@@ -26,7 +26,7 @@ const STEP_S = STEP_MS / 1000;
 interface SmoothedRun {
 	start: number;
 	end: number;
-	times: Float32Array;
+	times: Float64Array;
 	xs: Float32Array;
 	ys: Float32Array;
 }
@@ -36,7 +36,7 @@ function clamp(value: number, min: number, max: number) {
 }
 
 function binarySearchAtOrBefore(
-	times: Float32Array | number[],
+	times: Float32Array | Float64Array | number[],
 	timeMs: number,
 	hi: number,
 ): number {
@@ -56,15 +56,15 @@ function binarySearchAtOrBefore(
 }
 
 /** Linear interpolation of a sample run's position at an arbitrary time. */
-function interpolateRun(samples: CursorRecordingSample[], timeMs: number): SmoothedCursorPosition {
+function interpolateRun(
+	samples: CursorRecordingSample[],
+	timeMs: number,
+	sampleTimes?: Float64Array,
+): SmoothedCursorPosition {
 	const last = samples.length - 1;
 	if (timeMs <= samples[0].timeMs) return { cx: samples[0].cx, cy: samples[0].cy };
 	if (timeMs >= samples[last].timeMs) return { cx: samples[last].cx, cy: samples[last].cy };
-	const i = binarySearchAtOrBefore(
-		samples.map((s) => s.timeMs),
-		timeMs,
-		last,
-	);
+	const i = binarySearchAtOrBefore(sampleTimes ?? samples.map((s) => s.timeMs), timeMs, last);
 	const a = samples[i];
 	const b = samples[i + 1] ?? a;
 	const span = b.timeMs - a.timeMs;
@@ -123,13 +123,15 @@ function buildSmoothedRun(
 	const end = samples[samples.length - 1].timeMs;
 	const stepCount = Math.max(1, Math.round((end - start) / STEP_MS));
 	const n = stepCount + 1;
-	const times = new Float32Array(n);
+	const times = new Float64Array(n);
 	const rawX = new Float32Array(n);
 	const rawY = new Float32Array(n);
+	const sampleTimes = new Float64Array(samples.length);
+	for (let i = 0; i < samples.length; i++) sampleTimes[i] = samples[i].timeMs;
 	for (let i = 0; i < n; i++) {
 		const t = i === n - 1 ? end : start + i * STEP_MS;
 		times[i] = t;
-		const p = interpolateRun(samples, t);
+		const p = interpolateRun(samples, t, sampleTimes);
 		rawX[i] = p.cx;
 		rawY[i] = p.cy;
 	}
@@ -194,7 +196,7 @@ function buildSmoothedPath(
 			? {
 					start: run[0].timeMs,
 					end: run[0].timeMs,
-					times: new Float32Array([run[0].timeMs]),
+					times: new Float64Array([run[0].timeMs]),
 					xs: new Float32Array([run[0].cx]),
 					ys: new Float32Array([run[0].cy]),
 				}
